@@ -944,6 +944,7 @@ func (m Model) renderSummaryContent() string {
 	div := dayViewDividerStyle.Render(strings.Repeat("─", innerW))
 
 	var b strings.Builder
+	b.WriteString("\n")
 
 	// ── Work Day times ────────────────────────────────────────────────────────
 	b.WriteString(dayViewSectionStyle.Render("🕐  Work Day") + "\n")
@@ -1038,6 +1039,7 @@ func (m Model) renderSummaryContent() string {
 			for _, t := range tasks {
 				b.WriteString(normalEntryStyle.Render(renderRow("    ", t.Task, journal.FormatDuration(t.Duration()))))
 			}
+			b.WriteString("\n")
 		}
 
 		// ── Breaks block ──────────────────────────────────────────────────────
@@ -1063,6 +1065,7 @@ func (m Model) renderSummaryContent() string {
 			for _, e := range bkList {
 				b.WriteString(breakEntryStyle.Render(renderRow("    ", e.Task, journal.FormatDuration(e.Duration()))))
 			}
+			b.WriteString("\n")
 		}
 
 		// ── Totals ────────────────────────────────────────────────────────────
