@@ -162,6 +162,7 @@ var (
 	dayViewValueStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color(cText)).Bold(true)
 	dayViewMutedStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color(cOverlay1))
 	dayViewTotalsStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color(cSubtext0))
+	dayViewWarnStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color(cPeach)).Bold(true)
 	dayViewNotesStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color(cText))
 	selectedEntryStyle  = lipgloss.NewStyle().Background(lipgloss.Color(cSurface0)).Foreground(lipgloss.Color(cMauve)).Bold(true)
 	normalEntryStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color(cText))

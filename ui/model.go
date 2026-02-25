@@ -958,6 +958,20 @@ func (m Model) renderWorkLogContent() string {
 	if totals != "" {
 		b.WriteString("\n" + dayViewTotalsStyle.Render(totals) + "\n")
 	}
+	if dayDur, ok := m.dayRecord.DayDuration(); ok {
+		logged := work + breaks
+		if logged != dayDur {
+			diff := dayDur - logged
+			sign := "+"
+			if diff < 0 {
+				diff = -diff
+				sign = "-"
+			}
+			warn := "  ⚠  Logged time (" + journal.FormatDuration(logged) + ") differs from day span (" +
+				journal.FormatDuration(dayDur) + ") by " + sign + journal.FormatDuration(diff)
+			b.WriteString(dayViewWarnStyle.Render(warn) + "\n")
+		}
+	}
 
 	b.WriteString("\n")
 
