@@ -326,6 +326,10 @@ func (m Model) handleListKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if !filtering {
 			return m, tea.Quit
 		}
+	case "esc":
+		if !filtering {
+			return m, tea.Quit
+		}
 	case "n":
 		if !filtering {
 			return m.openDayViewToday()
@@ -436,7 +440,7 @@ func (m Model) handleDayViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 			return exportedMsg{path: path}
 		}
-	case "esc", "q":
+	case "esc":
 		m.state = stateList
 		return m, loadRecords
 	}
@@ -934,7 +938,7 @@ func (m Model) viewList() string {
 		{"d", "delete"},
 		{"x", "export"},
 		{"/", "filter"},
-		{"q", "quit"},
+		{"esc", "quit"},
 	})
 	return lipgloss.JoinVertical(lipgloss.Left, header, m.list.View(), footer)
 }
