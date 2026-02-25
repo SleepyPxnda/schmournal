@@ -177,3 +177,20 @@ var (
 				Foreground(lipgloss.Color(cSubtext0)).
 				Padding(0, 1)
 )
+
+// ── Stats panel styles ────────────────────────────────────────────────────────
+var (
+	statsBlockFilledStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(cGreen))
+	statsBlockEmptyStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color(cSurface2))
+	statsBlockFutureStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(cSurface1))
+	statsLabelStyle       = lipgloss.NewStyle().Foreground(lipgloss.Color(cSubtext0))
+	statsValueStyle       = lipgloss.NewStyle().Foreground(lipgloss.Color(cText)).Bold(true)
+	statsStreakStyle      = lipgloss.NewStyle().Foreground(lipgloss.Color(cPeach)).Bold(true)
+
+	eomBannerStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color(cBase)).
+			Background(lipgloss.Color(cRed)).
+			Bold(true).
+			Width(0). // set at render time
+			Align(lipgloss.Center)
+)

@@ -32,6 +32,7 @@ const (
 const (
 	headerHeight = 2 // title line + separator
 	footerHeight = 1
+	statsHeight  = 2 // stats bar + separator
 )
 
 // ── Messages ──────────────────────────────────────────────────────────────────
@@ -47,7 +48,19 @@ type errMsg struct{ err error }
 
 type dayListItem struct{ rec journal.DayRecord }
 
-func (d dayListItem) FilterValue() string { return d.rec.Date }
+func (d dayListItem) FilterValue() string {
+	parts := []string{d.rec.Date}
+	for _, e := range d.rec.Entries {
+		if e.Project != "" {
+			parts = append(parts, e.Project)
+		}
+		parts = append(parts, e.Task)
+	}
+	if d.rec.Notes != "" {
+		parts = append(parts, d.rec.Notes)
+	}
+	return strings.Join(parts, " ")
+}
 
 func (d dayListItem) Title() string {
 	t, err := d.rec.ParseDate()
@@ -134,7 +147,7 @@ func New() Model {
 	ta.ShowLineNumbers = false
 	ta.FocusedStyle.Base = lipgloss.NewStyle().Foreground(lipgloss.Color(cText))
 	ta.FocusedStyle.Placeholder = lipgloss.NewStyle().Foreground(lipgloss.Color(cOverlay0))
-	ta.FocusedStyle.CursorLine = lipgloss.NewStyle().Background(lipgloss.Color(cSurface0))
+	ta.FocusedStyle.CursorLine = lipgloss.NewStyle()
 	ta.BlurredStyle.Base = lipgloss.NewStyle().Foreground(lipgloss.Color(cSubtext0))
 
 	taskIn := textinput.New()
@@ -235,7 +248,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.viewport.Width = m.width
 			m.viewport.Height = vpH
 		}
-		m.list.SetSize(m.width, ch)
+		listH := ch - statsHeight
+		if m.renderEOMBanner() != "" {
+			listH--
+		}
+		m.list.SetSize(m.width, listH)
 		m.textarea.SetWidth(m.width - 4)
 		m.textarea.SetHeight(ch - 2)
 		return m, nil
@@ -1088,8 +1105,6 @@ func (m Model) renderSummaryContent() string {
 	return b.String()
 }
 
-
-
 func (m Model) View() string {
 	if !m.ready {
 		return "\n  " + lipgloss.NewStyle().Foreground(lipgloss.Color(cMauve)).Render("Loading…")
@@ -1234,7 +1249,91 @@ func (m Model) viewList() string {
 		{"/", "filter"},
 		{"esc", "quit"},
 	})
-	return lipgloss.JoinVertical(lipgloss.Left, header, m.list.View(), footer)
+	sections := []string{header, m.renderStats()}
+	if eom := m.renderEOMBanner(); eom != "" {
+		sections = append(sections, eom)
+	}
+	sections = append(sections, m.list.View(), footer)
+	return lipgloss.JoinVertical(lipgloss.Left, sections...)
+}
+
+func (m Model) renderEOMBanner() string {
+	now := time.Now()
+	// last day of the month: first day of next month minus one day
+	firstOfNext := time.Date(now.Year(), now.Month()+1, 1, 0, 0, 0, 0, now.Location())
+	if now.Before(firstOfNext.AddDate(0, 0, -1)) {
+		return ""
+	}
+	return eomBannerStyle.Width(m.width).Render("⚠  Last day of the month — don't forget to submit your times!")
+}
+
+func (m Model) renderStats() string {
+	now := time.Now()
+
+	// Build a set of dates that have records.
+	dated := make(map[string]bool, len(m.records))
+	for _, r := range m.records {
+		dated[r.Date] = true
+	}
+
+	// Week bar: ISO week starting Monday.
+	weekday := int(now.Weekday())
+	if weekday == 0 {
+		weekday = 7 // Sunday → 7
+	}
+	monday := now.AddDate(0, 0, -(weekday - 1))
+	dayInitials := [7]string{"M", "T", "W", "T", "F", "S", "S"}
+	const filled = "▓"
+	const empty = "░"
+	var weekParts []string
+	for i := 0; i < 7; i++ {
+		d := monday.AddDate(0, 0, i)
+		dateStr := d.Format("2006-01-02")
+		lbl := statsLabelStyle.Render(dayInitials[i])
+		var block string
+		switch {
+		case dated[dateStr]:
+			block = statsBlockFilledStyle.Render(filled)
+		case d.After(now):
+			block = statsBlockFutureStyle.Render(empty)
+		default:
+			block = statsBlockEmptyStyle.Render(empty)
+		}
+		weekParts = append(weekParts, lbl+" "+block)
+	}
+	weekStr := strings.Join(weekParts, "  ")
+
+	// Month count.
+	monthKey := now.Format("2006-01")
+	monthCount := 0
+	for _, r := range m.records {
+		if strings.HasPrefix(r.Date, monthKey) {
+			monthCount++
+		}
+	}
+	monthStr := statsLabelStyle.Render(now.Format("Jan")+": ") +
+		statsValueStyle.Render(fmt.Sprintf("%d", monthCount))
+
+	// Streak: consecutive days going back from today.
+	streak := 0
+	for check := now; ; check = check.AddDate(0, 0, -1) {
+		if !dated[check.Format("2006-01-02")] {
+			break
+		}
+		streak++
+	}
+	var streakStr string
+	if streak > 0 {
+		streakStr = "🔥 " + statsStreakStyle.Render(fmt.Sprintf("%d", streak)) +
+			statsLabelStyle.Render(" day streak")
+	} else {
+		streakStr = statsLabelStyle.Render("No active streak")
+	}
+
+	dot := helpStyle.Render("  ·  ")
+	line := "  " + weekStr + dot + monthStr + dot + streakStr
+	sep := separatorStyle.Render(strings.Repeat("─", m.width))
+	return line + "\n" + sep
 }
 
 func (m Model) viewDayView() string {
@@ -1409,11 +1508,11 @@ func (m Model) viewConfirmDelete() string {
 	header := m.renderHeader("📔  Schmournal", "Delete")
 
 	dialog := confirmBoxStyle.Render(
-		confirmTitleStyle.Render(fmt.Sprintf("Delete %s?", subject))+
-			"\n\n  "+
-			confirmYesStyle.Render("[y]")+helpStyle.Render(" yes")+
-			"    "+
-			confirmNoStyle.Render("[n]")+helpStyle.Render(" no / esc"),
+		confirmTitleStyle.Render(fmt.Sprintf("Delete %s?", subject)) +
+			"\n\n  " +
+			confirmYesStyle.Render("[y]") + helpStyle.Render(" yes") +
+			"    " +
+			confirmNoStyle.Render("[n]") + helpStyle.Render(" no / esc"),
 	)
 
 	dh := lipgloss.Height(dialog)
@@ -1425,4 +1524,3 @@ func (m Model) viewConfirmDelete() string {
 	centered := lipgloss.NewStyle().Width(m.width).Align(lipgloss.Center).Render(dialog)
 	return header + "\n" + strings.Repeat("\n", topPad) + centered
 }
-
