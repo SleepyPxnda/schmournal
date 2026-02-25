@@ -480,20 +480,42 @@ func (m Model) handleWorkFormKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		editIdx := m.editEntryIdx
 
 		if editIdx >= 0 && editIdx < len(m.dayRecord.Entries) {
-			// Update existing entry.
+			// Update existing entry in-place.
 			m.dayRecord.Entries[editIdx].Task = task
 			m.dayRecord.Entries[editIdx].Project = project
 			m.dayRecord.Entries[editIdx].DurationMin = int(dur.Minutes())
 			m.dayRecord.Entries[editIdx].IsBreak = isBreak
 			m.selectedEntry = editIdx
+		} else if isBreak {
+			// For new breaks: merge into an existing break with the same label (case-insensitive).
+			taskLower := strings.ToLower(task)
+			merged := false
+			for i, e := range m.dayRecord.Entries {
+				if e.IsBreak && strings.ToLower(e.Task) == taskLower {
+					m.dayRecord.Entries[i].DurationMin += int(dur.Minutes())
+					m.selectedEntry = i
+					merged = true
+					break
+				}
+			}
+			if !merged {
+				entry := journal.WorkEntry{
+					ID:          journal.NewID(),
+					Task:        task,
+					DurationMin: int(dur.Minutes()),
+					IsBreak:     true,
+				}
+				m.dayRecord.Entries = append(m.dayRecord.Entries, entry)
+				m.selectedEntry = len(m.dayRecord.Entries) - 1
+			}
 		} else {
-			// Append new entry.
+			// Append new work entry.
 			entry := journal.WorkEntry{
 				ID:          journal.NewID(),
 				Task:        task,
 				Project:     project,
 				DurationMin: int(dur.Minutes()),
-				IsBreak:     isBreak,
+				IsBreak:     false,
 			}
 			m.dayRecord.Entries = append(m.dayRecord.Entries, entry)
 			m.selectedEntry = len(m.dayRecord.Entries) - 1
@@ -504,7 +526,9 @@ func (m Model) handleWorkFormKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.scrollToSelected()
 
 		label := "✓ Work entry logged"
-		if isBreak {
+		if editIdx >= 0 {
+			label = "✓ Entry updated"
+		} else if isBreak {
 			label = "✓ Break logged"
 		}
 		return m, m.saveDayCmd(label)
