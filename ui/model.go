@@ -75,6 +75,7 @@ type Model struct {
 
 	dayRecord     journal.DayRecord
 	selectedEntry int // index into dayRecord.Entries; -1 = no selection
+	dayViewTab    int // 0 = Work Log, 1 = Summary
 
 	taskInput     textinput.Model
 	projectInput  textinput.Model
@@ -213,12 +214,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = msg.Width
 		m.height = msg.Height
 		ch := m.contentHeight()
+		vpH := ch - 2 // 2 lines for tab bar + separator
 		if !m.ready {
-			m.viewport = viewport.New(m.width, ch)
+			m.viewport = viewport.New(m.width, vpH)
 			m.ready = true
 		} else {
 			m.viewport.Width = m.width
-			m.viewport.Height = ch
+			m.viewport.Height = vpH
 		}
 		m.list.SetSize(m.width, ch)
 		m.textarea.SetWidth(m.width - 4)
@@ -381,15 +383,29 @@ func (m Model) handleListKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 func (m Model) handleDayViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	n := len(m.dayRecord.Entries)
 	switch msg.String() {
+	case "left":
+		if m.dayViewTab > 0 {
+			m.dayViewTab--
+			m.viewport.GotoTop()
+			m.viewport.SetContent(m.renderDayContent())
+		}
+		return m, nil
+	case "right":
+		if m.dayViewTab < 1 {
+			m.dayViewTab++
+			m.viewport.GotoTop()
+			m.viewport.SetContent(m.renderDayContent())
+		}
+		return m, nil
 	case "j", "down":
-		if m.selectedEntry < n-1 {
+		if m.dayViewTab == 0 && m.selectedEntry < n-1 {
 			m.selectedEntry++
 			m.viewport.SetContent(m.renderDayContent())
 			m.scrollToSelected()
 		}
 		return m, nil
 	case "k", "up":
-		if m.selectedEntry > 0 {
+		if m.dayViewTab == 0 && m.selectedEntry > 0 {
 			m.selectedEntry--
 			m.viewport.SetContent(m.renderDayContent())
 			m.scrollToSelected()
@@ -650,6 +666,7 @@ func (m Model) openDayView(rec journal.DayRecord) (tea.Model, tea.Cmd) {
 	if m.dayRecord.Path == "" {
 		m.dayRecord.Path = rec.Path
 	}
+	m.dayViewTab = 0
 	m.selectedEntry = -1
 	if len(m.dayRecord.Entries) > 0 {
 		m.selectedEntry = 0
@@ -784,9 +801,33 @@ func (m *Model) scrollToSelected() {
 	}
 }
 
+// ── Tab bar ───────────────────────────────────────────────────────────────────
+
+func (m Model) renderTabBar() string {
+	tabs := []string{"📋  Work Log", "📊  Summary"}
+	var parts []string
+	for i, label := range tabs {
+		if i == m.dayViewTab {
+			parts = append(parts, activeTabStyle.Render(" "+label+" "))
+		} else {
+			parts = append(parts, inactiveTabStyle.Render(" "+label+" "))
+		}
+	}
+	bar := strings.Join(parts, inactiveTabStyle.Render("  "))
+	sep := dayViewDividerStyle.Render(strings.Repeat("─", m.width))
+	return bar + "\n" + sep
+}
+
 // ── Day view content renderer ─────────────────────────────────────────────────
 
 func (m Model) renderDayContent() string {
+	if m.dayViewTab == 1 {
+		return m.renderSummaryContent()
+	}
+	return m.renderWorkLogContent()
+}
+
+func (m Model) renderWorkLogContent() string {
 	innerW := m.width - 2
 	if innerW < 40 {
 		innerW = 40
@@ -894,7 +935,153 @@ func (m Model) renderDayContent() string {
 	return b.String()
 }
 
-// ── View ──────────────────────────────────────────────────────────────────────
+func (m Model) renderSummaryContent() string {
+	innerW := m.width - 2
+	if innerW < 40 {
+		innerW = 40
+	}
+	div := dayViewDividerStyle.Render(strings.Repeat("─", innerW))
+
+	var b strings.Builder
+	b.WriteString("\n")
+
+	// ── Work Day times ────────────────────────────────────────────────────────
+	b.WriteString(dayViewSectionStyle.Render("🕐  Work Day") + "\n")
+	b.WriteString(div + "\n")
+	startD, endD := m.dayRecord.StartTime, m.dayRecord.EndTime
+	if startD == "" {
+		startD = dayViewMutedStyle.Render("—")
+	} else {
+		startD = dayViewValueStyle.Render(startD)
+	}
+	if endD == "" {
+		endD = dayViewMutedStyle.Render("—")
+	} else {
+		endD = dayViewValueStyle.Render(endD)
+	}
+	timeLine := "  " + dayViewLabelStyle.Render("Start:") + " " + startD +
+		"   " + dayViewLabelStyle.Render("End:") + " " + endD
+	if dur, ok := m.dayRecord.DayDuration(); ok {
+		timeLine += "   " + dayViewMutedStyle.Render("("+journal.FormatDuration(dur)+")")
+	}
+	b.WriteString(timeLine + "\n\n")
+
+	// ── Projects ──────────────────────────────────────────────────────────────
+	type projGroup struct {
+		name    string
+		entries []journal.WorkEntry
+	}
+	seen := make(map[string]int)
+	var groups []projGroup
+	var breakEntries []journal.WorkEntry
+
+	for _, e := range m.dayRecord.Entries {
+		if e.IsBreak {
+			breakEntries = append(breakEntries, e)
+			continue
+		}
+		proj := e.Project
+		if proj == "" {
+			proj = "—"
+		}
+		if idx, ok := seen[proj]; ok {
+			groups[idx].entries = append(groups[idx].entries, e)
+		} else {
+			seen[proj] = len(groups)
+			groups = append(groups, projGroup{name: proj, entries: []journal.WorkEntry{e}})
+		}
+	}
+
+	durW := 8
+	labelW := innerW - durW - 4
+
+	renderRow := func(indent, label, dur string) string {
+		lbl := fmt.Sprintf("%-*s", labelW, label)
+		if len(label) > labelW {
+			lbl = label[:labelW-1] + "…"
+		}
+		return indent + lbl + fmt.Sprintf("%*s", durW, dur) + "\n"
+	}
+
+	if len(groups) == 0 && len(breakEntries) == 0 {
+		b.WriteString("  " + dayViewMutedStyle.Render("No entries yet") + "\n")
+	} else {
+		b.WriteString(dayViewSectionStyle.Render("🗂  By Project") + "\n")
+		b.WriteString(div + "\n")
+
+		var totalWork time.Duration
+		for _, g := range groups {
+			// Consolidate tasks within the project by name.
+			taskSeen := make(map[string]int)
+			var tasks []journal.WorkEntry
+			for _, e := range g.entries {
+				key := strings.ToLower(e.Task)
+				if idx, ok := taskSeen[key]; ok {
+					tasks[idx].DurationMin += e.DurationMin
+				} else {
+					taskSeen[key] = len(tasks)
+					tasks = append(tasks, e)
+				}
+			}
+			var projTotal time.Duration
+			for _, t := range tasks {
+				projTotal += t.Duration()
+			}
+			totalWork += projTotal
+
+			projLabel := g.name
+			if projLabel == "—" {
+				projLabel = "Other"
+			}
+			b.WriteString(dayViewSectionStyle.Render("  "+projLabel) +
+				dayViewTotalsStyle.Render(fmt.Sprintf("%*s", durW+labelW-2-len(projLabel), journal.FormatDuration(projTotal))) + "\n")
+			for _, t := range tasks {
+				b.WriteString(normalEntryStyle.Render(renderRow("    ", t.Task, journal.FormatDuration(t.Duration()))))
+			}
+			b.WriteString("\n")
+		}
+
+		// ── Breaks block ──────────────────────────────────────────────────────
+		if len(breakEntries) > 0 {
+			// Consolidate breaks by label.
+			bkSeen := make(map[string]int)
+			var bkList []journal.WorkEntry
+			for _, e := range breakEntries {
+				key := strings.ToLower(e.Task)
+				if idx, ok := bkSeen[key]; ok {
+					bkList[idx].DurationMin += e.DurationMin
+				} else {
+					bkSeen[key] = len(bkList)
+					bkList = append(bkList, e)
+				}
+			}
+			var breakTotal time.Duration
+			for _, e := range bkList {
+				breakTotal += e.Duration()
+			}
+			b.WriteString(breakEntryStyle.Render("  ☕  Breaks")+
+				dayViewTotalsStyle.Render(fmt.Sprintf("%*s", durW+labelW-8, journal.FormatDuration(breakTotal)))+"\n")
+			for _, e := range bkList {
+				b.WriteString(breakEntryStyle.Render(renderRow("    ", e.Task, journal.FormatDuration(e.Duration()))))
+			}
+			b.WriteString("\n")
+		}
+
+		// ── Totals ────────────────────────────────────────────────────────────
+		work, breaks, total := m.dayRecord.WorkTotals()
+		b.WriteString(div + "\n")
+		if breaks > 0 {
+			b.WriteString(dayViewTotalsStyle.Render(fmt.Sprintf("  Work: %s  ·  Breaks: %s  ·  Total: %s",
+				journal.FormatDuration(work), journal.FormatDuration(breaks), journal.FormatDuration(total))) + "\n")
+		} else if work > 0 {
+			b.WriteString(dayViewTotalsStyle.Render("  Total work: "+journal.FormatDuration(work)) + "\n")
+		}
+	}
+
+	return b.String()
+}
+
+
 
 func (m Model) View() string {
 	if !m.ready {
@@ -973,21 +1160,34 @@ func (m Model) viewDayView() string {
 		subtitle = t.Format("Monday, 02 January 2006")
 	}
 	header := m.renderHeader("📔  Schmournal", subtitle)
-	footer := m.renderFooter([][2]string{
-		{"j/k", "select"},
-		{"w", "work"},
-		{"b", "break"},
-		{"e", "edit"},
-		{"d", "del"},
-		{"s", "start"},
-		{"S", "set start"},
-		{"f", "end"},
-		{"F", "set end"},
-		{"N", "notes"},
-		{"x", "export"},
-		{"esc", "back"},
-	})
-	return lipgloss.JoinVertical(lipgloss.Left, header, m.viewport.View(), footer)
+	tabBar := m.renderTabBar()
+
+	var footerKeys [][2]string
+	if m.dayViewTab == 0 {
+		footerKeys = [][2]string{
+			{"←/→", "switch tab"},
+			{"j/k", "select"},
+			{"w", "work"},
+			{"b", "break"},
+			{"e", "edit"},
+			{"d", "del"},
+			{"s/S", "start"},
+			{"f/F", "end"},
+			{"N", "notes"},
+			{"x", "export"},
+			{"esc", "back"},
+		}
+	} else {
+		footerKeys = [][2]string{
+			{"←/→", "switch tab"},
+			{"s/S", "start"},
+			{"f/F", "end"},
+			{"x", "export"},
+			{"esc", "back"},
+		}
+	}
+	footer := m.renderFooter(footerKeys)
+	return lipgloss.JoinVertical(lipgloss.Left, header, tabBar, m.viewport.View(), footer)
 }
 
 func (m Model) viewWorkLogForm() string {

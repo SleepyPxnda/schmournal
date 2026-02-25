@@ -166,4 +166,14 @@ var (
 	selectedEntryStyle  = lipgloss.NewStyle().Background(lipgloss.Color(cSurface0)).Foreground(lipgloss.Color(cMauve)).Bold(true)
 	normalEntryStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color(cText))
 	breakEntryStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color(cTeal))
+
+	activeTabStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color(cBase)).
+			Background(lipgloss.Color(cMauve)).
+			Bold(true).
+			Padding(0, 1)
+
+	inactiveTabStyle = lipgloss.NewStyle().
+				Foreground(lipgloss.Color(cSubtext0)).
+				Padding(0, 1)
 )
