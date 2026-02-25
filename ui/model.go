@@ -120,6 +120,7 @@ func New() Model {
 	l := list.New([]list.Item{}, newDelegate(), 0, 0)
 	l.SetShowTitle(false)
 	l.SetShowStatusBar(false)
+	l.SetShowHelp(false)
 	l.SetFilteringEnabled(true)
 	l.Styles.FilterPrompt = lipgloss.NewStyle().Foreground(lipgloss.Color(cBlue))
 	l.Styles.FilterCursor = lipgloss.NewStyle().Foreground(lipgloss.Color(cMauve))
