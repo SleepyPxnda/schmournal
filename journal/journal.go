@@ -28,6 +28,15 @@ func TodayPath() (string, error) {
 	return filepath.Join(dir, time.Now().Format("2006-01-02")+".json"), nil
 }
 
+// PathForDate returns the file path for a given date string (YYYY-MM-DD).
+func PathForDate(date string) (string, error) {
+	dir, err := Dir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(dir, date+".json"), nil
+}
+
 // Load reads a DayRecord from path. If the file does not exist, it returns an
 // empty DayRecord (not an error).
 func Load(path string) (DayRecord, error) {

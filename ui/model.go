@@ -26,6 +26,7 @@ const (
 	stateTimeInput
 	stateNotesEditor
 	stateConfirmDelete
+	stateDateInput
 )
 
 const (
@@ -88,6 +89,8 @@ type Model struct {
 
 	timeInput      textinput.Model
 	timeInputStart bool
+
+	dateInput textinput.Model // for opening/creating any day
 
 	deleteDay bool // true = confirm delete whole day, false = confirm delete entry
 	deleteIdx int  // index in records (deleteDay) or entries (!deleteDay)
@@ -163,6 +166,14 @@ func New() Model {
 	timeIn.TextStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(cText))
 	timeIn.PlaceholderStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(cOverlay0))
 
+	dateIn := textinput.New()
+	dateIn.Placeholder = "YYYY-MM-DD"
+	dateIn.CharLimit = 10
+	dateIn.Width = 14
+	dateIn.PromptStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(cMauve))
+	dateIn.TextStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(cText))
+	dateIn.PlaceholderStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(cOverlay0))
+
 	return Model{
 		state:         stateList,
 		list:          l,
@@ -171,6 +182,7 @@ func New() Model {
 		projectInput:  projIn,
 		durationInput: durIn,
 		timeInput:     timeIn,
+		dateInput:     dateIn,
 		selectedEntry: -1,
 		editEntryIdx:  -1,
 	}
@@ -284,6 +296,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.handleNotesEditorKey(msg)
 		case stateConfirmDelete:
 			return m.handleConfirmDeleteKey(msg)
+		case stateDateInput:
+			return m.handleDateInputKey(msg)
 		}
 	}
 
@@ -316,6 +330,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		var cmd tea.Cmd
 		m.textarea, cmd = m.textarea.Update(msg)
 		return m, cmd
+	case stateDateInput:
+		var cmd tea.Cmd
+		m.dateInput, cmd = m.dateInput.Update(msg)
+		return m, cmd
 	}
 	return m, nil
 }
@@ -336,6 +354,10 @@ func (m Model) handleListKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "n":
 		if !filtering {
 			return m.openDayViewToday()
+		}
+	case "c":
+		if !filtering {
+			return m.openDateInput()
 		}
 	case "enter":
 		if !filtering {
@@ -1085,6 +1107,8 @@ func (m Model) View() string {
 		return m.viewNotesEditor()
 	case stateConfirmDelete:
 		return m.viewConfirmDelete()
+	case stateDateInput:
+		return m.viewDateInput()
 	}
 	return ""
 }
@@ -1124,10 +1148,84 @@ func (m Model) renderFooter(keys [][2]string) string {
 	return help
 }
 
+// ── Date input (open/create any day) ─────────────────────────────────────────
+
+func (m Model) openDateInput() (tea.Model, tea.Cmd) {
+	m.dateInput.SetValue("")
+	m.dateInput.Placeholder = time.Now().Format("2006-01-02")
+	cmd := m.dateInput.Focus()
+	m.state = stateDateInput
+	return m, cmd
+}
+
+func (m Model) handleDateInputKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "esc":
+		m.dateInput.Blur()
+		m.state = stateList
+		return m, nil
+	case "enter":
+		raw := strings.TrimSpace(m.dateInput.Value())
+		if raw == "" {
+			raw = time.Now().Format("2006-01-02")
+		}
+		// Accept YYYY-MM-DD
+		date, err := time.Parse("2006-01-02", raw)
+		if err != nil {
+			m.statusMsg = "✗ Invalid date — use YYYY-MM-DD"
+			m.isError = true
+			m.state = stateList
+			return m, clearStatusCmd()
+		}
+		m.dateInput.Blur()
+		dateStr := date.Format("2006-01-02")
+		path, err := journal.PathForDate(dateStr)
+		if err != nil {
+			m.statusMsg = "✗ " + err.Error()
+			m.isError = true
+			m.state = stateList
+			return m, clearStatusCmd()
+		}
+		rec, _ := journal.Load(path)
+		if rec.Date == "" {
+			rec.Date = dateStr
+		}
+		rec.Path = path
+		return m.openDayView(rec)
+	}
+	var cmd tea.Cmd
+	m.dateInput, cmd = m.dateInput.Update(msg)
+	return m, cmd
+}
+
+func (m Model) viewDateInput() string {
+	header := m.renderHeader("📔  Schmournal", "Open Day")
+	prompt := dayViewLabelStyle.Render("Enter date:") + "  " + m.dateInput.View()
+	box := formBoxStyle.Render(
+		lipgloss.JoinVertical(lipgloss.Left,
+			formLabelStyle.Render("Open or create a journal entry for any day"),
+			"",
+			prompt,
+			"",
+			dayViewMutedStyle.Render("enter  confirm  ·  esc  cancel"),
+		),
+	)
+	bh := lipgloss.Height(box)
+	ch := m.contentHeight()
+	topPad := (ch - bh) / 2
+	if topPad < 0 {
+		topPad = 0
+	}
+	pad := strings.Repeat("\n", topPad)
+	footer := m.renderFooter([][2]string{{"enter", "open"}, {"esc", "cancel"}})
+	return lipgloss.JoinVertical(lipgloss.Left, header, pad+box, footer)
+}
+
 func (m Model) viewList() string {
 	header := m.renderHeader("📔  Schmournal", time.Now().Format("Mon, 02 Jan 2006"))
 	footer := m.renderFooter([][2]string{
 		{"n", "open today"},
+		{"c", "open date"},
 		{"w", "log work"},
 		{"b", "log break"},
 		{"enter", "view"},
