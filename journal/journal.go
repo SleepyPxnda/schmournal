@@ -1,20 +1,13 @@
 package journal
 
 import (
+	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
-	"strings"
 	"time"
 )
-
-// Entry represents a single journal entry stored as a markdown file.
-type Entry struct {
-	Date    time.Time
-	Title   string
-	Content string
-	Path    string
-}
 
 // Dir returns (and creates if necessary) the ~/.journal directory.
 func Dir() (string, error) {
@@ -26,86 +19,83 @@ func Dir() (string, error) {
 	return dir, os.MkdirAll(dir, 0o755)
 }
 
-// TodayPath returns the file path for today's entry.
+// TodayPath returns the file path for today's .json record.
 func TodayPath() (string, error) {
 	dir, err := Dir()
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(dir, time.Now().Format("2006-01-02")+".md"), nil
+	return filepath.Join(dir, time.Now().Format("2006-01-02")+".json"), nil
 }
 
-// NewEntryContent returns the daily template for a new entry.
-func NewEntryContent(t time.Time) string {
-	return NewEntryTemplate(t)
+// Load reads a DayRecord from path. If the file does not exist, it returns an
+// empty DayRecord (not an error).
+func Load(path string) (DayRecord, error) {
+	data, err := os.ReadFile(path)
+	if os.IsNotExist(err) {
+		dateStr := filepath.Base(path)
+		if len(dateStr) >= 10 {
+			dateStr = dateStr[:10]
+		}
+		return DayRecord{Date: dateStr, Path: path}, nil
+	}
+	if err != nil {
+		return DayRecord{}, err
+	}
+	var rec DayRecord
+	if err := json.Unmarshal(data, &rec); err != nil {
+		return DayRecord{}, err
+	}
+	rec.Path = path
+	return rec, nil
 }
 
-// LoadAll loads every entry from the journal directory, sorted newest first.
-func LoadAll() ([]Entry, error) {
+// Save writes rec to disk as JSON. If rec.Path is empty it is derived from rec.Date.
+func Save(rec DayRecord) error {
+	if rec.Path == "" {
+		dir, err := Dir()
+		if err != nil {
+			return err
+		}
+		rec.Path = filepath.Join(dir, rec.Date+".json")
+	}
+	data, err := json.MarshalIndent(rec, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(rec.Path, data, 0o644)
+}
+
+// LoadAll loads every DayRecord from the journal directory, sorted newest first.
+func LoadAll() ([]DayRecord, error) {
 	dir, err := Dir()
 	if err != nil {
 		return nil, err
 	}
-	files, err := filepath.Glob(filepath.Join(dir, "*.md"))
+	files, err := filepath.Glob(filepath.Join(dir, "????-??-??.json"))
 	if err != nil {
 		return nil, err
 	}
-	var entries []Entry
+	var records []DayRecord
 	for _, f := range files {
-		e, err := Load(f)
+		rec, err := Load(f)
 		if err != nil {
 			continue
 		}
-		entries = append(entries, e)
+		records = append(records, rec)
 	}
-	sort.Slice(entries, func(i, j int) bool {
-		return entries[i].Date.After(entries[j].Date)
+	sort.Slice(records, func(i, j int) bool {
+		return records[i].Date > records[j].Date
 	})
-	return entries, nil
+	return records, nil
 }
 
-// Load reads a single entry from disk.
-func Load(path string) (Entry, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return Entry{}, err
-	}
-	dateStr := strings.TrimSuffix(filepath.Base(path), ".md")
-	t, err := time.Parse("2006-01-02", dateStr)
-	if err != nil {
-		return Entry{}, err
-	}
-	content := string(data)
-	return Entry{
-		Date:    t,
-		Title:   extractTitle(content, t),
-		Content: content,
-		Path:    path,
-	}, nil
-}
-
-// Save writes content to path, creating or overwriting the file.
-func Save(path, content string) error {
-	return os.WriteFile(path, []byte(content), 0o644)
-}
-
-// Delete removes an entry file.
+// Delete removes a record file.
 func Delete(path string) error {
 	return os.Remove(path)
 }
 
-func extractTitle(content string, t time.Time) string {
-	for _, line := range strings.Split(content, "\n") {
-		line = strings.TrimSpace(line)
-		if strings.HasPrefix(line, "# ") {
-			return strings.TrimPrefix(line, "# ")
-		}
-		if line != "" {
-			if len(line) > 50 {
-				return line[:50] + "…"
-			}
-			return line
-		}
-	}
-	return t.Format("January 2, 2006")
+// NewID returns a unique string ID based on the current nanosecond timestamp.
+func NewID() string {
+	return fmt.Sprintf("%d", time.Now().UnixNano())
 }

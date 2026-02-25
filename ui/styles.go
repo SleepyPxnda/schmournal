@@ -153,3 +153,17 @@ var (
 	listFilterMatch = lipgloss.NewStyle().
 			Foreground(lipgloss.Color(cYellow))
 )
+
+// ── Day view styles ───────────────────────────────────────────────────────────
+var (
+	dayViewSectionStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(cLavender)).Bold(true)
+	dayViewDividerStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(cSurface2))
+	dayViewLabelStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color(cSubtext1))
+	dayViewValueStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color(cText)).Bold(true)
+	dayViewMutedStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color(cOverlay1))
+	dayViewTotalsStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color(cSubtext0))
+	dayViewNotesStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color(cText))
+	selectedEntryStyle  = lipgloss.NewStyle().Background(lipgloss.Color(cSurface0)).Foreground(lipgloss.Color(cMauve)).Bold(true)
+	normalEntryStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color(cText))
+	breakEntryStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color(cTeal))
+)

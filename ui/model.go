@@ -3,7 +3,6 @@ package ui
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -12,7 +11,6 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/glamour"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/fgrohme/tui-journal/journal"
 )
@@ -23,11 +21,11 @@ type viewState int
 
 const (
 	stateList viewState = iota
-	stateViewer
-	stateEditor
-	stateConfirmDelete
-	stateWorkLogForm
+	stateDayView
+	stateWorkForm
 	stateTimeInput
+	stateNotesEditor
+	stateConfirmDelete
 )
 
 const (
@@ -37,89 +35,65 @@ const (
 
 // ── Messages ──────────────────────────────────────────────────────────────────
 
-type entriesLoadedMsg struct {
-	entries []journal.Entry
-	err     error
-}
-type savedMsg struct{}
-type deletedMsg struct{}
-type stampedMsg struct{ text string }
-type workEntrySavedMsg struct{ isBreak bool }
+type recordsLoadedMsg struct{ records []journal.DayRecord }
+type daySavedMsg struct{ label string }
+type dayDeletedMsg struct{}
 type exportedMsg struct{ path string }
 type clearStatusMsg struct{}
 type errMsg struct{ err error }
 
 // ── List item ─────────────────────────────────────────────────────────────────
 
-type entryItem struct{ entry journal.Entry }
+type dayListItem struct{ rec journal.DayRecord }
 
-func (i entryItem) FilterValue() string {
-	return i.entry.Title + " " + i.entry.Content
-}
+func (d dayListItem) FilterValue() string { return d.rec.Date }
 
-func (i entryItem) Title() string {
+func (d dayListItem) Title() string {
+	t, err := d.rec.ParseDate()
+	if err != nil {
+		return d.rec.Date
+	}
 	now := time.Now()
-	isToday := i.entry.Date.Year() == now.Year() && i.entry.Date.YearDay() == now.YearDay()
-	if isToday {
-		return "✦ " + i.entry.Title
+	if t.Year() == now.Year() && t.YearDay() == now.YearDay() {
+		return "✦ " + t.Format("Monday, 02 January 2006")
 	}
-	return i.entry.Title
+	return t.Format("Monday, 02 January 2006")
 }
 
-func (i entryItem) Description() string {
-	date := i.entry.Date.Format("Mon, 02 Jan 2006")
-	for _, line := range strings.Split(i.entry.Content, "\n") {
-		line = strings.TrimSpace(line)
-		if line != "" && !strings.HasPrefix(line, "#") {
-			if len(line) > 60 {
-				line = line[:60] + "…"
-			}
-			return date + "  ·  " + line
-		}
-	}
-	return date
-}
+func (d dayListItem) Description() string { return d.rec.Summary() }
 
 // ── Model ─────────────────────────────────────────────────────────────────────
 
 type Model struct {
-	state     viewState
-	prevState viewState
-	width     int
-	height    int
-	ready     bool
+	state  viewState
+	width  int
+	height int
+	ready  bool
 
-	// List view
 	list    list.Model
-	entries []journal.Entry
+	records []journal.DayRecord
 
-	// Viewer
-	viewport    viewport.Model
-	viewing     int
-	viewingPath string // stable reference across reloads
+	dayRecord     journal.DayRecord
+	selectedEntry int // index into dayRecord.Entries; -1 = no selection
 
-	// Editor
-	textarea textarea.Model
-	editPath string
-	editDate time.Time
+	taskInput     textinput.Model
+	projectInput  textinput.Model
+	durationInput textinput.Model
+	activeInput   int
+	isBreakEntry  bool
+	editEntryIdx  int // -1 = new, >=0 = editing existing entry
 
-	// Delete confirm
-	deleteIdx int
+	textarea textarea.Model // notes editor
 
-	// Work log form
-	taskInput          textinput.Model
-	projectInput       textinput.Model
-	durationInput      textinput.Model
-	activeInput        int    // field index (work: 0=task 1=project 2=duration; break: 0=label 1=duration)
-	workLogPath        string // entry being targeted by the form
-	workLogReturnState viewState
-	isBreakEntry       bool // true when the form is logging a break
-
-	// Manual time input dialog
 	timeInput      textinput.Model
-	timeInputStart bool // true = setting start, false = setting finish
+	timeInputStart bool
 
-	// Status bar
+	deleteDay bool // true = confirm delete whole day, false = confirm delete entry
+	deleteIdx int  // index in records (deleteDay) or entries (!deleteDay)
+	prevState viewState
+
+	viewport viewport.Model
+
 	statusMsg string
 	isError   bool
 }
@@ -195,24 +169,39 @@ func New() Model {
 		projectInput:  projIn,
 		durationInput: durIn,
 		timeInput:     timeIn,
+		selectedEntry: -1,
+		editEntryIdx:  -1,
 	}
 }
 
 func (m Model) Init() tea.Cmd {
-	return loadEntries
+	return loadRecords
 }
 
 // ── Commands ──────────────────────────────────────────────────────────────────
 
-func loadEntries() tea.Msg {
-	entries, err := journal.LoadAll()
-	return entriesLoadedMsg{entries: entries, err: err}
+func loadRecords() tea.Msg {
+	records, err := journal.LoadAll()
+	if err != nil {
+		return errMsg{err: err}
+	}
+	return recordsLoadedMsg{records: records}
 }
 
 func clearStatusCmd() tea.Cmd {
 	return tea.Tick(2*time.Second, func(time.Time) tea.Msg {
 		return clearStatusMsg{}
 	})
+}
+
+func (m Model) saveDayCmd(label string) tea.Cmd {
+	rec := m.dayRecord
+	return func() tea.Msg {
+		if err := journal.Save(rec); err != nil {
+			return errMsg{err: err}
+		}
+		return daySavedMsg{label: label}
+	}
 }
 
 // ── Update ────────────────────────────────────────────────────────────────────
@@ -233,57 +222,30 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.list.SetSize(m.width, ch)
 		m.textarea.SetWidth(m.width - 4)
-		m.textarea.SetHeight(ch - 2) // border takes 2 lines
+		m.textarea.SetHeight(ch - 2)
 		return m, nil
 
-	case entriesLoadedMsg:
-		if msg.err != nil {
-			m.statusMsg = "✗ " + msg.err.Error()
-			m.isError = true
-			return m, nil
-		}
-		m.entries = msg.entries
-		items := make([]list.Item, len(m.entries))
-		for i, e := range m.entries {
-			items[i] = entryItem{entry: e}
+	case recordsLoadedMsg:
+		m.records = msg.records
+		items := make([]list.Item, len(m.records))
+		for i, r := range m.records {
+			items[i] = dayListItem{rec: r}
 		}
 		m.list.SetItems(items)
-		// Restore viewer position if we're still in the viewer.
-		if m.state == stateViewer && m.viewingPath != "" {
-			for i, e := range m.entries {
-				if e.Path == m.viewingPath {
-					m.viewing = i
-					m.viewport.SetContent(m.renderMarkdown(e.Content))
-					break
-				}
-			}
-		}
 		return m, nil
 
-	case savedMsg:
-		m.statusMsg = "✓ Entry saved"
+	case daySavedMsg:
+		m.statusMsg = msg.label
+		m.isError = false
+		return m, tea.Batch(loadRecords, clearStatusCmd())
+
+	case dayDeletedMsg:
+		m.statusMsg = "✓ Day deleted"
 		m.isError = false
 		m.state = stateList
-		return m, tea.Batch(loadEntries, clearStatusCmd())
-
-	case stampedMsg:
-		m.statusMsg = "✓ " + msg.text
-		m.isError = false
-		// State stays as stateViewer; entriesLoadedMsg will refresh the viewport.
-		return m, tea.Batch(loadEntries, clearStatusCmd())
-
-	case workEntrySavedMsg:
-		if msg.isBreak {
-			m.statusMsg = "✓ Break logged"
-		} else {
-			m.statusMsg = "✓ Work entry logged"
-		}
-		m.isError = false
-		m.state = m.workLogReturnState
-		return m, tea.Batch(loadEntries, clearStatusCmd())
+		return m, tea.Batch(loadRecords, clearStatusCmd())
 
 	case exportedMsg:
-		// Abbreviate home dir in the displayed path.
 		display := msg.path
 		if home, err := os.UserHomeDir(); err == nil {
 			display = strings.Replace(display, home, "~", 1)
@@ -291,12 +253,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.statusMsg = "✓ Exported → " + display
 		m.isError = false
 		return m, clearStatusCmd()
-
-	case deletedMsg:
-		m.statusMsg = "✓ Entry deleted"
-		m.isError = false
-		m.state = stateList
-		return m, tea.Batch(loadEntries, clearStatusCmd())
 
 	case errMsg:
 		m.statusMsg = "✗ " + msg.err.Error()
@@ -315,34 +271,30 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch m.state {
 		case stateList:
 			return m.handleListKey(msg)
-		case stateViewer:
-			return m.handleViewerKey(msg)
-		case stateEditor:
-			return m.handleEditorKey(msg)
-		case stateConfirmDelete:
-			return m.handleConfirmDeleteKey(msg)
-		case stateWorkLogForm:
-			return m.handleWorkLogFormKey(msg)
+		case stateDayView:
+			return m.handleDayViewKey(msg)
+		case stateWorkForm:
+			return m.handleWorkFormKey(msg)
 		case stateTimeInput:
 			return m.handleTimeInputKey(msg)
+		case stateNotesEditor:
+			return m.handleNotesEditorKey(msg)
+		case stateConfirmDelete:
+			return m.handleConfirmDeleteKey(msg)
 		}
 	}
 
-	// Forward non-key messages to the active sub-model.
+	// Forward non-key messages to active sub-model.
 	switch m.state {
 	case stateList:
 		var cmd tea.Cmd
 		m.list, cmd = m.list.Update(msg)
 		return m, cmd
-	case stateViewer:
+	case stateDayView:
 		var cmd tea.Cmd
 		m.viewport, cmd = m.viewport.Update(msg)
 		return m, cmd
-	case stateEditor:
-		var cmd tea.Cmd
-		m.textarea, cmd = m.textarea.Update(msg)
-		return m, cmd
-	case stateWorkLogForm:
+	case stateWorkForm:
 		var cmd tea.Cmd
 		switch {
 		case m.activeInput == 0:
@@ -356,6 +308,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case stateTimeInput:
 		var cmd tea.Cmd
 		m.timeInput, cmd = m.timeInput.Update(msg)
+		return m, cmd
+	case stateNotesEditor:
+		var cmd tea.Cmd
+		m.textarea, cmd = m.textarea.Update(msg)
 		return m, cmd
 	}
 	return m, nil
@@ -372,24 +328,19 @@ func (m Model) handleListKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 	case "n":
 		if !filtering {
-			return m.openNewEntry()
+			return m.openDayViewToday()
 		}
 	case "enter":
 		if !filtering {
-			if item, ok := m.list.SelectedItem().(entryItem); ok {
-				return m.openViewer(item.entry)
-			}
-		}
-	case "e":
-		if !filtering {
-			if item, ok := m.list.SelectedItem().(entryItem); ok {
-				return m.openEditor(item.entry)
+			if item, ok := m.list.SelectedItem().(dayListItem); ok {
+				return m.openDayView(item.rec)
 			}
 		}
 	case "d":
 		if !filtering {
 			idx := m.list.Index()
-			if idx >= 0 && idx < len(m.entries) {
+			if idx >= 0 && idx < len(m.records) {
+				m.deleteDay = true
 				m.deleteIdx = idx
 				m.prevState = stateList
 				m.state = stateConfirmDelete
@@ -397,22 +348,19 @@ func (m Model) handleListKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 		}
 	case "w":
-		// Log work entry to today's journal (creates the entry if needed).
 		if !filtering {
-			return m.openWorkLogFormForToday(false)
+			return m.openWorkFormForToday(false)
 		}
 	case "b":
-		// Log a break to today's journal (creates the entry if needed).
 		if !filtering {
-			return m.openWorkLogFormForToday(true)
+			return m.openWorkFormForToday(true)
 		}
 	case "x":
-		// Export selected entry.
 		if !filtering {
-			if item, ok := m.list.SelectedItem().(entryItem); ok {
-				entry := item.entry
+			if item, ok := m.list.SelectedItem().(dayListItem); ok {
+				rec := item.rec
 				return m, func() tea.Msg {
-					path, err := journal.SaveExport(entry)
+					path, err := journal.SaveExport(rec)
 					if err != nil {
 						return errMsg{err: err}
 					}
@@ -426,109 +374,78 @@ func (m Model) handleListKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
-func (m Model) handleViewerKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (m Model) handleDayViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	n := len(m.dayRecord.Entries)
 	switch msg.String() {
-	case "esc", "q":
-		m.state = stateList
-		return m, nil
-	case "e":
-		if m.viewing >= 0 && m.viewing < len(m.entries) {
-			return m.openEditor(m.entries[m.viewing])
+	case "j", "down":
+		if m.selectedEntry < n-1 {
+			m.selectedEntry++
+			m.viewport.SetContent(m.renderDayContent())
+			m.scrollToSelected()
 		}
+		return m, nil
+	case "k", "up":
+		if m.selectedEntry > 0 {
+			m.selectedEntry--
+			m.viewport.SetContent(m.renderDayContent())
+			m.scrollToSelected()
+		}
+		return m, nil
+	case "w":
+		return m.openWorkForm(false, -1)
+	case "b":
+		return m.openWorkForm(true, -1)
+	case "e":
+		if m.selectedEntry >= 0 && m.selectedEntry < n {
+			return m.openWorkForm(m.dayRecord.Entries[m.selectedEntry].IsBreak, m.selectedEntry)
+		}
+		return m.openNotesEditor()
 	case "d":
-		if m.viewing >= 0 && m.viewing < len(m.entries) {
-			m.deleteIdx = m.viewing
-			m.prevState = stateViewer
+		if m.selectedEntry >= 0 && m.selectedEntry < n {
+			m.deleteDay = false
+			m.deleteIdx = m.selectedEntry
+			m.prevState = stateDayView
 			m.state = stateConfirmDelete
 			return m, nil
 		}
-	case "w":
-		// Log work entry to the currently viewed entry.
-		if m.viewing >= 0 && m.viewing < len(m.entries) {
-			return m.openWorkLogForm(m.entries[m.viewing].Path, stateViewer, false)
-		}
-	case "b":
-		// Log a break to the currently viewed entry.
-		if m.viewing >= 0 && m.viewing < len(m.entries) {
-			return m.openWorkLogForm(m.entries[m.viewing].Path, stateViewer, true)
-		}
-	case "x":
-		// Export current entry.
-		if m.viewing >= 0 && m.viewing < len(m.entries) {
-			entry := m.entries[m.viewing]
-			return m, func() tea.Msg {
-				path, err := journal.SaveExport(entry)
-				if err != nil {
-					return errMsg{err: err}
-				}
-				return exportedMsg{path: path}
-			}
-		}
+		m.deleteDay = true
+		m.deleteIdx = -1 // current day
+		m.prevState = stateDayView
+		m.state = stateConfirmDelete
+		return m, nil
 	case "s":
-		// Stamp work-day start time.
-		if m.viewing >= 0 && m.viewing < len(m.entries) {
-			return m.stampTime(m.entries[m.viewing], true)
-		}
+		m.dayRecord.StartTime = time.Now().Format("15:04")
+		m.viewport.SetContent(m.renderDayContent())
+		return m, m.saveDayCmd("✓ Start time set to " + m.dayRecord.StartTime)
 	case "S":
-		// Open dialog to manually set start time.
-		if m.viewing >= 0 && m.viewing < len(m.entries) {
-			return m.openTimeInput(true)
-		}
+		return m.openTimeInput(true)
 	case "f":
-		// Stamp work-day finish time.
-		if m.viewing >= 0 && m.viewing < len(m.entries) {
-			return m.stampTime(m.entries[m.viewing], false)
-		}
+		m.dayRecord.EndTime = time.Now().Format("15:04")
+		m.viewport.SetContent(m.renderDayContent())
+		return m, m.saveDayCmd("✓ End time set to " + m.dayRecord.EndTime)
 	case "F":
-		// Open dialog to manually set finish time.
-		if m.viewing >= 0 && m.viewing < len(m.entries) {
-			return m.openTimeInput(false)
+		return m.openTimeInput(false)
+	case "N", "n":
+		return m.openNotesEditor()
+	case "x":
+		rec := m.dayRecord
+		return m, func() tea.Msg {
+			path, err := journal.SaveExport(rec)
+			if err != nil {
+				return errMsg{err: err}
+			}
+			return exportedMsg{path: path}
 		}
+	case "esc", "q":
+		m.state = stateList
+		return m, loadRecords
 	}
 	var cmd tea.Cmd
 	m.viewport, cmd = m.viewport.Update(msg)
 	return m, cmd
 }
 
-func (m Model) handleEditorKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	switch msg.Type {
-	case tea.KeyCtrlS:
-		content := m.textarea.Value()
-		path := m.editPath
-		return m, func() tea.Msg {
-			if err := journal.Save(path, content); err != nil {
-				return errMsg{err: err}
-			}
-			return savedMsg{}
-		}
-	case tea.KeyEsc:
-		m.state = stateList
-		return m, nil
-	}
-	var cmd tea.Cmd
-	m.textarea, cmd = m.textarea.Update(msg)
-	return m, cmd
-}
-
-func (m Model) handleConfirmDeleteKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	switch msg.String() {
-	case "y", "Y":
-		if m.deleteIdx >= 0 && m.deleteIdx < len(m.entries) {
-			path := m.entries[m.deleteIdx].Path
-			return m, func() tea.Msg {
-				if err := journal.Delete(path); err != nil {
-					return errMsg{err: err}
-				}
-				return deletedMsg{}
-			}
-		}
-	case "n", "N", "esc":
-		m.state = m.prevState
-	}
-	return m, nil
-}
-
-func (m Model) handleWorkLogFormKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (m Model) handleWorkFormKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.Type {
 	case tea.KeyTab:
 		return m.focusField((m.activeInput + 1) % m.numFormFields())
@@ -555,30 +472,44 @@ func (m Model) handleWorkLogFormKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, clearStatusCmd()
 		}
 		project := strings.TrimSpace(m.projectInput.Value())
-		targetPath := m.workLogPath
-		retState := m.workLogReturnState
 		isBreak := m.isBreakEntry
-		m.state = retState
-		return m, func() tea.Msg {
-			content := loadOrCreateContent(targetPath)
-			var updated string
-			if isBreak {
-				updated = journal.AddBreakEntry(content, task, dur)
-			} else {
-				updated = journal.AddWorkEntry(content, task, project, dur)
+		editIdx := m.editEntryIdx
+
+		if editIdx >= 0 && editIdx < len(m.dayRecord.Entries) {
+			// Update existing entry.
+			m.dayRecord.Entries[editIdx].Task = task
+			m.dayRecord.Entries[editIdx].Project = project
+			m.dayRecord.Entries[editIdx].DurationMin = int(dur.Minutes())
+			m.dayRecord.Entries[editIdx].IsBreak = isBreak
+			m.selectedEntry = editIdx
+		} else {
+			// Append new entry.
+			entry := journal.WorkEntry{
+				ID:          journal.NewID(),
+				Task:        task,
+				Project:     project,
+				DurationMin: int(dur.Minutes()),
+				IsBreak:     isBreak,
 			}
-			if err := journal.Save(targetPath, updated); err != nil {
-				return errMsg{err: err}
-			}
-			return workEntrySavedMsg{isBreak: isBreak}
+			m.dayRecord.Entries = append(m.dayRecord.Entries, entry)
+			m.selectedEntry = len(m.dayRecord.Entries) - 1
 		}
 
+		m.state = stateDayView
+		m.viewport.SetContent(m.renderDayContent())
+		m.scrollToSelected()
+
+		label := "✓ Work entry logged"
+		if isBreak {
+			label = "✓ Break logged"
+		}
+		return m, m.saveDayCmd(label)
+
 	case tea.KeyEsc:
-		m.state = m.workLogReturnState
+		m.state = stateDayView
 		return m, nil
 	}
 
-	// Forward to the active sub-input.
 	var cmd tea.Cmd
 	switch {
 	case m.activeInput == 0:
@@ -591,53 +522,198 @@ func (m Model) handleWorkLogFormKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
-// ── Navigation helpers ────────────────────────────────────────────────────────
-
-func (m Model) openViewer(entry journal.Entry) (tea.Model, tea.Cmd) {
-	for i, e := range m.entries {
-		if e.Path == entry.Path {
-			m.viewing = i
-			break
+func (m Model) handleTimeInputKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.Type {
+	case tea.KeyEnter:
+		val := strings.TrimSpace(m.timeInput.Value())
+		if !isValidHHMM(val) {
+			m.statusMsg = "✗ Invalid time — use HH:MM (e.g. 09:30)"
+			m.isError = true
+			m.state = stateDayView
+			return m, clearStatusCmd()
 		}
+		if m.timeInputStart {
+			m.dayRecord.StartTime = val
+		} else {
+			m.dayRecord.EndTime = val
+		}
+		m.state = stateDayView
+		m.viewport.SetContent(m.renderDayContent())
+		label := "✓ End time set to " + val
+		if m.timeInputStart {
+			label = "✓ Start time set to " + val
+		}
+		return m, m.saveDayCmd(label)
+	case tea.KeyEsc:
+		m.state = stateDayView
+		return m, nil
 	}
-	m.viewingPath = entry.Path
-	m.viewport.SetContent(m.renderMarkdown(entry.Content))
-	m.viewport.GotoTop()
-	m.state = stateViewer
+	var cmd tea.Cmd
+	m.timeInput, cmd = m.timeInput.Update(msg)
+	return m, cmd
+}
+
+func (m Model) handleNotesEditorKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.Type {
+	case tea.KeyCtrlS:
+		m.dayRecord.Notes = m.textarea.Value()
+		m.state = stateDayView
+		m.viewport.SetContent(m.renderDayContent())
+		return m, m.saveDayCmd("✓ Notes saved")
+	case tea.KeyEsc:
+		m.state = stateDayView
+		return m, nil
+	}
+	var cmd tea.Cmd
+	m.textarea, cmd = m.textarea.Update(msg)
+	return m, cmd
+}
+
+func (m Model) handleConfirmDeleteKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "y", "Y":
+		if m.deleteDay {
+			// Delete the whole day file.
+			var path string
+			if m.prevState == stateDayView {
+				path = m.dayRecord.Path
+			} else if m.deleteIdx >= 0 && m.deleteIdx < len(m.records) {
+				path = m.records[m.deleteIdx].Path
+			}
+			if path == "" {
+				m.state = m.prevState
+				return m, nil
+			}
+			return m, func() tea.Msg {
+				if err := journal.Delete(path); err != nil {
+					return errMsg{err: err}
+				}
+				return dayDeletedMsg{}
+			}
+		}
+		// Delete a single entry from the current day.
+		if m.deleteIdx >= 0 && m.deleteIdx < len(m.dayRecord.Entries) {
+			m.dayRecord.Entries = append(
+				m.dayRecord.Entries[:m.deleteIdx],
+				m.dayRecord.Entries[m.deleteIdx+1:]...,
+			)
+			if m.selectedEntry >= len(m.dayRecord.Entries) {
+				m.selectedEntry = len(m.dayRecord.Entries) - 1
+			}
+		}
+		m.state = stateDayView
+		m.viewport.SetContent(m.renderDayContent())
+		return m, m.saveDayCmd("✓ Entry deleted")
+	case "n", "N", "esc":
+		m.state = m.prevState
+	}
 	return m, nil
 }
 
-func (m Model) openEditor(entry journal.Entry) (tea.Model, tea.Cmd) {
-	m.editPath = entry.Path
-	m.editDate = entry.Date
-	m.textarea.SetValue(entry.Content)
-	blinkCmd := m.textarea.Focus()
-	m.state = stateEditor
-	return m, blinkCmd
+// ── Navigation helpers ────────────────────────────────────────────────────────
+
+func (m Model) openDayView(rec journal.DayRecord) (tea.Model, tea.Cmd) {
+	// Reload from disk to get freshest data.
+	fresh, err := journal.Load(rec.Path)
+	if err != nil {
+		fresh = rec
+	}
+	m.dayRecord = fresh
+	if m.dayRecord.Path == "" {
+		m.dayRecord.Path = rec.Path
+	}
+	m.selectedEntry = -1
+	if len(m.dayRecord.Entries) > 0 {
+		m.selectedEntry = 0
+	}
+	m.state = stateDayView
+	m.viewport.GotoTop()
+	m.viewport.SetContent(m.renderDayContent())
+	return m, nil
 }
 
-func (m Model) openNewEntry() (tea.Model, tea.Cmd) {
+func (m Model) openDayViewToday() (tea.Model, tea.Cmd) {
 	path, err := journal.TodayPath()
 	if err != nil {
 		m.statusMsg = "✗ " + err.Error()
 		m.isError = true
 		return m, nil
 	}
-	now := time.Now()
-	content := journal.NewEntryContent(now)
-	if existing, err := journal.Load(path); err == nil {
-		content = existing.Content
+	rec, err := journal.Load(path)
+	if err != nil {
+		m.statusMsg = "✗ " + err.Error()
+		m.isError = true
+		return m, nil
 	}
-	m.editPath = path
-	m.editDate = now
-	m.textarea.SetValue(content)
+	if rec.Date == "" {
+		rec.Date = time.Now().Format("2006-01-02")
+	}
+	rec.Path = path
+	return m.openDayView(rec)
+}
+
+func (m Model) openWorkForm(isBreak bool, editIdx int) (tea.Model, tea.Cmd) {
+	m.isBreakEntry = isBreak
+	m.editEntryIdx = editIdx
+	m.taskInput.SetValue("")
+	m.projectInput.SetValue("")
+	m.durationInput.SetValue("")
+	if editIdx >= 0 && editIdx < len(m.dayRecord.Entries) {
+		e := m.dayRecord.Entries[editIdx]
+		m.taskInput.SetValue(e.Task)
+		m.projectInput.SetValue(e.Project)
+		m.durationInput.SetValue(journal.FormatDuration(e.Duration()))
+	}
+	if isBreak {
+		m.taskInput.Placeholder = "e.g. Lunch, coffee break, walk…"
+	} else {
+		m.taskInput.Placeholder = "e.g. Feature development, meeting, code review…"
+	}
+	m.state = stateWorkForm
+	return m.focusField(0)
+}
+
+func (m Model) openWorkFormForToday(isBreak bool) (tea.Model, tea.Cmd) {
+	path, err := journal.TodayPath()
+	if err != nil {
+		m.statusMsg = "✗ " + err.Error()
+		m.isError = true
+		return m, nil
+	}
+	rec, err := journal.Load(path)
+	if err != nil {
+		m.statusMsg = "✗ " + err.Error()
+		m.isError = true
+		return m, nil
+	}
+	if rec.Date == "" {
+		rec.Date = time.Now().Format("2006-01-02")
+	}
+	rec.Path = path
+	m.dayRecord = rec
+	if m.selectedEntry < 0 || m.selectedEntry >= len(rec.Entries) {
+		m.selectedEntry = len(rec.Entries) - 1
+	}
+	// After form submission we'll land in stateDayView.
+	return m.openWorkForm(isBreak, -1)
+}
+
+func (m Model) openNotesEditor() (tea.Model, tea.Cmd) {
+	m.textarea.SetValue(m.dayRecord.Notes)
 	blinkCmd := m.textarea.Focus()
-	m.state = stateEditor
+	m.state = stateNotesEditor
 	return m, blinkCmd
 }
 
+func (m Model) openTimeInput(isStart bool) (tea.Model, tea.Cmd) {
+	m.timeInputStart = isStart
+	m.timeInput.SetValue(time.Now().Format("15:04"))
+	m.timeInput.CursorEnd()
+	m.state = stateTimeInput
+	return m, m.timeInput.Focus()
+}
+
 // numFormFields returns how many fields the current work-log form has.
-// Work entries: 3 (task, project, duration). Breaks: 2 (label, duration).
 func (m Model) numFormFields() int {
 	if m.isBreakEntry {
 		return 2
@@ -661,158 +737,133 @@ func (m Model) focusField(n int) (Model, tea.Cmd) {
 	}
 }
 
-// openWorkLogForm opens the work/break log entry form targeting the entry at path.
-func (m Model) openWorkLogForm(path string, returnTo viewState, isBreak bool) (tea.Model, tea.Cmd) {
-	m.workLogPath = path
-	m.workLogReturnState = returnTo
-	m.isBreakEntry = isBreak
-	m.taskInput.SetValue("")
-	m.projectInput.SetValue("")
-	m.durationInput.SetValue("")
-	if isBreak {
-		m.taskInput.Placeholder = "e.g. Lunch, coffee break, walk…"
-	} else {
-		m.taskInput.Placeholder = "e.g. Feature development, meeting, code review…"
-	}
-	m.state = stateWorkLogForm
-	return m.focusField(0)
-}
-
-// openWorkLogFormForToday opens the work/break form pointing at today's entry.
-func (m Model) openWorkLogFormForToday(isBreak bool) (tea.Model, tea.Cmd) {
-	path, err := journal.TodayPath()
-	if err != nil {
-		m.statusMsg = "✗ " + err.Error()
-		m.isError = true
-		return m, nil
-	}
-	return m.openWorkLogForm(path, stateList, isBreak)
-}
-
-// stampTime writes the current time as the start or finish marker in an entry.
-func (m Model) stampTime(entry journal.Entry, isStart bool) (tea.Model, tea.Cmd) {
-	timeStr := time.Now().Format("15:04")
-	path := entry.Path
-	content := entry.Content
-	var (
-		updated string
-		found   bool
-		label   string
-	)
-	if isStart {
-		updated, found = journal.StampStartTime(content, timeStr)
-		label = "Start time set to " + timeStr
-	} else {
-		updated, found = journal.StampEndTime(content, timeStr)
-		label = "Finish time set to " + timeStr
-	}
-	if !found {
-		m.statusMsg = "✗ No time marker found — entry needs the daily template"
-		m.isError = true
-		return m, clearStatusCmd()
-	}
-	return m, func() tea.Msg {
-		if err := journal.Save(path, updated); err != nil {
-			return errMsg{err: err}
-		}
-		return stampedMsg{text: label}
-	}
-}
-
-// openTimeInput opens the manual time-entry dialog.
-func (m Model) openTimeInput(isStart bool) (tea.Model, tea.Cmd) {
-	m.timeInputStart = isStart
-	// Pre-fill with the current time as a sensible default.
-	m.timeInput.SetValue(time.Now().Format("15:04"))
-	m.timeInput.CursorEnd()
-	m.state = stateTimeInput
-	return m, m.timeInput.Focus()
-}
-
-func (m Model) handleTimeInputKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	switch msg.Type {
-	case tea.KeyEnter:
-		val := strings.TrimSpace(m.timeInput.Value())
-		if !isValidHHMM(val) {
-			m.statusMsg = "✗ Invalid time — use HH:MM (e.g. 09:30)"
-			m.isError = true
-			m.state = stateViewer
-			return m, clearStatusCmd()
-		}
-		if m.viewing < 0 || m.viewing >= len(m.entries) {
-			m.state = stateViewer
-			return m, nil
-		}
-		entry := m.entries[m.viewing]
-		isStart := m.timeInputStart
-		m.state = stateViewer
-		return m, func() tea.Msg {
-			var (
-				updated string
-				found   bool
-				label   string
-			)
-			if isStart {
-				updated, found = journal.StampStartTime(entry.Content, val)
-				label = "Start time set to " + val
-			} else {
-				updated, found = journal.StampEndTime(entry.Content, val)
-				label = "Finish time set to " + val
-			}
-			if !found {
-				return errMsg{err: fmt.Errorf("no time marker found — entry needs the daily template")}
-			}
-			if err := journal.Save(entry.Path, updated); err != nil {
-				return errMsg{err: err}
-			}
-			return stampedMsg{text: label}
-		}
-
-	case tea.KeyEsc:
-		m.state = stateViewer
-		return m, nil
-	}
-
-	var cmd tea.Cmd
-	m.timeInput, cmd = m.timeInput.Update(msg)
-	return m, cmd
-}
-
-// isValidHHMM reports whether s is a valid 24-hour time in HH:MM format.
 func isValidHHMM(s string) bool {
 	_, err := time.Parse("15:04", s)
 	return err == nil
 }
-func loadOrCreateContent(path string) string {
-	if e, err := journal.Load(path); err == nil {
-		return e.Content
+
+// scrollToSelected adjusts the viewport so the selected entry is visible.
+func (m *Model) scrollToSelected() {
+	const entryStartLine = 7
+	if m.selectedEntry < 0 {
+		return
 	}
-	base := filepath.Base(path)
-	dateStr := strings.TrimSuffix(base, ".md")
-	t, err := time.Parse("2006-01-02", dateStr)
-	if err != nil {
-		t = time.Now()
+	targetLine := entryStartLine + m.selectedEntry
+	if targetLine < m.viewport.YOffset {
+		m.viewport.YOffset = targetLine
+	} else if targetLine >= m.viewport.YOffset+m.viewport.Height {
+		m.viewport.YOffset = targetLine - m.viewport.Height + 1
 	}
-	return journal.NewEntryContent(t)
 }
 
-func (m Model) renderMarkdown(content string) string {
-	w := m.width - 4
-	if w < 40 {
-		w = 40
+// ── Day view content renderer ─────────────────────────────────────────────────
+
+func (m Model) renderDayContent() string {
+	innerW := m.width - 2
+	if innerW < 40 {
+		innerW = 40
 	}
-	r, err := glamour.NewTermRenderer(
-		glamour.WithStandardStyle("dark"),
-		glamour.WithWordWrap(w),
-	)
-	if err != nil {
-		return content
+	div := dayViewDividerStyle.Render(strings.Repeat("─", innerW))
+
+	var b strings.Builder
+
+	b.WriteString("\n")
+
+	// ── Work Day section ──────────────────────────────────────────────────────
+	b.WriteString(dayViewSectionStyle.Render("🕐  Work Day") + "\n")
+	b.WriteString(div + "\n")
+
+	start := m.dayRecord.StartTime
+	end := m.dayRecord.EndTime
+	startDisplay := start
+	if startDisplay == "" {
+		startDisplay = dayViewMutedStyle.Render("—")
+	} else {
+		startDisplay = dayViewValueStyle.Render(start)
 	}
-	rendered, err := r.Render(content)
-	if err != nil {
-		return content
+	endDisplay := end
+	if endDisplay == "" {
+		endDisplay = dayViewMutedStyle.Render("—")
+	} else {
+		endDisplay = dayViewValueStyle.Render(end)
 	}
-	return rendered
+	timeLine := "  " + dayViewLabelStyle.Render("Start:") + " " + startDisplay +
+		"   " + dayViewLabelStyle.Render("End:") + " " + endDisplay
+	if dur, ok := m.dayRecord.DayDuration(); ok {
+		timeLine += "   " + dayViewMutedStyle.Render("("+journal.FormatDuration(dur)+")")
+	}
+	b.WriteString(timeLine + "\n\n")
+
+	// ── Work Log section ──────────────────────────────────────────────────────
+	b.WriteString(dayViewSectionStyle.Render("📋  Work Log") + "\n")
+	b.WriteString(div + "\n")
+
+	entries := m.dayRecord.Entries
+	if len(entries) == 0 {
+		b.WriteString(dayViewMutedStyle.Render("  No entries yet") + "\n")
+	} else {
+		// column widths: selector(2) + project(14) + task(dynamic) + duration(8)
+		taskW := innerW - 2 - 14 - 8
+		if taskW < 10 {
+			taskW = 10
+		}
+		for i, e := range entries {
+			selector := "  "
+			if i == m.selectedEntry {
+				selector = "▶ "
+			}
+
+			proj := fmt.Sprintf("%-14s", e.Project)
+			taskStr := e.Task
+			if e.IsBreak {
+				taskStr = "☕  " + taskStr
+			}
+			if len(taskStr) > taskW {
+				taskStr = taskStr[:taskW-1] + "…"
+			}
+			taskStr = fmt.Sprintf("%-*s", taskW, taskStr)
+			durStr := fmt.Sprintf("%8s", journal.FormatDuration(e.Duration()))
+
+			line := selector + proj + taskStr + durStr
+
+			if i == m.selectedEntry {
+				line = selectedEntryStyle.Render(line)
+			} else if e.IsBreak {
+				line = breakEntryStyle.Render(line)
+			} else {
+				line = normalEntryStyle.Render(line)
+			}
+			b.WriteString(line + "\n")
+		}
+	}
+
+	work, breaks, _ := m.dayRecord.WorkTotals()
+	totals := ""
+	if work > 0 || breaks > 0 {
+		totals = "  Work: " + journal.FormatDuration(work)
+		if breaks > 0 {
+			totals += "  ·  Breaks: " + journal.FormatDuration(breaks)
+			totals += "  ·  Total: " + journal.FormatDuration(work+breaks)
+		}
+	}
+	if totals != "" {
+		b.WriteString("\n" + dayViewTotalsStyle.Render(totals) + "\n")
+	}
+
+	b.WriteString("\n")
+
+	// ── Notes section ─────────────────────────────────────────────────────────
+	b.WriteString(dayViewSectionStyle.Render("📝  Notes") + "\n")
+	b.WriteString(div + "\n")
+	if m.dayRecord.Notes == "" {
+		b.WriteString(dayViewMutedStyle.Render("  No notes") + "\n")
+	} else {
+		for _, line := range strings.Split(m.dayRecord.Notes, "\n") {
+			b.WriteString(dayViewNotesStyle.Render("  "+line) + "\n")
+		}
+	}
+
+	return b.String()
 }
 
 // ── View ──────────────────────────────────────────────────────────────────────
@@ -824,16 +875,16 @@ func (m Model) View() string {
 	switch m.state {
 	case stateList:
 		return m.viewList()
-	case stateViewer:
-		return m.viewViewer()
-	case stateEditor:
-		return m.viewEditor()
-	case stateConfirmDelete:
-		return m.viewConfirmDelete()
-	case stateWorkLogForm:
+	case stateDayView:
+		return m.viewDayView()
+	case stateWorkForm:
 		return m.viewWorkLogForm()
 	case stateTimeInput:
 		return m.viewTimeInput()
+	case stateNotesEditor:
+		return m.viewNotesEditor()
+	case stateConfirmDelete:
+		return m.viewConfirmDelete()
 	}
 	return ""
 }
@@ -876,11 +927,10 @@ func (m Model) renderFooter(keys [][2]string) string {
 func (m Model) viewList() string {
 	header := m.renderHeader("📔  Schmournal", time.Now().Format("Mon, 02 Jan 2006"))
 	footer := m.renderFooter([][2]string{
-		{"n", "new"},
+		{"n", "open today"},
 		{"w", "log work"},
 		{"b", "log break"},
 		{"enter", "view"},
-		{"e", "edit"},
 		{"d", "delete"},
 		{"x", "export"},
 		{"/", "filter"},
@@ -889,71 +939,32 @@ func (m Model) viewList() string {
 	return lipgloss.JoinVertical(lipgloss.Left, header, m.list.View(), footer)
 }
 
-func (m Model) viewViewer() string {
-	subtitle := ""
-	if m.viewing >= 0 && m.viewing < len(m.entries) {
-		subtitle = m.entries[m.viewing].Date.Format("Monday, 02 January 2006")
+func (m Model) viewDayView() string {
+	subtitle := m.dayRecord.Date
+	if t, err := m.dayRecord.ParseDate(); err == nil {
+		subtitle = t.Format("Monday, 02 January 2006")
 	}
 	header := m.renderHeader("📔  Schmournal", subtitle)
 	footer := m.renderFooter([][2]string{
-		{"w", "log work"},
-		{"b", "log break"},
-		{"s", "start now"},
-		{"S", "set start"},
-		{"f", "finish now"},
-		{"F", "set finish"},
-		{"x", "export"},
+		{"j/k", "select"},
+		{"w", "work"},
+		{"b", "break"},
 		{"e", "edit"},
-		{"d", "delete"},
-		{"↑↓", "scroll"},
+		{"d", "del"},
+		{"s", "start"},
+		{"S", "set start"},
+		{"f", "end"},
+		{"F", "set end"},
+		{"N", "notes"},
+		{"x", "export"},
 		{"esc", "back"},
 	})
 	return lipgloss.JoinVertical(lipgloss.Left, header, m.viewport.View(), footer)
 }
 
-func (m Model) viewEditor() string {
-	subtitle := "New Entry"
-	if !m.editDate.IsZero() {
-		subtitle = "Editing · " + m.editDate.Format("Mon, 02 Jan 2006")
-	}
-	header := m.renderHeader("📔  Schmournal", subtitle)
-	footer := m.renderFooter([][2]string{
-		{"ctrl+s", "save"},
-		{"esc", "cancel"},
-	})
-	editor := editorBorderStyle.
-		Width(m.width - 4).
-		Render(m.textarea.View())
-	return lipgloss.JoinVertical(lipgloss.Left, header, editor, footer)
-}
-
-func (m Model) viewConfirmDelete() string {
-	entryDate := ""
-	if m.deleteIdx >= 0 && m.deleteIdx < len(m.entries) {
-		entryDate = m.entries[m.deleteIdx].Date.Format("Monday, 02 January 2006")
-	}
-	header := m.renderHeader("📔  Schmournal", "Delete Entry")
-
-	dialog := confirmBoxStyle.Render(
-		confirmTitleStyle.Render(fmt.Sprintf("Delete the entry for %s?", entryDate)) +
-			"\n\n  " +
-			confirmYesStyle.Render("[y]") + helpStyle.Render(" yes") +
-			"    " +
-			confirmNoStyle.Render("[n]") + helpStyle.Render(" no / esc"),
-	)
-
-	dh := lipgloss.Height(dialog)
-	topPad := (m.contentHeight() - dh) / 2
-	if topPad < 0 {
-		topPad = 0
-	}
-
-	centered := lipgloss.NewStyle().Width(m.width).Align(lipgloss.Center).Render(dialog)
-	return header + "\n" + strings.Repeat("\n", topPad) + centered
-}
-
 func (m Model) viewWorkLogForm() string {
 	var badge, taskLabel string
+	dateStr := m.dayRecord.Date
 	if m.isBreakEntry {
 		badge = breakLogBadgeStyle.Render(" Log Break ")
 		taskLabel = "Break label"
@@ -962,7 +973,7 @@ func (m Model) viewWorkLogForm() string {
 		taskLabel = "What did you work on?"
 	}
 	header := m.renderHeader("📔  Schmournal", badge+
-		headerSubtitleStyle.Render("  "+filepath.Base(m.workLogPath)))
+		headerSubtitleStyle.Render("  "+dateStr))
 	footer := m.renderFooter([][2]string{
 		{"tab", "next field"},
 		{"enter", "save"},
@@ -1051,3 +1062,56 @@ func (m Model) viewTimeInput() string {
 	centered := lipgloss.NewStyle().Width(m.width).Align(lipgloss.Center).Render(dialog)
 	return header + "\n" + strings.Repeat("\n", topPad) + centered + "\n" + footer
 }
+
+func (m Model) viewNotesEditor() string {
+	subtitle := m.dayRecord.Date
+	if t, err := m.dayRecord.ParseDate(); err == nil {
+		subtitle = t.Format("Monday, 02 January 2006")
+	}
+	header := m.renderHeader("📔  Schmournal", subtitle)
+	footer := m.renderFooter([][2]string{
+		{"ctrl+s", "save"},
+		{"esc", "cancel"},
+	})
+	editor := editorBorderStyle.
+		Width(m.width - 4).
+		Render(m.textarea.View())
+	return lipgloss.JoinVertical(lipgloss.Left, header, editor, footer)
+}
+
+func (m Model) viewConfirmDelete() string {
+	var subject string
+	if m.deleteDay {
+		if m.prevState == stateDayView {
+			subject = m.dayRecord.Date
+		} else if m.deleteIdx >= 0 && m.deleteIdx < len(m.records) {
+			subject = m.records[m.deleteIdx].Date
+		}
+		subject = "the day " + subject
+	} else {
+		if m.deleteIdx >= 0 && m.deleteIdx < len(m.dayRecord.Entries) {
+			subject = `entry "` + m.dayRecord.Entries[m.deleteIdx].Task + `"`
+		} else {
+			subject = "this entry"
+		}
+	}
+	header := m.renderHeader("📔  Schmournal", "Delete")
+
+	dialog := confirmBoxStyle.Render(
+		confirmTitleStyle.Render(fmt.Sprintf("Delete %s?", subject))+
+			"\n\n  "+
+			confirmYesStyle.Render("[y]")+helpStyle.Render(" yes")+
+			"    "+
+			confirmNoStyle.Render("[n]")+helpStyle.Render(" no / esc"),
+	)
+
+	dh := lipgloss.Height(dialog)
+	topPad := (m.contentHeight() - dh) / 2
+	if topPad < 0 {
+		topPad = 0
+	}
+
+	centered := lipgloss.NewStyle().Width(m.width).Align(lipgloss.Center).Render(dialog)
+	return header + "\n" + strings.Repeat("\n", topPad) + centered
+}
+
