@@ -1001,7 +1001,7 @@ func (m Model) renderSummaryContent() string {
 		if len(label) > labelW {
 			lbl = label[:labelW-1] + "…"
 		}
-		return indent + lbl + fmt.Sprintf("%*s", durW, dur) + "\n"
+		return indent + lbl + fmt.Sprintf("%*s", durW, dur)
 	}
 
 	if len(groups) == 0 && len(breakEntries) == 0 {
@@ -1037,7 +1037,7 @@ func (m Model) renderSummaryContent() string {
 			b.WriteString(dayViewSectionStyle.Render("  "+projLabel) +
 				dayViewTotalsStyle.Render(fmt.Sprintf("%*s", durW+labelW-2-len(projLabel), journal.FormatDuration(projTotal))) + "\n")
 			for _, t := range tasks {
-				b.WriteString(normalEntryStyle.Render(renderRow("    ", t.Task, journal.FormatDuration(t.Duration()))))
+				b.WriteString(normalEntryStyle.Render(renderRow("    ", t.Task, journal.FormatDuration(t.Duration()))) + "\n")
 			}
 			b.WriteString("\n")
 		}
@@ -1063,7 +1063,7 @@ func (m Model) renderSummaryContent() string {
 			b.WriteString(breakEntryStyle.Render("  ☕  Breaks")+
 				dayViewTotalsStyle.Render(fmt.Sprintf("%*s", durW+labelW-8, journal.FormatDuration(breakTotal)))+"\n")
 			for _, e := range bkList {
-				b.WriteString(breakEntryStyle.Render(renderRow("    ", e.Task, journal.FormatDuration(e.Duration()))))
+				b.WriteString(breakEntryStyle.Render(renderRow("    ", e.Task, journal.FormatDuration(e.Duration()))) + "\n")
 			}
 			b.WriteString("\n")
 		}
