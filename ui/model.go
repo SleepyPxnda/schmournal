@@ -993,15 +993,20 @@ func (m Model) renderSummaryContent() string {
 		}
 	}
 
-	durW := 8
-	labelW := innerW - durW - 4
-
-	renderRow := func(indent, label, dur string) string {
-		lbl := fmt.Sprintf("%-*s", labelW, label)
-		if len(label) > labelW {
-			lbl = label[:labelW-1] + "…"
+	// consolidateByName merges entries with the same task name (case-insensitive).
+	consolidateByName := func(entries []journal.WorkEntry) []journal.WorkEntry {
+		seen := make(map[string]int)
+		var out []journal.WorkEntry
+		for _, e := range entries {
+			key := strings.ToLower(e.Task)
+			if idx, ok := seen[key]; ok {
+				out[idx].DurationMin += e.DurationMin
+			} else {
+				seen[key] = len(out)
+				out = append(out, e)
+			}
 		}
-		return indent + lbl + fmt.Sprintf("%*s", durW, dur)
+		return out
 	}
 
 	if len(groups) == 0 && len(breakEntries) == 0 {
@@ -1010,62 +1015,41 @@ func (m Model) renderSummaryContent() string {
 		b.WriteString(dayViewSectionStyle.Render("🗂  By Project") + "\n")
 		b.WriteString(div + "\n")
 
-		var totalWork time.Duration
 		for _, g := range groups {
-			// Consolidate tasks within the project by name.
-			taskSeen := make(map[string]int)
-			var tasks []journal.WorkEntry
-			for _, e := range g.entries {
-				key := strings.ToLower(e.Task)
-				if idx, ok := taskSeen[key]; ok {
-					tasks[idx].DurationMin += e.DurationMin
-				} else {
-					taskSeen[key] = len(tasks)
-					tasks = append(tasks, e)
-				}
-			}
+			tasks := consolidateByName(g.entries)
 			var projTotal time.Duration
+			var names []string
 			for _, t := range tasks {
 				projTotal += t.Duration()
+				names = append(names, t.Task)
 			}
-			totalWork += projTotal
 
 			projLabel := g.name
 			if projLabel == "—" {
 				projLabel = "Other"
 			}
-			b.WriteString(dayViewSectionStyle.Render("  "+projLabel) +
-				dayViewTotalsStyle.Render(fmt.Sprintf("%*s", durW+labelW-2-len(projLabel), journal.FormatDuration(projTotal))) + "\n")
-			for _, t := range tasks {
-				b.WriteString(normalEntryStyle.Render(renderRow("    ", t.Task, journal.FormatDuration(t.Duration()))) + "\n")
-			}
-			b.WriteString("\n")
+
+			durStr := fmt.Sprintf("%-8s", journal.FormatDuration(projTotal))
+			taskList := "\"" + strings.Join(names, ", ") + "\""
+			b.WriteString("  " + dayViewTotalsStyle.Render(durStr) +
+				"  " + dayViewSectionStyle.Render(projLabel) +
+				"  " + dayViewMutedStyle.Render(taskList) + "\n")
 		}
 
 		// ── Breaks block ──────────────────────────────────────────────────────
 		if len(breakEntries) > 0 {
-			// Consolidate breaks by label.
-			bkSeen := make(map[string]int)
-			var bkList []journal.WorkEntry
-			for _, e := range breakEntries {
-				key := strings.ToLower(e.Task)
-				if idx, ok := bkSeen[key]; ok {
-					bkList[idx].DurationMin += e.DurationMin
-				} else {
-					bkSeen[key] = len(bkList)
-					bkList = append(bkList, e)
-				}
-			}
+			bkList := consolidateByName(breakEntries)
 			var breakTotal time.Duration
+			var names []string
 			for _, e := range bkList {
 				breakTotal += e.Duration()
+				names = append(names, e.Task)
 			}
-			b.WriteString(breakEntryStyle.Render("  ☕  Breaks")+
-				dayViewTotalsStyle.Render(fmt.Sprintf("%*s", durW+labelW-8, journal.FormatDuration(breakTotal)))+"\n")
-			for _, e := range bkList {
-				b.WriteString(breakEntryStyle.Render(renderRow("    ", e.Task, journal.FormatDuration(e.Duration()))) + "\n")
-			}
-			b.WriteString("\n")
+			durStr := fmt.Sprintf("%-8s", journal.FormatDuration(breakTotal))
+			taskList := "\"" + strings.Join(names, ", ") + "\""
+			b.WriteString("  " + dayViewTotalsStyle.Render(durStr) +
+				"  " + breakEntryStyle.Render("☕  Breaks") +
+				"  " + dayViewMutedStyle.Render(taskList) + "\n")
 		}
 
 		// ── Totals ────────────────────────────────────────────────────────────
