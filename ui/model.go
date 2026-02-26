@@ -1224,6 +1224,21 @@ func (m Model) renderHeader(title, subtitle string) string {
 	return top + "\n" + sep
 }
 
+// joinKeyLabels joins two key labels with "/" for footer display.
+// If either label is empty, only the non-empty one is shown; if both are empty "?" is returned.
+func joinKeyLabels(a, b string) string {
+	if a == "" && b == "" {
+		return "?"
+	}
+	if a == "" {
+		return b
+	}
+	if b == "" {
+		return a
+	}
+	return a + "/" + b
+}
+
 func (m Model) renderFooter(keys [][2]string) string {
 	var parts []string
 	for _, k := range keys {
@@ -1469,8 +1484,8 @@ func (m Model) viewDayView() string {
 			{kb.AddBreak, "break"},
 			{kb.Edit, "edit"},
 			{kb.Delete, "del"},
-			{kb.SetStartNow + "/" + kb.SetStartManual, "start"},
-			{kb.SetEndNow + "/" + kb.SetEndManual, "end"},
+			{joinKeyLabels(kb.SetStartNow, kb.SetStartManual), "start"},
+			{joinKeyLabels(kb.SetEndNow, kb.SetEndManual), "end"},
 			{kb.Notes, "notes"},
 			{kb.Export, "export"},
 			{"esc", "back"},
@@ -1478,8 +1493,8 @@ func (m Model) viewDayView() string {
 	} else {
 		footerKeys = [][2]string{
 			{"←/→", "switch tab"},
-			{kb.SetStartNow + "/" + kb.SetStartManual, "start"},
-			{kb.SetEndNow + "/" + kb.SetEndManual, "end"},
+			{joinKeyLabels(kb.SetStartNow, kb.SetStartManual), "start"},
+			{joinKeyLabels(kb.SetEndNow, kb.SetEndManual), "end"},
 			{kb.Export, "export"},
 			{"esc", "back"},
 		}

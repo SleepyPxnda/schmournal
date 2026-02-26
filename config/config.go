@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -109,7 +110,7 @@ func Load() (Config, error) {
 
 	path, err := FilePath()
 	if err != nil {
-		return cfg, nil
+		return cfg, err
 	}
 
 	if _, err := os.Stat(path); os.IsNotExist(err) {
@@ -119,6 +120,10 @@ func Load() (Config, error) {
 	}
 
 	if _, err := toml.DecodeFile(path, &cfg); err != nil {
+		return Default(), err
+	}
+
+	if err := cfg.validate(); err != nil {
 		return Default(), err
 	}
 	return cfg, nil
@@ -134,6 +139,8 @@ func WriteDefault(path string) error {
 }
 
 // ExpandPath expands a leading ~ to the user's home directory.
+// It trims any leading slash after the ~ so that filepath.Join does not
+// interpret the remainder as an absolute path (e.g. "~/.journal" → "<home>/.journal").
 func ExpandPath(path string) (string, error) {
 	if !strings.HasPrefix(path, "~") {
 		return path, nil
@@ -142,7 +149,76 @@ func ExpandPath(path string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(home, path[1:]), nil
+	rest := strings.TrimPrefix(path[1:], "/")
+	if rest == "" {
+		return home, nil
+	}
+	return filepath.Join(home, rest), nil
+}
+
+// validate fills empty keybind fields with their defaults and returns an error
+// if any view contains duplicate keybind values (which would make some actions
+// unreachable).
+func (cfg *Config) validate() error {
+	def := Default()
+
+	fill := func(s *string, d string) {
+		if *s == "" {
+			*s = d
+		}
+	}
+
+	lk := &cfg.Keybinds.List
+	dl := def.Keybinds.List
+	fill(&lk.Quit, dl.Quit)
+	fill(&lk.OpenToday, dl.OpenToday)
+	fill(&lk.OpenDate, dl.OpenDate)
+	fill(&lk.Delete, dl.Delete)
+	fill(&lk.AddWork, dl.AddWork)
+	fill(&lk.AddBreak, dl.AddBreak)
+	fill(&lk.Export, dl.Export)
+	fill(&lk.WeekView, dl.WeekView)
+
+	dk := &cfg.Keybinds.Day
+	dd := def.Keybinds.Day
+	fill(&dk.AddWork, dd.AddWork)
+	fill(&dk.AddBreak, dd.AddBreak)
+	fill(&dk.Edit, dd.Edit)
+	fill(&dk.Delete, dd.Delete)
+	fill(&dk.SetStartNow, dd.SetStartNow)
+	fill(&dk.SetStartManual, dd.SetStartManual)
+	fill(&dk.SetEndNow, dd.SetEndNow)
+	fill(&dk.SetEndManual, dd.SetEndManual)
+	fill(&dk.Notes, dd.Notes)
+	fill(&dk.Export, dd.Export)
+
+	wk := &cfg.Keybinds.Week
+	dw := def.Keybinds.Week
+	fill(&wk.PrevWeek, dw.PrevWeek)
+	fill(&wk.NextWeek, dw.NextWeek)
+
+	if err := checkDuplicates("list", lk.Quit, lk.OpenToday, lk.OpenDate, lk.Delete, lk.AddWork, lk.AddBreak, lk.Export, lk.WeekView); err != nil {
+		return err
+	}
+	if err := checkDuplicates("day", dk.AddWork, dk.AddBreak, dk.Edit, dk.Delete, dk.SetStartNow, dk.SetStartManual, dk.SetEndNow, dk.SetEndManual, dk.Notes, dk.Export); err != nil {
+		return err
+	}
+	if err := checkDuplicates("week", wk.PrevWeek, wk.NextWeek); err != nil {
+		return err
+	}
+	return nil
+}
+
+// checkDuplicates returns an error if any two values in keys are equal.
+func checkDuplicates(view string, keys ...string) error {
+	seen := make(map[string]struct{}, len(keys))
+	for _, k := range keys {
+		if _, dup := seen[k]; dup {
+			return fmt.Errorf("config: duplicate keybind %q in [keybinds.%s]", k, view)
+		}
+		seen[k] = struct{}{}
+	}
+	return nil
 }
 
 // ── Default config file content ───────────────────────────────────────────────

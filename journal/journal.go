@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"time"
 )
 
@@ -24,7 +25,15 @@ func SetStoragePath(path string) error {
 		if err != nil {
 			return err
 		}
-		path = filepath.Join(home, path[1:])
+		// TrimPrefix strips a leading "/" so that filepath.Join does not
+		// interpret the remainder as an absolute path (e.g. "~/.journal" →
+		// "<home>/.journal" rather than "/.journal").
+		rest := strings.TrimPrefix(path[1:], "/")
+		if rest == "" {
+			path = home
+		} else {
+			path = filepath.Join(home, rest)
+		}
 	}
 	storagePath = path
 	return nil
