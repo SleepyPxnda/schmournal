@@ -12,6 +12,7 @@ import (
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/fgrohme/tui-journal/config"
 	"github.com/fgrohme/tui-journal/journal"
 )
 
@@ -85,6 +86,8 @@ type Model struct {
 	height int
 	ready  bool
 
+	cfg config.Config
+
 	list    list.Model
 	records []journal.DayRecord
 
@@ -134,8 +137,8 @@ func newDelegate() list.DefaultDelegate {
 	return d
 }
 
-// New constructs the initial model.
-func New() Model {
+// New constructs the initial model using the provided configuration.
+func New(cfg config.Config) Model {
 	l := list.New([]list.Item{}, newDelegate(), 0, 0)
 	l.SetShowTitle(false)
 	l.SetShowStatusBar(false)
@@ -191,6 +194,7 @@ func New() Model {
 	dateIn.PlaceholderStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(cOverlay0))
 
 	return Model{
+		cfg:           cfg,
 		state:         stateList,
 		list:          l,
 		textarea:      ta,
@@ -364,31 +368,20 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m Model) handleListKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	filtering := m.list.FilterState() == list.Filtering
-	switch msg.String() {
-	case "q":
-		if !filtering {
+	if !filtering {
+		kb := m.cfg.Keybinds.List
+		switch msg.String() {
+		case kb.Quit, "esc":
 			return m, tea.Quit
-		}
-	case "esc":
-		if !filtering {
-			return m, tea.Quit
-		}
-	case "n":
-		if !filtering {
+		case kb.OpenToday:
 			return m.openDayViewToday()
-		}
-	case "c":
-		if !filtering {
+		case kb.OpenDate:
 			return m.openDateInput()
-		}
-	case "enter":
-		if !filtering {
+		case "enter":
 			if item, ok := m.list.SelectedItem().(dayListItem); ok {
 				return m.openDayView(item.rec)
 			}
-		}
-	case "d":
-		if !filtering {
+		case kb.Delete:
 			idx := m.list.Index()
 			if idx >= 0 && idx < len(m.records) {
 				m.deleteDay = true
@@ -397,17 +390,11 @@ func (m Model) handleListKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.state = stateConfirmDelete
 				return m, nil
 			}
-		}
-	case "w":
-		if !filtering {
+		case kb.AddWork:
 			return m.openWorkFormForToday(false)
-		}
-	case "b":
-		if !filtering {
+		case kb.AddBreak:
 			return m.openWorkFormForToday(true)
-		}
-	case "x":
-		if !filtering {
+		case kb.Export:
 			if item, ok := m.list.SelectedItem().(dayListItem); ok {
 				rec := item.rec
 				return m, func() tea.Msg {
@@ -418,9 +405,7 @@ func (m Model) handleListKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 					return exportedMsg{path: path}
 				}
 			}
-		}
-	case "v":
-		if !filtering {
+		case kb.WeekView:
 			return m.openWeekView()
 		}
 	}
@@ -430,16 +415,17 @@ func (m Model) handleListKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) handleWeekViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	kb := m.cfg.Keybinds
 	switch msg.String() {
-	case "esc", "q":
+	case "esc", kb.List.Quit:
 		m.state = stateList
 		return m, nil
-	case "left", "h":
+	case "left", kb.Week.PrevWeek:
 		m.weekOffset--
 		m.viewport.GotoTop()
 		m.viewport.SetContent(m.renderWeekContent())
 		return m, nil
-	case "right", "l":
+	case "right", kb.Week.NextWeek:
 		if m.weekOffset < 0 {
 			m.weekOffset++
 			m.viewport.GotoTop()
@@ -454,6 +440,7 @@ func (m Model) handleWeekViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 func (m Model) handleDayViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	n := len(m.dayRecord.Entries)
+	kb := m.cfg.Keybinds.Day
 	switch msg.String() {
 	case "left":
 		if m.dayViewTab > 0 {
@@ -483,16 +470,16 @@ func (m Model) handleDayViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.scrollToSelected()
 		}
 		return m, nil
-	case "w":
+	case kb.AddWork:
 		return m.openWorkForm(false, -1)
-	case "b":
+	case kb.AddBreak:
 		return m.openWorkForm(true, -1)
-	case "e":
+	case kb.Edit:
 		if m.selectedEntry >= 0 && m.selectedEntry < n {
 			return m.openWorkForm(m.dayRecord.Entries[m.selectedEntry].IsBreak, m.selectedEntry)
 		}
 		return m.openNotesEditor()
-	case "d":
+	case kb.Delete:
 		if m.selectedEntry >= 0 && m.selectedEntry < n {
 			m.deleteDay = false
 			m.deleteIdx = m.selectedEntry
@@ -505,21 +492,21 @@ func (m Model) handleDayViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.prevState = stateDayView
 		m.state = stateConfirmDelete
 		return m, nil
-	case "s":
+	case kb.SetStartNow:
 		m.dayRecord.StartTime = time.Now().Format("15:04")
 		m.viewport.SetContent(m.renderDayContent())
 		return m, m.saveDayCmd("✓ Start time set to " + m.dayRecord.StartTime)
-	case "S":
+	case kb.SetStartManual:
 		return m.openTimeInput(true)
-	case "f":
+	case kb.SetEndNow:
 		m.dayRecord.EndTime = time.Now().Format("15:04")
 		m.viewport.SetContent(m.renderDayContent())
 		return m, m.saveDayCmd("✓ End time set to " + m.dayRecord.EndTime)
-	case "F":
+	case kb.SetEndManual:
 		return m.openTimeInput(false)
-	case "N", "n":
+	case kb.Notes:
 		return m.openNotesEditor()
-	case "x":
+	case kb.Export:
 		rec := m.dayRecord
 		return m, func() tea.Msg {
 			path, err := journal.SaveExport(rec)
@@ -1335,15 +1322,16 @@ func (m Model) viewDateInput() string {
 
 func (m Model) viewList() string {
 	header := m.renderHeader("📔  Schmournal", time.Now().Format("Mon, 02 Jan 2006"))
+	kb := m.cfg.Keybinds.List
 	footer := m.renderFooter([][2]string{
-		{"n", "open today"},
-		{"c", "open date"},
-		{"w", "log work"},
-		{"b", "log break"},
+		{kb.OpenToday, "open today"},
+		{kb.OpenDate, "open date"},
+		{kb.AddWork, "log work"},
+		{kb.AddBreak, "log break"},
 		{"enter", "view"},
-		{"v", "week"},
-		{"d", "delete"},
-		{"x", "export"},
+		{kb.WeekView, "week"},
+		{kb.Delete, "delete"},
+		{kb.Export, "export"},
 		{"/", "filter"},
 		{"esc", "quit"},
 	})
@@ -1472,26 +1460,27 @@ func (m Model) viewDayView() string {
 	tabBar := m.renderTabBar()
 
 	var footerKeys [][2]string
+	kb := m.cfg.Keybinds.Day
 	if m.dayViewTab == 0 {
 		footerKeys = [][2]string{
 			{"←/→", "switch tab"},
 			{"j/k", "select"},
-			{"w", "work"},
-			{"b", "break"},
-			{"e", "edit"},
-			{"d", "del"},
-			{"s/S", "start"},
-			{"f/F", "end"},
-			{"N", "notes"},
-			{"x", "export"},
+			{kb.AddWork, "work"},
+			{kb.AddBreak, "break"},
+			{kb.Edit, "edit"},
+			{kb.Delete, "del"},
+			{kb.SetStartNow + "/" + kb.SetStartManual, "start"},
+			{kb.SetEndNow + "/" + kb.SetEndManual, "end"},
+			{kb.Notes, "notes"},
+			{kb.Export, "export"},
 			{"esc", "back"},
 		}
 	} else {
 		footerKeys = [][2]string{
 			{"←/→", "switch tab"},
-			{"s/S", "start"},
-			{"f/F", "end"},
-			{"x", "export"},
+			{kb.SetStartNow + "/" + kb.SetStartManual, "start"},
+			{kb.SetEndNow + "/" + kb.SetEndManual, "end"},
+			{kb.Export, "export"},
 			{"esc", "back"},
 		}
 	}
