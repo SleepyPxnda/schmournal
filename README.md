@@ -12,6 +12,7 @@ A minimal, distraction-free terminal journaling app built with Go and the [Charm
 - **Create** — one keypress opens today's entry (creates it from template if missing)
 - **Delete** — with confirmation dialog
 - **Filter / search** — built-in fuzzy filtering with `/`
+- **Version flag** — `schmournal --version` prints the current version
 
 Entries are stored as plain Markdown files in `~/.journal/YYYY-MM-DD.md`.  
 Exports are written to `~/.journal/exports/export-YYYY-MM-DD.md`.
@@ -110,7 +111,24 @@ Pressing `x` generates a Markdown report at `~/.journal/exports/export-YYYY-MM-D
 
 ---
 
-## Build & run
+## Installation
+
+### Homebrew (macOS / Linux)
+
+```bash
+brew install SleepyPxnda/schmournal/schmournal
+```
+
+Or tap first if you want to keep it updated via `brew upgrade`:
+
+```bash
+brew tap SleepyPxnda/schmournal https://github.com/SleepyPxnda/schmournal
+brew install schmournal
+```
+
+> **Note:** The formula is automatically updated on every release. Run `brew upgrade schmournal` to get the latest version.
+
+### Build from source
 
 ```bash
 # Build for your current platform
@@ -125,6 +143,12 @@ make build-windows  # Windows amd64 + arm64
 
 # Clean build artefacts
 make clean
+```
+
+### Version
+
+```bash
+schmournal --version
 ```
 
 ---
