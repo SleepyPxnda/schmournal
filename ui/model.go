@@ -27,12 +27,13 @@ const (
 	stateNotesEditor
 	stateConfirmDelete
 	stateDateInput
+	stateWeekView
 )
 
 const (
 	headerHeight = 2 // title line + separator
 	footerHeight = 1
-	statsHeight  = 2 // stats bar + separator
+	statsHeight  = 3 // week bar + progress bar + separator
 )
 
 // ── Messages ──────────────────────────────────────────────────────────────────
@@ -110,6 +111,8 @@ type Model struct {
 	prevState viewState
 
 	viewport viewport.Model
+
+	weekOffset int // 0 = current week, -1 = last week, etc.
 
 	statusMsg string
 	isError   bool
@@ -315,6 +318,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.handleConfirmDeleteKey(msg)
 		case stateDateInput:
 			return m.handleDateInputKey(msg)
+		case stateWeekView:
+			return m.handleWeekViewKey(msg)
 		}
 	}
 
@@ -324,7 +329,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		var cmd tea.Cmd
 		m.list, cmd = m.list.Update(msg)
 		return m, cmd
-	case stateDayView:
+	case stateDayView, stateWeekView:
 		var cmd tea.Cmd
 		m.viewport, cmd = m.viewport.Update(msg)
 		return m, cmd
@@ -414,9 +419,36 @@ func (m Model) handleListKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				}
 			}
 		}
+	case "v":
+		if !filtering {
+			return m.openWeekView()
+		}
 	}
 	var cmd tea.Cmd
 	m.list, cmd = m.list.Update(msg)
+	return m, cmd
+}
+
+func (m Model) handleWeekViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "esc", "q":
+		m.state = stateList
+		return m, nil
+	case "left", "h":
+		m.weekOffset--
+		m.viewport.GotoTop()
+		m.viewport.SetContent(m.renderWeekContent())
+		return m, nil
+	case "right", "l":
+		if m.weekOffset < 0 {
+			m.weekOffset++
+			m.viewport.GotoTop()
+			m.viewport.SetContent(m.renderWeekContent())
+		}
+		return m, nil
+	}
+	var cmd tea.Cmd
+	m.viewport, cmd = m.viewport.Update(msg)
 	return m, cmd
 }
 
@@ -714,6 +746,14 @@ func (m Model) openDayView(rec journal.DayRecord) (tea.Model, tea.Cmd) {
 	m.state = stateDayView
 	m.viewport.GotoTop()
 	m.viewport.SetContent(m.renderDayContent())
+	return m, nil
+}
+
+func (m Model) openWeekView() (tea.Model, tea.Cmd) {
+	m.weekOffset = 0
+	m.state = stateWeekView
+	m.viewport.GotoTop()
+	m.viewport.SetContent(m.renderWeekContent())
 	return m, nil
 }
 
@@ -1138,6 +1178,8 @@ func (m Model) View() string {
 		return m.viewConfirmDelete()
 	case stateDateInput:
 		return m.viewDateInput()
+	case stateWeekView:
+		return m.viewWeekView()
 	}
 	return ""
 }
@@ -1258,6 +1300,7 @@ func (m Model) viewList() string {
 		{"w", "log work"},
 		{"b", "log break"},
 		{"enter", "view"},
+		{"v", "week"},
 		{"d", "delete"},
 		{"x", "export"},
 		{"/", "filter"},
@@ -1347,7 +1390,36 @@ func (m Model) renderStats() string {
 	dot := helpStyle.Render("  ·  ")
 	line := "  " + weekStr + dot + monthStr + dot + streakStr
 	sep := separatorStyle.Render(strings.Repeat("─", m.width))
-	return line + "\n" + sep
+
+	// Weekly work hours progress bar.
+	var weekWork time.Duration
+	for i := 0; i < 7; i++ {
+		d := monday.AddDate(0, 0, i)
+		dateStr := d.Format("2006-01-02")
+		for _, r := range m.records {
+			if r.Date == dateStr {
+				work, _, _ := r.WorkTotals()
+				weekWork += work
+				break
+			}
+		}
+	}
+	const weeklyGoal = 40 * time.Hour
+	pct := float64(weekWork) / float64(weeklyGoal)
+	if pct > 1 {
+		pct = 1
+	}
+	const progressBarWidth = 20
+	filledCount := int(pct * progressBarWidth)
+	progressBar := statsBlockFilledStyle.Render(strings.Repeat("█", filledCount)) +
+		statsBlockEmptyStyle.Render(strings.Repeat("░", progressBarWidth-filledCount))
+	weekHoursStr := "  " + statsLabelStyle.Render("Week: ") +
+		statsValueStyle.Render(journal.FormatDuration(weekWork)) +
+		statsLabelStyle.Render(" / 40h  ") +
+		progressBar +
+		statsLabelStyle.Render(fmt.Sprintf("  %.0f%%", pct*100))
+
+	return line + "\n" + weekHoursStr + "\n" + sep
 }
 
 func (m Model) viewDayView() string {
@@ -1537,4 +1609,189 @@ func (m Model) viewConfirmDelete() string {
 
 	centered := lipgloss.NewStyle().Width(m.width).Align(lipgloss.Center).Render(dialog)
 	return header + "\n" + strings.Repeat("\n", topPad) + centered
+}
+
+// ── Week view ─────────────────────────────────────────────────────────────────
+
+func (m Model) viewWeekView() string {
+	now := time.Now()
+	weekday := int(now.Weekday())
+	if weekday == 0 {
+		weekday = 7
+	}
+	monday := now.AddDate(0, 0, -(weekday-1)+m.weekOffset*7)
+	sunday := monday.AddDate(0, 0, 6)
+
+	weekRange := monday.Format("02 Jan") + " – " + sunday.Format("02 Jan 2006")
+	header := m.renderHeader("📅  This Week", weekRange)
+
+	// Navigation hint bar (matches day-view tab bar height: 2 lines).
+	var navParts []string
+	navParts = append(navParts, inactiveTabStyle.Render("← prev week"))
+	if m.weekOffset < 0 {
+		navParts = append(navParts, inactiveTabStyle.Render("→ next week"))
+	}
+	navBar := strings.Join(navParts, inactiveTabStyle.Render("  "))
+	sep := dayViewDividerStyle.Render(strings.Repeat("─", m.width))
+	subHeader := navBar + "\n" + sep
+
+	footer := m.renderFooter([][2]string{
+		{"j/k", "scroll"},
+		{"←/→", "prev/next week"},
+		{"esc", "back"},
+	})
+	return lipgloss.JoinVertical(lipgloss.Left, header, subHeader, m.viewport.View(), footer)
+}
+
+func (m Model) renderWeekContent() string {
+	now := time.Now()
+	weekday := int(now.Weekday())
+	if weekday == 0 {
+		weekday = 7
+	}
+	monday := now.AddDate(0, 0, -(weekday-1)+m.weekOffset*7)
+
+	// Build date→record map for quick lookup.
+	recByDate := make(map[string]journal.DayRecord, len(m.records))
+	for _, r := range m.records {
+		recByDate[r.Date] = r
+	}
+
+	innerW := m.width - 2
+	if innerW < 40 {
+		innerW = 40
+	}
+	div := dayViewDividerStyle.Render(strings.Repeat("─", innerW))
+
+	var b strings.Builder
+	b.WriteString("\n")
+
+	var weekWork time.Duration
+
+	for i := 0; i < 7; i++ {
+		d := monday.AddDate(0, 0, i)
+		dateStr := d.Format("2006-01-02")
+		rec, hasRec := recByDate[dateStr]
+
+		var work, breaks time.Duration
+		if hasRec {
+			work, breaks, _ = rec.WorkTotals()
+		}
+		weekWork += work
+
+		// Day header line.
+		dayLabel := d.Format("Mon  02 Jan 2006")
+		var headerLine string
+		if hasRec && (work+breaks) > 0 {
+			headerLine = dayViewSectionStyle.Render(dayLabel) +
+				dayViewMutedStyle.Render("  ·  ") +
+				dayViewValueStyle.Render(journal.FormatDuration(work)+" work")
+			if breaks > 0 {
+				headerLine += dayViewMutedStyle.Render("  ·  " + journal.FormatDuration(breaks) + " breaks")
+			}
+		} else {
+			headerLine = dayViewSectionStyle.Render(dayLabel) +
+				dayViewMutedStyle.Render("  ·  no entries")
+		}
+		b.WriteString(headerLine + "\n")
+
+		// Per-project breakdown.
+		if hasRec && len(rec.Entries) > 0 {
+			type projGroup struct {
+				name   string
+				dur    time.Duration
+				tasks  []string
+				isBreak bool
+			}
+			seenProj := make(map[string]int)
+			var groups []projGroup
+
+			for _, e := range rec.Entries {
+				if e.IsBreak {
+					// Collect breaks under a single "Breaks" group.
+					found := false
+					for gi, g := range groups {
+						if g.isBreak {
+							groups[gi].dur += e.Duration()
+							groups[gi].tasks = uniqueAppend(groups[gi].tasks, e.Task)
+							found = true
+							break
+						}
+					}
+					if !found {
+						groups = append(groups, projGroup{
+							name:    "Breaks",
+							dur:     e.Duration(),
+							tasks:   []string{e.Task},
+							isBreak: true,
+						})
+					}
+					continue
+				}
+				proj := e.Project
+				if proj == "" {
+					proj = "Other"
+				}
+				if idx, ok := seenProj[proj]; ok {
+					groups[idx].dur += e.Duration()
+					groups[idx].tasks = uniqueAppend(groups[idx].tasks, e.Task)
+				} else {
+					seenProj[proj] = len(groups)
+					groups = append(groups, projGroup{
+						name:  proj,
+						dur:   e.Duration(),
+						tasks: []string{e.Task},
+					})
+				}
+			}
+
+			for _, g := range groups {
+				durStr := fmt.Sprintf("%-8s", journal.FormatDuration(g.dur))
+				taskStr := `"` + strings.Join(g.tasks, ", ") + `"`
+				if g.isBreak {
+					b.WriteString("  " + dayViewTotalsStyle.Render(durStr) +
+						"  " + breakEntryStyle.Render("☕  "+g.name) +
+						"  " + dayViewMutedStyle.Render(taskStr) + "\n")
+				} else {
+					b.WriteString("  " + dayViewTotalsStyle.Render(durStr) +
+						"  " + dayViewSectionStyle.Render(g.name) +
+						"  " + dayViewMutedStyle.Render(taskStr) + "\n")
+				}
+			}
+		}
+
+		if i < 6 {
+			b.WriteString("\n")
+		}
+	}
+
+	// Week total + progress bar.
+	b.WriteString("\n" + div + "\n")
+	const weeklyGoal = 40 * time.Hour
+	pct := float64(weekWork) / float64(weeklyGoal)
+	if pct > 1 {
+		pct = 1
+	}
+	const barW = 24
+	filledCount := int(pct * barW)
+	bar := statsBlockFilledStyle.Render(strings.Repeat("█", filledCount)) +
+		statsBlockEmptyStyle.Render(strings.Repeat("░", barW-filledCount))
+	totalLine := "  " + dayViewLabelStyle.Render("Week total: ") +
+		dayViewValueStyle.Render(journal.FormatDuration(weekWork)) +
+		dayViewMutedStyle.Render(" / 40h  ") +
+		bar +
+		dayViewMutedStyle.Render(fmt.Sprintf("  %.0f%%", pct*100))
+	b.WriteString(totalLine + "\n")
+
+	return b.String()
+}
+
+// uniqueAppend appends s to slice only if not already present (case-sensitive).
+func uniqueAppend(slice []string, s string) []string {
+	for _, v := range slice {
+		if v == s {
+			return slice
+		}
+	}
+	return append(slice, s)
 }
