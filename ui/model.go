@@ -563,16 +563,15 @@ func (m Model) handleWorkFormKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.isError = true
 			return m, clearStatusCmd()
 		}
-		project := strings.TrimSpace(m.projectInput.Value())
+		projectRaw := strings.TrimSpace(m.projectInput.Value())
 		isBreak := m.isBreakEntry
 		editIdx := m.editEntryIdx
+		wasSplit := false
 
-		if editIdx >= 0 && editIdx < len(m.dayRecord.Entries) {
-			// Update existing entry in-place.
+		if editIdx >= 0 && editIdx < len(m.dayRecord.Entries) && isBreak {
+			// Update existing break entry in-place.
 			m.dayRecord.Entries[editIdx].Task = task
-			m.dayRecord.Entries[editIdx].Project = project
 			m.dayRecord.Entries[editIdx].DurationMin = int(dur.Minutes())
-			m.dayRecord.Entries[editIdx].IsBreak = isBreak
 			m.selectedEntry = editIdx
 		} else if isBreak {
 			// For new breaks: merge into an existing break with the same label (case-insensitive).
@@ -597,16 +596,56 @@ func (m Model) handleWorkFormKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.selectedEntry = len(m.dayRecord.Entries) - 1
 			}
 		} else {
-			// Append new work entry.
-			entry := journal.WorkEntry{
-				ID:          journal.NewID(),
-				Task:        task,
-				Project:     project,
-				DurationMin: int(dur.Minutes()),
-				IsBreak:     false,
+			// Split comma-separated projects and distribute duration evenly.
+			// This applies both to new entries and edited entries.
+			rawParts := strings.Split(projectRaw, ",")
+			projects := make([]string, 0, len(rawParts))
+			for _, p := range rawParts {
+				if trimmed := strings.TrimSpace(p); trimmed != "" {
+					projects = append(projects, trimmed)
+				}
 			}
-			m.dayRecord.Entries = append(m.dayRecord.Entries, entry)
-			m.selectedEntry = len(m.dayRecord.Entries) - 1
+			if len(projects) == 0 {
+				projects = []string{""}
+			}
+			totalMin := int(dur.Minutes())
+			base := totalMin / len(projects)
+			remainder := totalMin % len(projects)
+			newEntries := make([]journal.WorkEntry, 0, len(projects))
+			for i, proj := range projects {
+				mins := base
+				if i < remainder {
+					mins++ // distribute remainder evenly: one extra minute to first N projects
+				}
+				if mins == 0 {
+					continue // skip zero-duration entries when duration < number of projects
+				}
+				newEntries = append(newEntries, journal.WorkEntry{
+					ID:          journal.NewID(),
+					Task:        task,
+					Project:     proj,
+					DurationMin: mins,
+					IsBreak:     false,
+				})
+			}
+			if len(newEntries) == 0 {
+				m.statusMsg = "✗ Duration too short to distribute across projects"
+				m.isError = true
+				return m, clearStatusCmd()
+			}
+			wasSplit = len(projects) > 1
+			if editIdx >= 0 && editIdx < len(m.dayRecord.Entries) {
+				// Replace the edited entry with the split entries.
+				updated := make([]journal.WorkEntry, 0, len(m.dayRecord.Entries)-1+len(newEntries))
+				updated = append(updated, m.dayRecord.Entries[:editIdx]...)
+				updated = append(updated, newEntries...)
+				updated = append(updated, m.dayRecord.Entries[editIdx+1:]...)
+				m.dayRecord.Entries = updated
+				m.selectedEntry = editIdx + len(newEntries) - 1
+			} else {
+				m.dayRecord.Entries = append(m.dayRecord.Entries, newEntries...)
+				m.selectedEntry = len(m.dayRecord.Entries) - 1
+			}
 		}
 
 		m.state = stateDayView
@@ -614,10 +653,12 @@ func (m Model) handleWorkFormKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.scrollToSelected()
 
 		label := "✓ Work entry logged"
-		if editIdx >= 0 {
+		if editIdx >= 0 && !wasSplit {
 			label = "✓ Entry updated"
 		} else if isBreak {
 			label = "✓ Break logged"
+		} else if wasSplit {
+			label = "✓ Work entries split across projects"
 		}
 		return m, m.saveDayCmd(label)
 
