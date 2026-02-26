@@ -1736,7 +1736,25 @@ func (m Model) renderWeekContent() string {
 		}
 		b.WriteString(headerLine + "\n")
 
-		// Per-project breakdown.
+		// Start / end time sub-line (only shown when at least one is set).
+		if hasRec && (rec.StartTime != "" || rec.EndTime != "") {
+			start := rec.StartTime
+			end := rec.EndTime
+			startStr := dayViewValueStyle.Render(start)
+			if start == "" {
+				startStr = dayViewMutedStyle.Render("—")
+			}
+			endStr := dayViewValueStyle.Render(end)
+			if end == "" {
+				endStr = dayViewMutedStyle.Render("—")
+			}
+			timeLine := "  " + dayViewLabelStyle.Render("Start:") + " " + startStr +
+				"   " + dayViewLabelStyle.Render("End:") + " " + endStr
+			if dur, ok := rec.DayDuration(); ok {
+				timeLine += "   " + dayViewMutedStyle.Render("("+journal.FormatDuration(dur)+")")
+			}
+			b.WriteString(timeLine + "\n")
+		}
 		if hasRec && len(rec.Entries) > 0 {
 			type projGroup struct {
 				name   string
