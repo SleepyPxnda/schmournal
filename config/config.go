@@ -111,8 +111,9 @@ func FilePath() (string, error) {
 // errors the defaults are returned together with the error.
 //
 // If the file exists but is missing keys introduced in a newer version of the
-// application, those keys are appended to the file with their default values so
-// that users can discover and customise them.
+// application, a one-time migration is performed: the old file is renamed to
+// schmournal.old.config and a fresh schmournal.config is written using the full
+// default template with the user's existing values preserved.
 func Load() (Config, error) {
 	cfg := Default()
 
@@ -136,73 +137,30 @@ func Load() (Config, error) {
 		return Default(), err
 	}
 
-	// Append any keys that are new since the user's config was created.
-	patchMissingKeys(path, md, cfg)
+	// If any keys are absent, migrate to a fresh config that includes them all.
+	if needsMigration(md) {
+		_ = migrateConfig(path, cfg)
+	}
 
 	return cfg, nil
 }
 
-// patchMissingKeys appends any config keys that are absent from the existing
-// file (i.e. introduced after the file was first written) so that users can see
-// and customise them. Existing content is never modified.
-func patchMissingKeys(path string, md toml.MetaData, cfg Config) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return
-	}
-	patched := string(data)
-
-	if !md.IsDefined("weekly_hours_goal") {
-		patched += "\n# Default weekly working hours goal used in the stats bar and weekly summary.\n" +
-			"# Can be overridden per-week from the weekly summary view.\n" +
-			fmt.Sprintf("weekly_hours_goal = %g\n", cfg.WeeklyHoursGoal)
-	}
-
-	if !md.IsDefined("keybinds", "week", "set_weekly_hours") {
-		keyLine := fmt.Sprintf("set_weekly_hours = %q   # Set a custom hours goal for the displayed week\n", cfg.Keybinds.Week.SetWeeklyHours)
-		if strings.Contains(patched, "[keybinds.week]") {
-			patched = insertIntoSection(patched, "[keybinds.week]", keyLine)
-		} else {
-			patched += fmt.Sprintf("\n[keybinds.week]\n%s", keyLine)
-		}
-	}
-
-	if patched != string(data) {
-		_ = os.WriteFile(path, []byte(patched), 0o644)
-	}
+// needsMigration reports whether the decoded metadata is missing any keys that
+// are present in the current default config.
+func needsMigration(md toml.MetaData) bool {
+	return !md.IsDefined("weekly_hours_goal") ||
+		!md.IsDefined("keybinds", "week", "set_weekly_hours")
 }
 
-// insertIntoSection inserts text at the end of a named TOML section (just
-// before the next section header, or at the end of the file when the section
-// is the last one).
-func insertIntoSection(content, sectionHeader, text string) string {
-	lines := strings.Split(content, "\n")
-	sectionIdx := -1
-	for i, line := range lines {
-		if strings.TrimSpace(line) == sectionHeader {
-			sectionIdx = i
-			break
-		}
+// migrateConfig renames path to schmournal.old.config and writes a fresh
+// schmournal.config containing the full default template with the user's values
+// substituted in so that no customisation is lost.
+func migrateConfig(path string, cfg Config) error {
+	oldPath := strings.TrimSuffix(path, ".config") + ".old.config"
+	if err := os.Rename(path, oldPath); err != nil {
+		return err
 	}
-	if sectionIdx == -1 {
-		return content + text
-	}
-
-	// Walk forward to find where the section ends (next header or EOF).
-	insertAt := len(lines)
-	for i := sectionIdx + 1; i < len(lines); i++ {
-		trimmed := strings.TrimSpace(lines[i])
-		if trimmed != "" && strings.HasPrefix(trimmed, "[") {
-			insertAt = i
-			break
-		}
-	}
-
-	result := make([]string, 0, len(lines)+1)
-	result = append(result, lines[:insertAt]...)
-	result = append(result, strings.TrimRight(text, "\n"))
-	result = append(result, lines[insertAt:]...)
-	return strings.Join(result, "\n")
+	return os.WriteFile(path, []byte(generateConfigContent(cfg)), 0o644)
 }
 
 // WriteDefault writes a commented default config file to path, creating
@@ -211,7 +169,80 @@ func WriteDefault(path string) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}
-	return os.WriteFile(path, []byte(defaultConfigContent), 0o644)
+	return os.WriteFile(path, []byte(generateConfigContent(Default())), 0o644)
+}
+
+// generateConfigContent returns the full commented config file content with
+// values taken from cfg. This is used both when writing a brand-new default
+// config and when migrating an existing config that is missing newer keys.
+func generateConfigContent(cfg Config) string {
+	return fmt.Sprintf(`# Schmournal Configuration
+# Location: ~/.config/schmournal.config
+
+# Directory where journal JSON files are stored.
+# The ~ is expanded to your home directory.
+storage_path = %q
+
+# Default weekly working hours goal used in the stats bar and weekly summary.
+# Can be overridden per-week from the weekly summary view.
+weekly_hours_goal = %g
+
+# ── Keybinds ──────────────────────────────────────────────────────────────────
+# Each value is a single key string as understood by the terminal
+# (e.g. "q", "x", "ctrl+s").  Arrow keys, Enter, Esc and Tab are not
+# configurable here — they always keep their default role.
+
+[keybinds.list]
+quit       = %q   # Quit the application
+open_today = %q   # Open / create today's entry
+open_date  = %q   # Open / create an entry for a specific date
+delete     = %q   # Delete the selected day record
+add_work   = %q   # Log a work entry for today
+add_break  = %q   # Log a break entry for today
+export     = %q   # Export the selected day to Markdown
+week_view  = %q   # Open the weekly overview
+
+[keybinds.day]
+add_work        = %q   # Add a new work entry
+add_break       = %q   # Add a new break entry
+edit            = %q   # Edit selected entry (or open notes when none selected)
+delete          = %q   # Delete selected entry (or the whole day when none selected)
+set_start_now   = %q   # Set start time to now
+set_start_manual = %q  # Set start time manually
+set_end_now     = %q   # Set end time to now
+set_end_manual  = %q   # Set end time manually
+notes           = %q   # Open the notes editor
+export          = %q   # Export day to Markdown
+
+[keybinds.week]
+prev_week        = %q   # Go to the previous week (also ←)
+next_week        = %q   # Go to the next week  (also →)
+set_weekly_hours = %q   # Set a custom hours goal for the displayed week
+`,
+		cfg.StoragePath,
+		cfg.WeeklyHoursGoal,
+		cfg.Keybinds.List.Quit,
+		cfg.Keybinds.List.OpenToday,
+		cfg.Keybinds.List.OpenDate,
+		cfg.Keybinds.List.Delete,
+		cfg.Keybinds.List.AddWork,
+		cfg.Keybinds.List.AddBreak,
+		cfg.Keybinds.List.Export,
+		cfg.Keybinds.List.WeekView,
+		cfg.Keybinds.Day.AddWork,
+		cfg.Keybinds.Day.AddBreak,
+		cfg.Keybinds.Day.Edit,
+		cfg.Keybinds.Day.Delete,
+		cfg.Keybinds.Day.SetStartNow,
+		cfg.Keybinds.Day.SetStartManual,
+		cfg.Keybinds.Day.SetEndNow,
+		cfg.Keybinds.Day.SetEndManual,
+		cfg.Keybinds.Day.Notes,
+		cfg.Keybinds.Day.Export,
+		cfg.Keybinds.Week.PrevWeek,
+		cfg.Keybinds.Week.NextWeek,
+		cfg.Keybinds.Week.SetWeeklyHours,
+	)
 }
 
 // ExpandPath expands a leading ~ to the user's home directory.
@@ -304,46 +335,3 @@ func checkDuplicates(view string, keys ...string) error {
 
 // ── Default config file content ───────────────────────────────────────────────
 
-const defaultConfigContent = `# Schmournal Configuration
-# Location: ~/.config/schmournal.config
-
-# Directory where journal JSON files are stored.
-# The ~ is expanded to your home directory.
-storage_path = "~/.journal"
-
-# Default weekly working hours goal used in the stats bar and weekly summary.
-# Can be overridden per-week from the weekly summary view.
-weekly_hours_goal = 40
-
-# ── Keybinds ──────────────────────────────────────────────────────────────────
-# Each value is a single key string as understood by the terminal
-# (e.g. "q", "x", "ctrl+s").  Arrow keys, Enter, Esc and Tab are not
-# configurable here — they always keep their default role.
-
-[keybinds.list]
-quit       = "q"   # Quit the application
-open_today = "n"   # Open / create today's entry
-open_date  = "c"   # Open / create an entry for a specific date
-delete     = "d"   # Delete the selected day record
-add_work   = "w"   # Log a work entry for today
-add_break  = "b"   # Log a break entry for today
-export     = "x"   # Export the selected day to Markdown
-week_view  = "v"   # Open the weekly overview
-
-[keybinds.day]
-add_work        = "w"   # Add a new work entry
-add_break       = "b"   # Add a new break entry
-edit            = "e"   # Edit selected entry (or open notes when none selected)
-delete          = "d"   # Delete selected entry (or the whole day when none selected)
-set_start_now   = "s"   # Set start time to now
-set_start_manual = "S"  # Set start time manually
-set_end_now     = "f"   # Set end time to now
-set_end_manual  = "F"   # Set end time manually
-notes           = "n"   # Open the notes editor
-export          = "x"   # Export day to Markdown
-
-[keybinds.week]
-prev_week        = "h"   # Go to the previous week (also ←)
-next_week        = "l"   # Go to the next week  (also →)
-set_weekly_hours = "g"   # Set a custom hours goal for the displayed week
-`
