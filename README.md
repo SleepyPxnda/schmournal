@@ -32,6 +32,7 @@ Exports are written to `~/.journal/exports/export-YYYY-MM-DD.md`.
 | `w` | Log a work item for today |
 | `b` | Log a break for today |
 | `x` | Export today's work log |
+| `s` | Sync with cloud (requires rclone configuration) |
 | `/` | Filter entries |
 | `q` | Quit |
 | `ctrl+c` | Force quit |
@@ -108,6 +109,41 @@ Pressing `x` generates a Markdown report at `~/.journal/exports/export-YYYY-MM-D
 - **📋 Work Items** — grouped by project with per-project subtotals; same-named tasks within a project are consolidated
 - **☕ Breaks** — consolidated break list with total
 - **📊 Summary** — work, breaks, total logged, day duration
+
+---
+
+## ☁️ Cloud Sync
+
+Schmournal supports syncing your journal entries across devices using [rclone](https://rclone.org), a command-line tool that works with 70+ cloud storage providers (Google Drive, Dropbox, S3, OneDrive, Backblaze B2, SFTP, and more).
+
+### Setup
+
+1. **Install rclone** — see [rclone.org/install](https://rclone.org/install/)
+
+2. **Configure a remote** — run `rclone config` and follow the prompts to add a remote for your provider. Example remotes:
+   - `gdrive:journal` — Google Drive, a folder called `journal`
+   - `dropbox:journal` — Dropbox
+   - `s3:mybucket/journal` — Amazon S3
+
+3. **Create `~/.journal/config.json`** with your remote path:
+
+   ```json
+   {
+     "sync": {
+       "remote": "gdrive:journal",
+       "direction": "both"
+     }
+   }
+   ```
+
+   | Field | Values | Description |
+   |-------|--------|-------------|
+   | `remote` | rclone remote path | Destination/source for sync (**required**) |
+   | `direction` | `"both"` (default), `"push"`, `"pull"` | `"both"` merges both sides; `"push"` uploads only; `"pull"` downloads only |
+
+4. **Press `s`** in the list view to sync. Only day-record files (`YYYY-MM-DD.json`) are transferred — `config.json` and exports remain device-local.
+
+> **Note:** Sync uses `rclone copy` which copies newer/missing files without deleting. It does not resolve conflicts; if the same day was edited on two devices simultaneously, the file written last wins.
 
 ---
 

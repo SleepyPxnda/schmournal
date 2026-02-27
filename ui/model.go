@@ -42,6 +42,7 @@ type recordsLoadedMsg struct{ records []journal.DayRecord }
 type daySavedMsg struct{ label string }
 type dayDeletedMsg struct{}
 type exportedMsg struct{ path string }
+type syncDoneMsg struct{ err error }
 type clearStatusMsg struct{}
 type errMsg struct{ err error }
 
@@ -234,6 +235,16 @@ func (m Model) saveDayCmd(label string) tea.Cmd {
 	}
 }
 
+func syncCmd() tea.Cmd {
+	return func() tea.Msg {
+		cfg, err := journal.LoadConfig()
+		if err != nil {
+			return syncDoneMsg{err: fmt.Errorf("load config: %w", err)}
+		}
+		return syncDoneMsg{err: journal.Sync(cfg.Sync)}
+	}
+}
+
 // ── Update ────────────────────────────────────────────────────────────────────
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -288,6 +299,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.statusMsg = "✓ Exported → " + display
 		m.isError = false
 		return m, clearStatusCmd()
+
+	case syncDoneMsg:
+		if msg.err != nil {
+			m.statusMsg = "✗ Sync: " + msg.err.Error()
+			m.isError = true
+		} else {
+			m.statusMsg = "✓ Synced"
+			m.isError = false
+		}
+		return m, tea.Batch(loadRecords, clearStatusCmd())
 
 	case errMsg:
 		m.statusMsg = "✗ " + msg.err.Error()
@@ -422,6 +443,12 @@ func (m Model) handleListKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "v":
 		if !filtering {
 			return m.openWeekView()
+		}
+	case "s":
+		if !filtering {
+			m.statusMsg = "⟳ Syncing…"
+			m.isError = false
+			return m, syncCmd()
 		}
 	}
 	var cmd tea.Cmd
@@ -1344,6 +1371,7 @@ func (m Model) viewList() string {
 		{"v", "week"},
 		{"d", "delete"},
 		{"x", "export"},
+		{"s", "sync"},
 		{"/", "filter"},
 		{"esc", "quit"},
 	})
