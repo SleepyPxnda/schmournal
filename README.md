@@ -2,8 +2,7 @@
 
 A minimal, distraction-free terminal journaling app built with Go and the [Charm](https://charm.sh) TUI stack, themed with **Catppuccin Mocha**.
 
-<!-- screenshot: list-view — the main list of days with the stats bar -->
-<!-- ![List view](docs/screenshots/list-view.png) -->
+![List view](images/overview.png)
 
 ## Features
 
@@ -29,7 +28,7 @@ Exports are written to `~/.journal/exports/export-YYYY-MM-DD.md`.
 
 ### 📋 List view
 
-<!-- screenshot: list-view -->
+![List view](images/overview.png)
 
 | Key | Action |
 |-----|--------|
@@ -47,7 +46,7 @@ Exports are written to `~/.journal/exports/export-YYYY-MM-DD.md`.
 
 ### 👁 Day view — Work Log tab
 
-<!-- screenshot: day-view-work-log -->
+![Day view](images/day-worklog.png)
 
 | Key | Action |
 |-----|--------|
@@ -68,7 +67,7 @@ Exports are written to `~/.journal/exports/export-YYYY-MM-DD.md`.
 
 ### 📅 Weekly summary view
 
-<!-- screenshot: week-view -->
+![Week Summary view](images/week-overview.png)
 
 | Key | Action |
 |-----|--------|
@@ -86,7 +85,7 @@ Exports are written to `~/.journal/exports/export-YYYY-MM-DD.md`.
 
 ### 📝 Work / Break log form
 
-<!-- screenshot: work-form -->
+![Week Summary view](images/day-worklog-form.png)
 
 | Key | Action |
 |-----|--------|
@@ -130,7 +129,8 @@ Each day record has two tabs:
 
 **Summary tab** — shows a compact summary with start time, end time, day duration, total work, total breaks, and logged notes.
 
-<!-- screenshot: day-view-summary-tab -->
+![Day Summary view](images/day-summary.png)
+
 
 ---
 
