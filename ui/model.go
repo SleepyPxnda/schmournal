@@ -29,6 +29,7 @@ const (
 	stateConfirmDelete
 	stateDateInput
 	stateWeekView
+	stateWeekHoursInput
 )
 
 const (
@@ -45,6 +46,7 @@ type dayDeletedMsg struct{}
 type exportedMsg struct{ path string }
 type clearStatusMsg struct{}
 type errMsg struct{ err error }
+type weekGoalsLoadedMsg struct{ goals journal.WeeklyGoals }
 
 // ── List item ─────────────────────────────────────────────────────────────────
 
@@ -115,7 +117,9 @@ type Model struct {
 
 	viewport viewport.Model
 
-	weekOffset int // 0 = current week, -1 = last week, etc.
+	weekOffset     int // 0 = current week, -1 = last week, etc.
+	weekGoals      journal.WeeklyGoals
+	weekHoursInput textinput.Model
 
 	statusMsg string
 	isError   bool
@@ -193,23 +197,33 @@ func New(cfg config.Config) Model {
 	dateIn.TextStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(cText))
 	dateIn.PlaceholderStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(cOverlay0))
 
+	weekHoursIn := textinput.New()
+	weekHoursIn.Placeholder = fmt.Sprintf("%.0f", cfg.WeeklyHoursGoal)
+	weekHoursIn.CharLimit = 8
+	weekHoursIn.Width = 10
+	weekHoursIn.PromptStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(cMauve))
+	weekHoursIn.TextStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(cText))
+	weekHoursIn.PlaceholderStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(cOverlay0))
+
 	return Model{
-		cfg:           cfg,
-		state:         stateList,
-		list:          l,
-		textarea:      ta,
-		taskInput:     taskIn,
-		projectInput:  projIn,
-		durationInput: durIn,
-		timeInput:     timeIn,
-		dateInput:     dateIn,
-		selectedEntry: -1,
-		editEntryIdx:  -1,
+		cfg:            cfg,
+		state:          stateList,
+		list:           l,
+		textarea:       ta,
+		taskInput:      taskIn,
+		projectInput:   projIn,
+		durationInput:  durIn,
+		timeInput:      timeIn,
+		dateInput:      dateIn,
+		weekHoursInput: weekHoursIn,
+		weekGoals:      journal.WeeklyGoals{},
+		selectedEntry:  -1,
+		editEntryIdx:   -1,
 	}
 }
 
 func (m Model) Init() tea.Cmd {
-	return loadRecords
+	return tea.Batch(loadRecords, loadWeeklyGoals)
 }
 
 // ── Commands ──────────────────────────────────────────────────────────────────
@@ -220,6 +234,14 @@ func loadRecords() tea.Msg {
 		return errMsg{err: err}
 	}
 	return recordsLoadedMsg{records: records}
+}
+
+func loadWeeklyGoals() tea.Msg {
+	goals, err := journal.LoadWeeklyGoals()
+	if err != nil {
+		return errMsg{err: err}
+	}
+	return weekGoalsLoadedMsg{goals: goals}
 }
 
 func clearStatusCmd() tea.Cmd {
@@ -273,6 +295,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.list.SetItems(items)
 		return m, nil
 
+	case weekGoalsLoadedMsg:
+		m.weekGoals = msg.goals
+		return m, nil
+
 	case daySavedMsg:
 		m.statusMsg = msg.label
 		m.isError = false
@@ -324,6 +350,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.handleDateInputKey(msg)
 		case stateWeekView:
 			return m.handleWeekViewKey(msg)
+		case stateWeekHoursInput:
+			return m.handleWeekHoursInputKey(msg)
 		}
 	}
 
@@ -432,9 +460,94 @@ func (m Model) handleWeekViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.viewport.SetContent(m.renderWeekContent())
 		}
 		return m, nil
+	case kb.Week.SetWeeklyHours:
+		return m.openWeekHoursInput()
 	}
 	var cmd tea.Cmd
 	m.viewport, cmd = m.viewport.Update(msg)
+	return m, cmd
+}
+
+// weekKey returns the key used to store per-week goal overrides.
+// It is the Monday date of the week currently shown (format "YYYY-MM-DD").
+func (m Model) weekKey() string {
+	now := time.Now()
+	weekday := int(now.Weekday())
+	if weekday == 0 {
+		weekday = 7
+	}
+	monday := now.AddDate(0, 0, -(weekday-1)+m.weekOffset*7)
+	return monday.Format("2006-01-02")
+}
+
+// weeklyGoalFor returns the effective hours goal for the week identified by
+// mondayKey ("YYYY-MM-DD" of the week's Monday): per-week override if set,
+// otherwise the global config default.
+func (m Model) weeklyGoalFor(mondayKey string) float64 {
+	if h, ok := m.weekGoals[mondayKey]; ok && h > 0 {
+		return h
+	}
+	return m.cfg.WeeklyHoursGoal
+}
+
+// weeklyGoal returns the effective hours goal for the currently displayed week.
+func (m Model) weeklyGoal() float64 {
+	return m.weeklyGoalFor(m.weekKey())
+}
+
+func (m Model) openWeekHoursInput() (tea.Model, tea.Cmd) {
+	current := m.weeklyGoal()
+	m.weekHoursInput.SetValue(fmt.Sprintf("%g", current))
+	m.weekHoursInput.Placeholder = fmt.Sprintf("%g", m.cfg.WeeklyHoursGoal)
+	cmd := m.weekHoursInput.Focus()
+	m.state = stateWeekHoursInput
+	return m, cmd
+}
+
+func (m Model) handleWeekHoursInputKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.Type {
+	case tea.KeyEnter:
+		raw := strings.TrimSpace(m.weekHoursInput.Value())
+		m.weekHoursInput.Blur()
+
+		var hours float64
+		if raw == "" {
+			// Empty input resets to the global default.
+			delete(m.weekGoals, m.weekKey())
+			m.state = stateWeekView
+			m.viewport.SetContent(m.renderWeekContent())
+			goalsCopy := copyWeeklyGoals(m.weekGoals)
+			return m, func() tea.Msg {
+				if err := journal.SaveWeeklyGoals(goalsCopy); err != nil {
+					return errMsg{err: err}
+				}
+				return weekGoalsLoadedMsg{goals: goalsCopy}
+			}
+		}
+		if _, err := fmt.Sscanf(raw, "%f", &hours); err != nil || hours <= 0 {
+			m.statusMsg = "✗ Invalid hours — enter a positive number (e.g. 32 or 37.5)"
+			m.isError = true
+			m.state = stateWeekView
+			m.viewport.SetContent(m.renderWeekContent())
+			return m, clearStatusCmd()
+		}
+		m.weekGoals[m.weekKey()] = hours
+		m.state = stateWeekView
+		m.viewport.SetContent(m.renderWeekContent())
+		goalsCopy := copyWeeklyGoals(m.weekGoals)
+		return m, func() tea.Msg {
+			if err := journal.SaveWeeklyGoals(goalsCopy); err != nil {
+				return errMsg{err: err}
+			}
+			return weekGoalsLoadedMsg{goals: goalsCopy}
+		}
+	case tea.KeyEsc:
+		m.weekHoursInput.Blur()
+		m.state = stateWeekView
+		return m, nil
+	}
+	var cmd tea.Cmd
+	m.weekHoursInput, cmd = m.weekHoursInput.Update(msg)
 	return m, cmd
 }
 
@@ -1208,6 +1321,8 @@ func (m Model) View() string {
 		return m.viewDateInput()
 	case stateWeekView:
 		return m.viewWeekView()
+	case stateWeekHoursInput:
+		return m.viewWeekHoursInput()
 	}
 	return ""
 }
@@ -1448,18 +1563,22 @@ func (m Model) renderStats() string {
 			}
 		}
 	}
-	const weeklyGoal = 40 * time.Hour
+	// Use the per-week override (if any) for the current week, else global default.
+	currentWeekKey := monday.Format("2006-01-02")
+	goalHours := m.weeklyGoalFor(currentWeekKey)
+	weeklyGoal := time.Duration(goalHours * float64(time.Hour))
 	pct := float64(weekWork) / float64(weeklyGoal)
 	if pct > 1 {
 		pct = 1
 	}
+	goalLabel := fmt.Sprintf(" / %gh  ", goalHours)
 	const progressBarWidth = 20
 	filledCount := int(pct * progressBarWidth)
 	progressBar := statsBlockFilledStyle.Render(strings.Repeat("█", filledCount)) +
 		statsBlockEmptyStyle.Render(strings.Repeat("░", progressBarWidth-filledCount))
 	weekHoursStr := "  " + statsLabelStyle.Render("Week: ") +
 		statsValueStyle.Render(journal.FormatDuration(weekWork)) +
-		statsLabelStyle.Render(" / 40h  ") +
+		statsLabelStyle.Render(goalLabel) +
 		progressBar +
 		statsLabelStyle.Render(fmt.Sprintf("  %.0f%%", pct*100))
 
@@ -1604,6 +1723,42 @@ func (m Model) viewTimeInput() string {
 	return header + "\n" + strings.Repeat("\n", topPad) + centered + "\n" + footer
 }
 
+func (m Model) viewWeekHoursInput() string {
+	now := time.Now()
+	weekday := int(now.Weekday())
+	if weekday == 0 {
+		weekday = 7
+	}
+	monday := now.AddDate(0, 0, -(weekday-1)+m.weekOffset*7)
+	sunday := monday.AddDate(0, 0, 6)
+	weekRange := monday.Format("02 Jan") + " – " + sunday.Format("02 Jan 2006")
+
+	header := m.renderHeader("📅  This Week", weekRange)
+	footer := m.renderFooter([][2]string{
+		{"enter", "confirm"},
+		{"esc", "cancel"},
+	})
+
+	m.weekHoursInput.Width = 12
+	inputBox := formActiveInputStyle.Width(14).Render(m.weekHoursInput.View())
+
+	hint := fmt.Sprintf("hours  ·  global default: %gh  ·  leave empty to reset", m.cfg.WeeklyHoursGoal)
+	dialog := formBoxStyle.Render(
+		formLabelStyle.Render("Set Weekly Hours Goal") + "\n" +
+			formHintStyle.Render(hint) + "\n\n" +
+			inputBox,
+	)
+
+	dh := lipgloss.Height(dialog)
+	topPad := (m.contentHeight() - dh) / 2
+	if topPad < 0 {
+		topPad = 0
+	}
+
+	centered := lipgloss.NewStyle().Width(m.width).Align(lipgloss.Center).Render(dialog)
+	return header + "\n" + strings.Repeat("\n", topPad) + centered + "\n" + footer
+}
+
 func (m Model) viewNotesEditor() string {
 	subtitle := m.dayRecord.Date
 	if t, err := m.dayRecord.ParseDate(); err == nil {
@@ -1680,9 +1835,11 @@ func (m Model) viewWeekView() string {
 	sep := dayViewDividerStyle.Render(strings.Repeat("─", m.width))
 	subHeader := navBar + "\n" + sep
 
+	kb := m.cfg.Keybinds.Week
 	footer := m.renderFooter([][2]string{
 		{"j/k", "scroll"},
 		{"←/→", "prev/next week"},
+		{kb.SetWeeklyHours, "set week goal"},
 		{"esc", "back"},
 	})
 	return lipgloss.JoinVertical(lipgloss.Left, header, subHeader, m.viewport.View(), footer)
@@ -1830,10 +1987,16 @@ func (m Model) renderWeekContent() string {
 
 	// Week total + progress bar.
 	b.WriteString("\n" + div + "\n")
-	const weeklyGoal = 40 * time.Hour
+	goalHours := m.weeklyGoal()
+	weeklyGoal := time.Duration(goalHours * float64(time.Hour))
 	pct := float64(weekWork) / float64(weeklyGoal)
 	if pct > 1 {
 		pct = 1
+	}
+	goalLabel := fmt.Sprintf(" / %gh  ", goalHours)
+	// Annotate if this week uses a custom override.
+	if _, hasOverride := m.weekGoals[m.weekKey()]; hasOverride {
+		goalLabel = fmt.Sprintf(" / %gh (custom)  ", goalHours)
 	}
 	const barW = 24
 	filledCount := int(pct * barW)
@@ -1841,7 +2004,7 @@ func (m Model) renderWeekContent() string {
 		statsBlockEmptyStyle.Render(strings.Repeat("░", barW-filledCount))
 	totalLine := "  " + dayViewLabelStyle.Render("Week total: ") +
 		dayViewValueStyle.Render(journal.FormatDuration(weekWork)) +
-		dayViewMutedStyle.Render(" / 40h  ") +
+		dayViewMutedStyle.Render(goalLabel) +
 		bar +
 		dayViewMutedStyle.Render(fmt.Sprintf("  %.0f%%", pct*100))
 	b.WriteString(totalLine + "\n")
@@ -1857,4 +2020,14 @@ func uniqueAppend(slice []string, s string) []string {
 		}
 	}
 	return append(slice, s)
+}
+
+// copyWeeklyGoals returns a shallow copy of goals so that async tea.Cmd
+// closures can safely marshal it without racing against future Update calls.
+func copyWeeklyGoals(goals journal.WeeklyGoals) journal.WeeklyGoals {
+	cp := make(journal.WeeklyGoals, len(goals))
+	for k, v := range goals {
+		cp[k] = v
+	}
+	return cp
 }
