@@ -5,7 +5,7 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/fgrohme/tui-journal/journal"
+	"github.com/sleepypxnda/schmournal/journal"
 )
 
 // weekKey returns the key used to store per-week goal overrides.

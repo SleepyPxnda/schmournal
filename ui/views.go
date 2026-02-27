@@ -7,7 +7,7 @@ import (
 
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/fgrohme/tui-journal/journal"
+	"github.com/sleepypxnda/schmournal/journal"
 )
 
 func (m Model) View() string {
