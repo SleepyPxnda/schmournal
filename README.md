@@ -73,6 +73,7 @@ Exports are written to `~/.journal/exports/export-YYYY-MM-DD.md`.
 |-----|--------|
 | `←` / `h` | Previous week |
 | `→` / `l` | Next week |
+| `g` | Set a custom hours goal for the displayed week |
 | `j` / `k` | Scroll content |
 | `esc` / `q` | Back to list |
 
@@ -131,6 +132,33 @@ Each day record has two tabs:
 
 ![Day Summary view](images/day-summary.png)
 
+
+---
+
+## Configuration
+
+Schmournal reads its configuration from `~/.config/schmournal.config` (TOML format). The file is created automatically with defaults on first run.
+
+### `weekly_hours_goal`
+
+Sets the default weekly working-hours target used in the stats bar progress meter and the weekly summary view.
+
+```toml
+weekly_hours_goal = 40   # hours (default: 40)
+```
+
+You can also override this on a per-week basis from the **weekly summary view** by pressing `g`. The override is stored in `~/.journal/weekly_goals.json` and shown as "(custom)" next to the goal in the week total line. Leave the input empty and press `enter` to reset a week back to the global default.
+
+### Keybinds
+
+All keybinds can be customised in `~/.config/schmournal.config`. Example:
+
+```toml
+[keybinds.week]
+prev_week        = "h"
+next_week        = "l"
+set_weekly_hours = "g"   # set custom goal for the displayed week
+```
 
 ---
 

@@ -39,8 +39,9 @@ type DayKeybinds struct {
 
 // WeekKeybinds holds configurable keys for the week overview.
 type WeekKeybinds struct {
-	PrevWeek string `toml:"prev_week"`
-	NextWeek string `toml:"next_week"`
+	PrevWeek        string `toml:"prev_week"`
+	NextWeek        string `toml:"next_week"`
+	SetWeeklyHours  string `toml:"set_weekly_hours"`
 }
 
 // Keybinds groups all view-specific keybind configurations.
@@ -54,14 +55,16 @@ type Keybinds struct {
 
 // Config is the top-level configuration structure.
 type Config struct {
-	StoragePath string   `toml:"storage_path"`
-	Keybinds    Keybinds `toml:"keybinds"`
+	StoragePath      string   `toml:"storage_path"`
+	WeeklyHoursGoal  float64  `toml:"weekly_hours_goal"`
+	Keybinds         Keybinds `toml:"keybinds"`
 }
 
 // Default returns a Config populated with the application defaults.
 func Default() Config {
 	return Config{
-		StoragePath: "~/.journal",
+		StoragePath:     "~/.journal",
+		WeeklyHoursGoal: 40,
 		Keybinds: Keybinds{
 			List: ListKeybinds{
 				Quit:      "q",
@@ -86,8 +89,9 @@ func Default() Config {
 				Export:         "x",
 			},
 			Week: WeekKeybinds{
-				PrevWeek: "h",
-				NextWeek: "l",
+				PrevWeek:       "h",
+				NextWeek:       "l",
+				SetWeeklyHours: "g",
 			},
 		},
 	}
@@ -162,6 +166,10 @@ func ExpandPath(path string) (string, error) {
 func (cfg *Config) validate() error {
 	def := Default()
 
+	if cfg.WeeklyHoursGoal <= 0 {
+		cfg.WeeklyHoursGoal = def.WeeklyHoursGoal
+	}
+
 	fill := func(s *string, d string) {
 		if *s == "" {
 			*s = d
@@ -196,6 +204,7 @@ func (cfg *Config) validate() error {
 	dw := def.Keybinds.Week
 	fill(&wk.PrevWeek, dw.PrevWeek)
 	fill(&wk.NextWeek, dw.NextWeek)
+	fill(&wk.SetWeeklyHours, dw.SetWeeklyHours)
 
 	if err := checkDuplicates("list", lk.Quit, lk.OpenToday, lk.OpenDate, lk.Delete, lk.AddWork, lk.AddBreak, lk.Export, lk.WeekView); err != nil {
 		return err
@@ -203,7 +212,7 @@ func (cfg *Config) validate() error {
 	if err := checkDuplicates("day", dk.AddWork, dk.AddBreak, dk.Edit, dk.Delete, dk.SetStartNow, dk.SetStartManual, dk.SetEndNow, dk.SetEndManual, dk.Notes, dk.Export); err != nil {
 		return err
 	}
-	if err := checkDuplicates("week", wk.PrevWeek, wk.NextWeek); err != nil {
+	if err := checkDuplicates("week", wk.PrevWeek, wk.NextWeek, wk.SetWeeklyHours); err != nil {
 		return err
 	}
 	return nil
@@ -229,6 +238,10 @@ const defaultConfigContent = `# Schmournal Configuration
 # Directory where journal JSON files are stored.
 # The ~ is expanded to your home directory.
 storage_path = "~/.journal"
+
+# Default weekly working hours goal used in the stats bar and weekly summary.
+# Can be overridden per-week from the weekly summary view.
+weekly_hours_goal = 40
 
 # ── Keybinds ──────────────────────────────────────────────────────────────────
 # Each value is a single key string as understood by the terminal
@@ -258,6 +271,7 @@ notes           = "n"   # Open the notes editor
 export          = "x"   # Export day to Markdown
 
 [keybinds.week]
-prev_week = "h"   # Go to the previous week (also ←)
-next_week = "l"   # Go to the next week  (also →)
+prev_week        = "h"   # Go to the previous week (also ←)
+next_week        = "l"   # Go to the next week  (also →)
+set_weekly_hours = "g"   # Set a custom hours goal for the displayed week
 `
