@@ -109,6 +109,10 @@ func FilePath() (string, error) {
 // Load reads the config file and returns a Config. If the file does not exist a
 // default config is written to disk and the defaults are returned. On parse
 // errors the defaults are returned together with the error.
+//
+// If the file exists but is missing keys introduced in a newer version of the
+// application, those keys are appended to the file with their default values so
+// that users can discover and customise them.
 func Load() (Config, error) {
 	cfg := Default()
 
@@ -123,14 +127,82 @@ func Load() (Config, error) {
 		return cfg, nil
 	}
 
-	if _, err := toml.DecodeFile(path, &cfg); err != nil {
+	md, err := toml.DecodeFile(path, &cfg)
+	if err != nil {
 		return Default(), err
 	}
 
 	if err := cfg.validate(); err != nil {
 		return Default(), err
 	}
+
+	// Append any keys that are new since the user's config was created.
+	patchMissingKeys(path, md, cfg)
+
 	return cfg, nil
+}
+
+// patchMissingKeys appends any config keys that are absent from the existing
+// file (i.e. introduced after the file was first written) so that users can see
+// and customise them. Existing content is never modified.
+func patchMissingKeys(path string, md toml.MetaData, cfg Config) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return
+	}
+	patched := string(data)
+
+	if !md.IsDefined("weekly_hours_goal") {
+		patched += "\n# Default weekly working hours goal used in the stats bar and weekly summary.\n" +
+			"# Can be overridden per-week from the weekly summary view.\n" +
+			fmt.Sprintf("weekly_hours_goal = %g\n", cfg.WeeklyHoursGoal)
+	}
+
+	if !md.IsDefined("keybinds", "week", "set_weekly_hours") {
+		keyLine := fmt.Sprintf("set_weekly_hours = %q   # Set a custom hours goal for the displayed week\n", cfg.Keybinds.Week.SetWeeklyHours)
+		if strings.Contains(patched, "[keybinds.week]") {
+			patched = insertIntoSection(patched, "[keybinds.week]", keyLine)
+		} else {
+			patched += fmt.Sprintf("\n[keybinds.week]\n%s", keyLine)
+		}
+	}
+
+	if patched != string(data) {
+		_ = os.WriteFile(path, []byte(patched), 0o644)
+	}
+}
+
+// insertIntoSection inserts text at the end of a named TOML section (just
+// before the next section header, or at the end of the file when the section
+// is the last one).
+func insertIntoSection(content, sectionHeader, text string) string {
+	lines := strings.Split(content, "\n")
+	sectionIdx := -1
+	for i, line := range lines {
+		if strings.TrimSpace(line) == sectionHeader {
+			sectionIdx = i
+			break
+		}
+	}
+	if sectionIdx == -1 {
+		return content + text
+	}
+
+	// Walk forward to find where the section ends (next header or EOF).
+	insertAt := len(lines)
+	for i := sectionIdx + 1; i < len(lines); i++ {
+		trimmed := strings.TrimSpace(lines[i])
+		if trimmed != "" && strings.HasPrefix(trimmed, "[") {
+			insertAt = i
+			break
+		}
+	}
+
+	result := make([]string, 0, len(lines)+1)
+	result = append(result, lines[:insertAt]...)
+	result = append(result, strings.TrimRight(text, "\n"))
+	result = append(result, lines[insertAt:]...)
+	return strings.Join(result, "\n")
 }
 
 // WriteDefault writes a commented default config file to path, creating
