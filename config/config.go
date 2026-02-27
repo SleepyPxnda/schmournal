@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 
 	"github.com/BurntSushi/toml"
@@ -146,10 +147,43 @@ func Load() (Config, error) {
 }
 
 // needsMigration reports whether the decoded metadata is missing any keys that
-// are present in the current default config.
+// are present in the current default config. It derives the expected key set
+// automatically from the Config struct's toml tags so that adding a new field
+// never requires a manual update here.
 func needsMigration(md toml.MetaData) bool {
-	return !md.IsDefined("weekly_hours_goal") ||
-		!md.IsDefined("keybinds", "week", "set_weekly_hours")
+	for _, path := range collectTOMLPaths(reflect.TypeOf(Config{}), nil) {
+		if !md.IsDefined(path...) {
+			return true
+		}
+	}
+	return false
+}
+
+// collectTOMLPaths recursively walks a struct type and returns the TOML key
+// path (as a []string) for every leaf field, using the "toml" struct tag as
+// the path component name. Nested structs are descended into with their tag
+// name prepended to the path.
+func collectTOMLPaths(t reflect.Type, prefix []string) [][]string {
+	if t.Kind() == reflect.Ptr {
+		t = t.Elem()
+	}
+	var paths [][]string
+	for i := 0; i < t.NumField(); i++ {
+		f := t.Field(i)
+		tag := strings.Split(f.Tag.Get("toml"), ",")[0]
+		if tag == "" || tag == "-" {
+			continue
+		}
+		path := make([]string, len(prefix), len(prefix)+1)
+		copy(path, prefix)
+		path = append(path, tag)
+		if f.Type.Kind() == reflect.Struct {
+			paths = append(paths, collectTOMLPaths(f.Type, path)...)
+		} else {
+			paths = append(paths, path)
+		}
+	}
+	return paths
 }
 
 // migrateConfig renames path to schmournal.old.config and writes a fresh
