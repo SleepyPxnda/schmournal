@@ -516,12 +516,12 @@ func (m Model) handleWeekHoursInputKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			delete(m.weekGoals, m.weekKey())
 			m.state = stateWeekView
 			m.viewport.SetContent(m.renderWeekContent())
-			goals := m.weekGoals
+			goalsCopy := copyWeeklyGoals(m.weekGoals)
 			return m, func() tea.Msg {
-				if err := journal.SaveWeeklyGoals(goals); err != nil {
+				if err := journal.SaveWeeklyGoals(goalsCopy); err != nil {
 					return errMsg{err: err}
 				}
-				return weekGoalsLoadedMsg{goals: goals}
+				return weekGoalsLoadedMsg{goals: goalsCopy}
 			}
 		}
 		if _, err := fmt.Sscanf(raw, "%f", &hours); err != nil || hours <= 0 {
@@ -534,12 +534,12 @@ func (m Model) handleWeekHoursInputKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.weekGoals[m.weekKey()] = hours
 		m.state = stateWeekView
 		m.viewport.SetContent(m.renderWeekContent())
-		goals := m.weekGoals
+		goalsCopy := copyWeeklyGoals(m.weekGoals)
 		return m, func() tea.Msg {
-			if err := journal.SaveWeeklyGoals(goals); err != nil {
+			if err := journal.SaveWeeklyGoals(goalsCopy); err != nil {
 				return errMsg{err: err}
 			}
-			return weekGoalsLoadedMsg{goals: goals}
+			return weekGoalsLoadedMsg{goals: goalsCopy}
 		}
 	case tea.KeyEsc:
 		m.weekHoursInput.Blur()
@@ -2020,4 +2020,14 @@ func uniqueAppend(slice []string, s string) []string {
 		}
 	}
 	return append(slice, s)
+}
+
+// copyWeeklyGoals returns a shallow copy of goals so that async tea.Cmd
+// closures can safely marshal it without racing against future Update calls.
+func copyWeeklyGoals(goals journal.WeeklyGoals) journal.WeeklyGoals {
+	cp := make(journal.WeeklyGoals, len(goals))
+	for k, v := range goals {
+		cp[k] = v
+	}
+	return cp
 }
