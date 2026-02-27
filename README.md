@@ -2,19 +2,24 @@
 
 A minimal, distraction-free terminal journaling app built with Go and the [Charm](https://charm.sh) TUI stack, themed with **Catppuccin Mocha**.
 
+![List view](images/overview.png)
+
 ## Features
 
-- **List view** — all entries sorted newest-first with a content preview
-- **Viewer** — beautifully rendered Markdown via Glamour
-- **Editor** — full-screen textarea for writing
-- **Work day tracking** — log start/end times, work items (with project), and breaks
+- **List view** — all days sorted newest-first with an entry count and work-time preview
+- **Stats bar** — current-week activity bar, monthly entry count, and streak tracking
+- **Day view** — two-tab view: Work Log (entries table) and Summary
+- **Notes editor** — full-screen textarea for free-form notes per day
+- **Work day tracking** — log start/end times, work items (with optional project), and breaks
+- **Multi-project split** — enter comma-separated projects to split a task across them automatically
+- **Weekly summary** — scrollable week overview with per-day totals, navigable across past weeks
 - **Daily export** — generates a Markdown report grouped by project
-- **Create** — one keypress opens today's entry (creates it from template if missing)
-- **Delete** — with confirmation dialog
+- **Open any day** — open or create a journal entry for any arbitrary date
+- **Delete** — with confirmation dialog (single entry or whole day)
 - **Filter / search** — built-in fuzzy filtering with `/`
 - **Version flag** — `schmournal --version` prints the current version
 
-Entries are stored as plain Markdown files in `~/.journal/YYYY-MM-DD.md`.  
+Records are stored as JSON files in `~/.journal/YYYY-MM-DD.json`.  
 Exports are written to `~/.journal/exports/export-YYYY-MM-DD.md`.
 
 ---
@@ -23,43 +28,64 @@ Exports are written to `~/.journal/exports/export-YYYY-MM-DD.md`.
 
 ### 📋 List view
 
+![List view](images/overview.png)
+
 | Key | Action |
 |-----|--------|
-| `n` | New / open today's entry |
-| `enter` | View selected entry |
-| `e` | Edit selected entry |
-| `d` | Delete selected entry (with confirmation) |
+| `n` | Open today's entry (creates it if it doesn't exist) |
+| `c` | Open or create an entry for any date |
+| `enter` | View selected day |
+| `d` | Delete selected day (with confirmation) |
 | `w` | Log a work item for today |
 | `b` | Log a break for today |
-| `x` | Export today's work log |
+| `x` | Export the selected day's work log |
+| `v` | Weekly summary view |
 | `/` | Filter entries |
-| `q` | Quit |
+| `q` / `esc` | Quit |
 | `ctrl+c` | Force quit |
 
-### 👁 Viewer
+### 👁 Day view — Work Log tab
+
+![Day view](images/day-worklog.png)
 
 | Key | Action |
 |-----|--------|
-| `e` | Edit entry |
-| `d` | Delete entry |
-| `w` | Log a work item to this entry |
-| `b` | Log a break to this entry |
+| `←` / `→` | Switch between Work Log and Summary tabs |
+| `j` / `↓` | Select next entry |
+| `k` / `↑` | Select previous entry |
+| `w` | Log a new work item |
+| `b` | Log a new break |
+| `e` | Edit the selected entry (or open notes editor if none selected) |
+| `d` | Delete the selected entry (or the whole day if none selected) |
 | `s` | Stamp current time as **Start** |
 | `S` | Open dialog to manually **set Start time** |
 | `f` | Stamp current time as **End** (finish) |
 | `F` | Open dialog to manually **set End time** |
-| `x` | Export this entry's work log |
-| `↑ / ↓` | Scroll content |
-| `esc` / `q` | Back to list |
+| `N` | Open notes editor |
+| `x` | Export this day's work log |
+| `esc` | Back to list |
 
-### ✏️ Editor
+### 📅 Weekly summary view
+
+![Week Summary view](images/week-overview.png)
 
 | Key | Action |
 |-----|--------|
-| `ctrl+s` | Save entry |
+| `←` / `h` | Previous week |
+| `→` / `l` | Next week |
+| `j` / `k` | Scroll content |
+| `esc` / `q` | Back to list |
+
+### ✏️ Notes editor
+
+| Key | Action |
+|-----|--------|
+| `ctrl+s` | Save notes |
 | `esc` | Cancel (discard changes) |
 
 ### 📝 Work / Break log form
+
+![Week Summary view](images/day-worklog-form.png)
 
 | Key | Action |
 |-----|--------|
@@ -69,6 +95,9 @@ Exports are written to `~/.journal/exports/export-YYYY-MM-DD.md`.
 
 Work items have three fields: **Task**, **Project** (optional), **Duration**.  
 Break items have two fields: **Label**, **Duration**.
+
+The **Project** field accepts a comma-separated list of projects (e.g. `Frontend, Backend`).
+When multiple projects are supplied the logged duration is split evenly across them.
 
 Duration examples: `1h 30m` · `45m` · `2h` · `1.5h` · `90` (bare number = minutes)
 
@@ -81,22 +110,27 @@ Duration examples: `1h 30m` · `45m` · `2h` · `1.5h` · `90` (bare number = mi
 
 Input format: `HH:MM` (e.g. `09:00`, `14:30`)
 
+### 📆 Date input dialog (c)
+
+| Key | Action |
+|-----|--------|
+| `enter` | Open or create the day |
+| `esc` | Cancel |
+
+Input format: `YYYY-MM-DD`
+
 ---
 
-## Daily template
+## Day view
 
-Each new entry is created with the following sections:
+Each day record has two tabs:
 
-```
-## 🕐 Work Day
-Start / End timestamps
+**Work Log tab** — shows the start/end time bar, a table of all work and break entries (with the currently selected entry highlighted), and a work/break/total summary line.
 
-## 📋 Work Log
-Project | Task | Duration table + Work / Breaks / Total summary
+**Summary tab** — shows a compact summary with start time, end time, day duration, total work, total breaks, and logged notes.
 
-## 📝 Notes
-Free-form notes
-```
+![Day Summary view](images/day-summary.png)
+
 
 ---
 
