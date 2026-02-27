@@ -5,6 +5,8 @@ import (
 	"os"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/fgrohme/tui-journal/config"
+	"github.com/fgrohme/tui-journal/journal"
 	"github.com/fgrohme/tui-journal/ui"
 )
 
@@ -16,8 +18,17 @@ func main() {
 		return
 	}
 
+	cfg, err := config.Load()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "Warning: could not load config:", err)
+	}
+
+	if err := journal.SetStoragePath(cfg.StoragePath); err != nil {
+		fmt.Fprintln(os.Stderr, "Warning: invalid storage_path in config:", err)
+	}
+
 	p := tea.NewProgram(
-		ui.New(),
+		ui.New(cfg),
 		tea.WithAltScreen(),
 		tea.WithMouseCellMotion(),
 	)

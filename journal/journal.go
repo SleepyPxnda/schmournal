@@ -6,11 +6,45 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"time"
 )
 
-// Dir returns (and creates if necessary) the ~/.journal directory.
+// storagePath overrides the default ~/.journal directory when set via SetStoragePath.
+var storagePath string
+
+// SetStoragePath overrides the default ~/.journal storage directory. The path
+// may contain a leading ~ which is expanded to the user's home directory.
+func SetStoragePath(path string) error {
+	if path == "" {
+		storagePath = ""
+		return nil
+	}
+	if path[0] == '~' {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return err
+		}
+		// TrimPrefix strips a leading "/" so that filepath.Join does not
+		// interpret the remainder as an absolute path (e.g. "~/.journal" →
+		// "<home>/.journal" rather than "/.journal").
+		rest := strings.TrimPrefix(path[1:], "/")
+		if rest == "" {
+			path = home
+		} else {
+			path = filepath.Join(home, rest)
+		}
+	}
+	storagePath = path
+	return nil
+}
+
+// Dir returns (and creates if necessary) the journal storage directory.
+// Defaults to ~/.journal; can be overridden with SetStoragePath.
 func Dir() (string, error) {
+	if storagePath != "" {
+		return storagePath, os.MkdirAll(storagePath, 0o755)
+	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", err
