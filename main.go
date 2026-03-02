@@ -23,12 +23,28 @@ func main() {
 		fmt.Fprintln(os.Stderr, "Warning: could not load config:", err)
 	}
 
-	if err := journal.SetStoragePath(cfg.StoragePath); err != nil {
+	// Determine the active workspace and apply its settings.
+	state, _ := config.LoadState()
+	activeWorkspace := resolveActiveWorkspace(cfg, state.ActiveWorkspace)
+
+	storagePath := cfg.StoragePath
+	if activeWorkspace != "" {
+		for _, ws := range cfg.Workspaces {
+			if ws.Name == activeWorkspace {
+				if ws.StoragePath != "" {
+					storagePath = ws.StoragePath
+				}
+				break
+			}
+		}
+	}
+
+	if err := journal.SetStoragePath(storagePath); err != nil {
 		fmt.Fprintln(os.Stderr, "Warning: invalid storage_path in config:", err)
 	}
 
 	p := tea.NewProgram(
-		ui.New(cfg),
+		ui.New(cfg, activeWorkspace),
 		tea.WithAltScreen(),
 		tea.WithMouseCellMotion(),
 	)
@@ -37,3 +53,20 @@ func main() {
 		os.Exit(1)
 	}
 }
+
+// resolveActiveWorkspace returns the workspace name to use on startup.
+// If the saved name is valid it is returned; otherwise the first configured
+// workspace name is returned (or "" when no workspaces are defined).
+func resolveActiveWorkspace(cfg config.Config, saved string) string {
+	if len(cfg.Workspaces) == 0 {
+		return ""
+	}
+	for _, ws := range cfg.Workspaces {
+		if ws.Name == saved {
+			return saved
+		}
+	}
+	// Fall back to the first workspace.
+	return cfg.Workspaces[0].Name
+}
+

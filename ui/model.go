@@ -30,6 +30,7 @@ const (
 	stateDateInput
 	stateWeekView
 	stateWeekHoursInput
+	stateWorkspacePicker
 )
 
 const (
@@ -88,7 +89,8 @@ type Model struct {
 	height int
 	ready  bool
 
-	cfg config.Config
+	cfg             config.Config
+	activeWorkspace string // name of the currently active workspace (empty = no workspaces)
 
 	list    list.Model
 	records []journal.DayRecord
@@ -121,6 +123,8 @@ type Model struct {
 	weekGoals      journal.WeeklyGoals
 	weekHoursInput textinput.Model
 
+	workspaceIdx int // currently highlighted row in the workspace picker
+
 	statusMsg string
 	isError   bool
 }
@@ -142,7 +146,7 @@ func newDelegate() list.DefaultDelegate {
 }
 
 // New constructs the initial model using the provided configuration.
-func New(cfg config.Config) Model {
+func New(cfg config.Config, activeWorkspace string) Model {
 	l := list.New([]list.Item{}, newDelegate(), 0, 0)
 	l.SetShowTitle(false)
 	l.SetShowStatusBar(false)
@@ -206,19 +210,20 @@ func New(cfg config.Config) Model {
 	weekHoursIn.PlaceholderStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(cOverlay0))
 
 	return Model{
-		cfg:            cfg,
-		state:          stateList,
-		list:           l,
-		textarea:       ta,
-		taskInput:      taskIn,
-		projectInput:   projIn,
-		durationInput:  durIn,
-		timeInput:      timeIn,
-		dateInput:      dateIn,
-		weekHoursInput: weekHoursIn,
-		weekGoals:      journal.WeeklyGoals{},
-		selectedEntry:  -1,
-		editEntryIdx:   -1,
+		cfg:             cfg,
+		activeWorkspace: activeWorkspace,
+		state:           stateList,
+		list:            l,
+		textarea:        ta,
+		taskInput:       taskIn,
+		projectInput:    projIn,
+		durationInput:   durIn,
+		timeInput:       timeIn,
+		dateInput:       dateIn,
+		weekHoursInput:  weekHoursIn,
+		weekGoals:       journal.WeeklyGoals{},
+		selectedEntry:   -1,
+		editEntryIdx:    -1,
 	}
 }
 
@@ -352,6 +357,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.handleWeekViewKey(msg)
 		case stateWeekHoursInput:
 			return m.handleWeekHoursInputKey(msg)
+		case stateWorkspacePicker:
+			return m.handleWorkspacePickerKey(msg)
 		}
 	}
 
@@ -435,6 +442,8 @@ func (m Model) handleListKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 		case kb.WeekView:
 			return m.openWeekView()
+		case kb.SwitchWorkspace:
+			return m.openWorkspacePicker()
 		}
 	}
 	var cmd tea.Cmd
@@ -482,12 +491,12 @@ func (m Model) weekKey() string {
 
 // weeklyGoalFor returns the effective hours goal for the week identified by
 // mondayKey ("YYYY-MM-DD" of the week's Monday): per-week override if set,
-// otherwise the global config default.
+// otherwise the workspace-specific goal (or the global config default).
 func (m Model) weeklyGoalFor(mondayKey string) float64 {
 	if h, ok := m.weekGoals[mondayKey]; ok && h > 0 {
 		return h
 	}
-	return m.cfg.WeeklyHoursGoal
+	return m.effectiveWeeklyHoursGoal()
 }
 
 // weeklyGoal returns the effective hours goal for the currently displayed week.
@@ -495,10 +504,30 @@ func (m Model) weeklyGoal() float64 {
 	return m.weeklyGoalFor(m.weekKey())
 }
 
+// activeWorkspaceConfig returns a pointer to the active WorkspaceConfig, or nil
+// when no workspaces are configured or none matches the active name.
+func (m Model) activeWorkspaceConfig() *config.WorkspaceConfig {
+	for i := range m.cfg.Workspaces {
+		if m.cfg.Workspaces[i].Name == m.activeWorkspace {
+			return &m.cfg.Workspaces[i]
+		}
+	}
+	return nil
+}
+
+// effectiveWeeklyHoursGoal returns the hours-per-week goal for the active
+// workspace, falling back to the global config default when not overridden.
+func (m Model) effectiveWeeklyHoursGoal() float64 {
+	if ws := m.activeWorkspaceConfig(); ws != nil && ws.WeeklyHoursGoal > 0 {
+		return ws.WeeklyHoursGoal
+	}
+	return m.cfg.WeeklyHoursGoal
+}
+
 func (m Model) openWeekHoursInput() (tea.Model, tea.Cmd) {
 	current := m.weeklyGoal()
 	m.weekHoursInput.SetValue(fmt.Sprintf("%g", current))
-	m.weekHoursInput.Placeholder = fmt.Sprintf("%g", m.cfg.WeeklyHoursGoal)
+	m.weekHoursInput.Placeholder = fmt.Sprintf("%g", m.effectiveWeeklyHoursGoal())
 	cmd := m.weekHoursInput.Focus()
 	m.state = stateWeekHoursInput
 	return m, cmd
@@ -1323,6 +1352,8 @@ func (m Model) View() string {
 		return m.viewWeekView()
 	case stateWeekHoursInput:
 		return m.viewWeekHoursInput()
+	case stateWorkspacePicker:
+		return m.viewWorkspacePicker()
 	}
 	return ""
 }
@@ -1451,20 +1482,29 @@ func (m Model) viewDateInput() string {
 }
 
 func (m Model) viewList() string {
-	header := m.renderHeader("📔  Schmournal", time.Now().Format("Mon, 02 Jan 2006"))
+	subtitle := time.Now().Format("Mon, 02 Jan 2006")
+	if m.activeWorkspace != "" {
+		subtitle = m.activeWorkspace + "  ·  " + subtitle
+	}
+	header := m.renderHeader("📔  Schmournal", subtitle)
 	kb := m.cfg.Keybinds.List
-	footer := m.renderFooter([][2]string{
-		{kb.OpenToday, "open today"},
-		{kb.OpenDate, "open date"},
-		{kb.AddWork, "log work"},
-		{kb.AddBreak, "log break"},
-		{"enter", "view"},
-		{kb.WeekView, "week"},
-		{kb.Delete, "delete"},
-		{kb.Export, "export"},
-		{"/", "filter"},
-		{"esc", "quit"},
-	})
+	var footerKeys [][2]string
+	footerKeys = append(footerKeys,
+		[2]string{kb.OpenToday, "open today"},
+		[2]string{kb.OpenDate, "open date"},
+		[2]string{kb.AddWork, "log work"},
+		[2]string{kb.AddBreak, "log break"},
+		[2]string{"enter", "view"},
+		[2]string{kb.WeekView, "week"},
+		[2]string{kb.Delete, "delete"},
+		[2]string{kb.Export, "export"},
+		[2]string{"/", "filter"},
+	)
+	if len(m.cfg.Workspaces) > 0 {
+		footerKeys = append(footerKeys, [2]string{kb.SwitchWorkspace, "workspace"})
+	}
+	footerKeys = append(footerKeys, [2]string{"esc", "quit"})
+	footer := m.renderFooter(footerKeys)
 	sections := []string{header, m.renderStats()}
 	if eom := m.renderEOMBanner(); eom != "" {
 		sections = append(sections, eom)
@@ -1742,7 +1782,7 @@ func (m Model) viewWeekHoursInput() string {
 	m.weekHoursInput.Width = 12
 	inputBox := formActiveInputStyle.Width(14).Render(m.weekHoursInput.View())
 
-	hint := fmt.Sprintf("hours  ·  global default: %gh  ·  leave empty to reset", m.cfg.WeeklyHoursGoal)
+	hint := fmt.Sprintf("hours  ·  global default: %gh  ·  leave empty to reset", m.effectiveWeeklyHoursGoal())
 	dialog := formBoxStyle.Render(
 		formLabelStyle.Render("Set Weekly Hours Goal") + "\n" +
 			formHintStyle.Render(hint) + "\n\n" +
@@ -2030,4 +2070,137 @@ func copyWeeklyGoals(goals journal.WeeklyGoals) journal.WeeklyGoals {
 		cp[k] = v
 	}
 	return cp
+}
+
+// ── Workspace picker ──────────────────────────────────────────────────────────
+
+// openWorkspacePicker opens the workspace picker dialog. If no workspaces are
+// configured a status message is shown instead.
+func (m Model) openWorkspacePicker() (tea.Model, tea.Cmd) {
+	if len(m.cfg.Workspaces) == 0 {
+		m.statusMsg = "No workspaces configured — add [[workspaces]] entries to your config file"
+		m.isError = false
+		return m, clearStatusCmd()
+	}
+	// Pre-select the currently active workspace.
+	m.workspaceIdx = 0
+	for i, ws := range m.cfg.Workspaces {
+		if ws.Name == m.activeWorkspace {
+			m.workspaceIdx = i
+			break
+		}
+	}
+	m.state = stateWorkspacePicker
+	return m, nil
+}
+
+func (m Model) handleWorkspacePickerKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	n := len(m.cfg.Workspaces)
+	switch msg.String() {
+	case "j", "down":
+		if m.workspaceIdx < n-1 {
+			m.workspaceIdx++
+		}
+		return m, nil
+	case "k", "up":
+		if m.workspaceIdx > 0 {
+			m.workspaceIdx--
+		}
+		return m, nil
+	case "enter":
+		if m.workspaceIdx >= 0 && m.workspaceIdx < n {
+			return m.switchWorkspace(m.cfg.Workspaces[m.workspaceIdx].Name)
+		}
+	case "esc", m.cfg.Keybinds.List.Quit:
+		m.state = stateList
+	}
+	return m, nil
+}
+
+// switchWorkspace applies the named workspace: updates the journal storage
+// path, records the active workspace name and reloads all data.
+func (m Model) switchWorkspace(name string) (tea.Model, tea.Cmd) {
+	// Resolve the storage path for the chosen workspace.
+	storagePath := m.cfg.StoragePath
+	for _, ws := range m.cfg.Workspaces {
+		if ws.Name == name {
+			if ws.StoragePath != "" {
+				storagePath = ws.StoragePath
+			}
+			break
+		}
+	}
+
+	if err := journal.SetStoragePath(storagePath); err != nil {
+		m.statusMsg = "✗ " + err.Error()
+		m.isError = true
+		m.state = stateList
+		return m, clearStatusCmd()
+	}
+
+	m.activeWorkspace = name
+	m.state = stateList
+	m.statusMsg = fmt.Sprintf("✓ Switched to workspace %q", name)
+	m.isError = false
+
+	return m, tea.Batch(
+		loadRecords,
+		loadWeeklyGoals,
+		clearStatusCmd(),
+		func() tea.Msg {
+			_ = config.SaveState(config.AppState{ActiveWorkspace: name})
+			return nil
+		},
+	)
+}
+
+func (m Model) viewWorkspacePicker() string {
+	header := m.renderHeader("📔  Schmournal", "Switch Workspace")
+
+	innerW := 36
+	if m.width-8 > innerW {
+		innerW = m.width / 2
+	}
+	if innerW > 60 {
+		innerW = 60
+	}
+
+	div := dayViewDividerStyle.Render(strings.Repeat("─", innerW))
+
+	var rows []string
+	rows = append(rows, formLabelStyle.Render("Select a workspace:"))
+	rows = append(rows, div)
+
+	for i, ws := range m.cfg.Workspaces {
+		cursor := "  "
+		if i == m.workspaceIdx {
+			cursor = "▶ "
+		}
+		label := ws.Name
+		if ws.Name == m.activeWorkspace {
+			label += "  " + statusSuccessStyle.Render("✓")
+		}
+		line := cursor + label
+		if i == m.workspaceIdx {
+			line = selectedEntryStyle.Render(fmt.Sprintf("%-*s", innerW, line))
+		} else {
+			line = normalEntryStyle.Render(line)
+		}
+		rows = append(rows, line)
+	}
+
+	rows = append(rows, div)
+	rows = append(rows, dayViewMutedStyle.Render("j/k  navigate  ·  enter  switch  ·  esc  cancel"))
+
+	box := formBoxStyle.Render(lipgloss.JoinVertical(lipgloss.Left, rows...))
+
+	bh := lipgloss.Height(box)
+	ch := m.contentHeight()
+	topPad := (ch - bh) / 2
+	if topPad < 0 {
+		topPad = 0
+	}
+	centered := lipgloss.NewStyle().Width(m.width).Align(lipgloss.Center).Render(box)
+	footer := m.renderFooter([][2]string{{"j/k", "navigate"}, {"enter", "switch"}, {"esc", "cancel"}})
+	return lipgloss.JoinVertical(lipgloss.Left, header, strings.Repeat("\n", topPad)+centered, footer)
 }
