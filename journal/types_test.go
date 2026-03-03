@@ -1,6 +1,7 @@
 package journal
 
 import (
+	"strings"
 	"testing"
 	"time"
 )
@@ -102,7 +103,7 @@ func TestSummary(t *testing.T) {
 			t.Error("Summary() returned empty string for single entry")
 		}
 		// Should mention "1 entry" (singular).
-		if !containsStr(got, "1 entry") {
+		if !strings.Contains(got, "1 entry") {
 			t.Errorf("Summary() = %q, expected to contain %q", got, "1 entry")
 		}
 	})
@@ -116,13 +117,13 @@ func TestSummary(t *testing.T) {
 			},
 		}
 		got := rec.Summary()
-		if !containsStr(got, "3 entries") {
+		if !strings.Contains(got, "3 entries") {
 			t.Errorf("Summary() = %q, expected to contain %q", got, "3 entries")
 		}
-		if !containsStr(got, "Work:") {
+		if !strings.Contains(got, "Work:") {
 			t.Errorf("Summary() = %q, expected to contain %q", got, "Work:")
 		}
-		if !containsStr(got, "Breaks:") {
+		if !strings.Contains(got, "Breaks:") {
 			t.Errorf("Summary() = %q, expected to contain %q", got, "Breaks:")
 		}
 	})
@@ -145,17 +146,4 @@ func TestParseDateInvalid(t *testing.T) {
 	if _, err := rec.ParseDate(); err == nil {
 		t.Error("ParseDate() expected error for invalid date, got nil")
 	}
-}
-
-// containsStr is a simple helper to check string containment.
-func containsStr(s, sub string) bool {
-	return len(s) >= len(sub) && (s == sub || len(sub) == 0 ||
-		func() bool {
-			for i := 0; i <= len(s)-len(sub); i++ {
-				if s[i:i+len(sub)] == sub {
-					return true
-				}
-			}
-			return false
-		}())
 }
