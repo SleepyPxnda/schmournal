@@ -2,6 +2,7 @@ package ui
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"strings"
 	"time"
@@ -53,7 +54,10 @@ type clockTickMsg struct{}
 
 // ── List item ─────────────────────────────────────────────────────────────────
 
-type dayListItem struct{ rec journal.DayRecord }
+type dayListItem struct {
+	rec       journal.DayRecord
+	isWorkDay bool
+}
 
 func (d dayListItem) FilterValue() string {
 	parts := []string{d.rec.Date}
@@ -142,7 +146,26 @@ func (m Model) contentHeight() int {
 	return m.height - headerHeight - footerHeight
 }
 
-func newDelegate() list.DefaultDelegate {
+// workDayDelegate wraps list.DefaultDelegate and renders non-working-day
+// entries with a distinct colour so they stand out in the list view.
+type workDayDelegate struct {
+	list.DefaultDelegate
+}
+
+// Render overrides the default item rendering to apply the non-working-day
+// colour scheme to items that were logged on an off-day.
+func (d workDayDelegate) Render(w io.Writer, m list.Model, index int, item list.Item) {
+	// Take an explicit local copy of the inner delegate so that per-item style
+	// changes are confined to this call and never leak to subsequent items.
+	inner := d.DefaultDelegate
+	if di, ok := item.(dayListItem); ok && !di.isWorkDay && index != m.Index() && m.FilterState() == list.Unfiltered {
+		inner.Styles.NormalTitle = listNonWorkDayTitle
+		inner.Styles.NormalDesc = listNonWorkDayDesc
+	}
+	inner.Render(w, m, index, item)
+}
+
+func newDelegate() workDayDelegate {
 	d := list.NewDefaultDelegate()
 	d.Styles.NormalTitle = listNormalTitle
 	d.Styles.NormalDesc = listNormalDesc
@@ -151,7 +174,7 @@ func newDelegate() list.DefaultDelegate {
 	d.Styles.DimmedTitle = listDimmedTitle
 	d.Styles.DimmedDesc = listDimmedDesc
 	d.Styles.FilterMatch = listFilterMatch
-	return d
+	return workDayDelegate{DefaultDelegate: d}
 }
 
 // New constructs the initial model using the provided configuration.
@@ -270,7 +293,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.records = msg.records
 		items := make([]list.Item, len(m.records))
 		for i, r := range m.records {
-			items[i] = dayListItem{rec: r}
+			isWork := true
+			if t, err := r.ParseDate(); err == nil {
+				isWork = m.cfg.IsWorkDay(t)
+			}
+			items[i] = dayListItem{rec: r, isWorkDay: isWork}
 		}
 		m.list.SetItems(items)
 		return m, nil

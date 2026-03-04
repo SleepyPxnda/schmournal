@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"strings"
+	"time"
 
 	"github.com/BurntSushi/toml"
 )
@@ -73,8 +74,22 @@ type Keybinds struct {
 type Config struct {
 	StoragePath     string            `toml:"storage_path"`
 	WeeklyHoursGoal float64           `toml:"weekly_hours_goal"`
+	WorkDays        []string          `toml:"work_days"`
 	Keybinds        Keybinds          `toml:"keybinds"`
 	Workspaces      []WorkspaceConfig `toml:"workspaces"`
+}
+
+// IsWorkDay reports whether t falls on a configured working day.
+// Day matching is case-insensitive (config values are normalised to lowercase
+// during validation, so this comparison is always exact after Load).
+func (cfg Config) IsWorkDay(t time.Time) bool {
+	wd := strings.ToLower(t.Weekday().String())
+	for _, d := range cfg.WorkDays {
+		if d == wd {
+			return true
+		}
+	}
+	return false
 }
 
 // Default returns a Config populated with the application defaults.
@@ -82,6 +97,7 @@ func Default() Config {
 	return Config{
 		StoragePath:     "~/.journal",
 		WeeklyHoursGoal: 40,
+		WorkDays:        []string{"monday", "tuesday", "wednesday", "thursday", "friday"},
 		Keybinds: Keybinds{
 			List: ListKeybinds{
 				Quit:            "q",
@@ -235,6 +251,12 @@ func WriteDefault(path string) error {
 // values taken from cfg. This is used both when writing a brand-new default
 // config and when migrating an existing config that is missing newer keys.
 func generateConfigContent(cfg Config) string {
+	workDayParts := make([]string, len(cfg.WorkDays))
+	for i, d := range cfg.WorkDays {
+		workDayParts[i] = fmt.Sprintf("%q", d)
+	}
+	workDaysStr := "[" + strings.Join(workDayParts, ", ") + "]"
+
 	return fmt.Sprintf(`# Schmournal Configuration
 # Location: ~/.config/schmournal.config
 
@@ -245,6 +267,14 @@ storage_path = %q
 # Default weekly working hours goal used in the stats bar and weekly summary.
 # Can be overridden per-week from the weekly summary view.
 weekly_hours_goal = %g
+
+# Days of the week that count as working days.
+# Non-working days are skipped when calculating your streak (so a weekend
+# never breaks it) and are highlighted in the week overview.
+# Logging on a non-working day is always allowed.
+# Valid values (case-insensitive): monday, tuesday, wednesday, thursday,
+#   friday, saturday, sunday
+work_days = %s
 
 # ── Workspaces ────────────────────────────────────────────────────────────────
 # Workspaces let you maintain separate journal directories with independent
@@ -303,6 +333,7 @@ set_weekly_hours = %q   # Set a custom hours goal for the displayed week
 `,
 		cfg.StoragePath,
 		cfg.WeeklyHoursGoal,
+		workDaysStr,
 		cfg.Keybinds.List.Quit,
 		cfg.Keybinds.List.OpenToday,
 		cfg.Keybinds.List.OpenDate,
@@ -356,6 +387,23 @@ func (cfg *Config) validate() error {
 
 	if cfg.WeeklyHoursGoal <= 0 {
 		cfg.WeeklyHoursGoal = def.WeeklyHoursGoal
+	}
+
+	// Validate and normalise work_days.
+	validDays := map[string]bool{
+		"monday": true, "tuesday": true, "wednesday": true,
+		"thursday": true, "friday": true, "saturday": true, "sunday": true,
+	}
+	if len(cfg.WorkDays) == 0 {
+		cfg.WorkDays = def.WorkDays
+	} else {
+		for i, d := range cfg.WorkDays {
+			lower := strings.ToLower(d)
+			if !validDays[lower] {
+				return fmt.Errorf("config: invalid work_day %q (must be a weekday name, e.g. \"monday\")", d)
+			}
+			cfg.WorkDays[i] = lower
+		}
 	}
 
 	fill := func(s *string, d string) {

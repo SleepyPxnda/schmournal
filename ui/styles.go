@@ -152,6 +152,14 @@ var (
 
 	listFilterMatch = lipgloss.NewStyle().
 			Foreground(lipgloss.Color(cYellow))
+
+	listNonWorkDayTitle = lipgloss.NewStyle().
+				Foreground(lipgloss.Color(cMaroon)).
+				Padding(0, 0, 0, 2)
+
+	listNonWorkDayDesc = lipgloss.NewStyle().
+				Foreground(lipgloss.Color(cMaroon)).
+				Padding(0, 0, 0, 2)
 )
 
 // ── Day view styles ───────────────────────────────────────────────────────────
@@ -188,12 +196,13 @@ var (
 
 // ── Stats panel styles ────────────────────────────────────────────────────────
 var (
-	statsBlockFilledStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(cGreen))
-	statsBlockEmptyStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color(cSurface2))
-	statsBlockFutureStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(cSurface1))
-	statsLabelStyle       = lipgloss.NewStyle().Foreground(lipgloss.Color(cSubtext0))
-	statsValueStyle       = lipgloss.NewStyle().Foreground(lipgloss.Color(cText)).Bold(true)
-	statsStreakStyle      = lipgloss.NewStyle().Foreground(lipgloss.Color(cPeach)).Bold(true)
+	statsBlockFilledStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color(cGreen))
+	statsBlockEmptyStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color(cSurface2))
+	statsBlockFutureStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color(cSurface1))
+	statsBlockNonWorkStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color(cMaroon))
+	statsLabelStyle          = lipgloss.NewStyle().Foreground(lipgloss.Color(cSubtext0))
+	statsValueStyle          = lipgloss.NewStyle().Foreground(lipgloss.Color(cText)).Bold(true)
+	statsStreakStyle         = lipgloss.NewStyle().Foreground(lipgloss.Color(cPeach)).Bold(true)
 
 	eomBannerStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color(cBase)).
