@@ -29,6 +29,14 @@ func clearStatusCmd() tea.Cmd {
 	})
 }
 
+// clockTickCmd returns a command that fires a clockTickMsg after one second.
+// It is re-issued on every tick while the clock is running.
+func clockTickCmd() tea.Cmd {
+	return tea.Tick(time.Second, func(time.Time) tea.Msg {
+		return clockTickMsg{}
+	})
+}
+
 func (m Model) saveDayCmd(label string) tea.Cmd {
 	rec := m.dayRecord
 	return func() tea.Msg {

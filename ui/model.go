@@ -24,6 +24,7 @@ const (
 	stateList viewState = iota
 	stateDayView
 	stateWorkForm
+	stateClockForm
 	stateTimeInput
 	stateNotesEditor
 	stateConfirmDelete
@@ -48,6 +49,7 @@ type exportedMsg struct{ path string }
 type clearStatusMsg struct{}
 type errMsg struct{ err error }
 type weekGoalsLoadedMsg struct{ goals journal.WeeklyGoals }
+type clockTickMsg struct{}
 
 // ── List item ─────────────────────────────────────────────────────────────────
 
@@ -124,6 +126,13 @@ type Model struct {
 	weekHoursInput textinput.Model
 
 	workspaceIdx int // currently highlighted row in the workspace picker
+
+	// ── Clock (Clocking tab) ──────────────────────────────────────────────────
+	clockRunning bool
+	clockStart   time.Time
+	clockTask    string
+	clockProject string
+	clockFrame   int // animation frame index (incremented each tick)
 
 	statusMsg string
 	isError   bool
@@ -300,6 +309,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.isError = false
 		return m, nil
 
+	case clockTickMsg:
+		if m.clockRunning {
+			m.clockFrame++
+			if m.state == stateDayView && m.dayViewTab == 2 {
+				m.viewport.SetContent(m.renderDayContent())
+			}
+			return m, clockTickCmd()
+		}
+		return m, nil
+
 	case tea.KeyMsg:
 		if msg.String() == "ctrl+c" {
 			return m, tea.Quit
@@ -311,6 +330,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.handleDayViewKey(msg)
 		case stateWorkForm:
 			return m.handleWorkFormKey(msg)
+		case stateClockForm:
+			return m.handleClockFormKey(msg)
 		case stateTimeInput:
 			return m.handleTimeInputKey(msg)
 		case stateNotesEditor:
@@ -347,6 +368,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.projectInput, cmd = m.projectInput.Update(msg)
 		default:
 			m.durationInput, cmd = m.durationInput.Update(msg)
+		}
+		return m, cmd
+	case stateClockForm:
+		var cmd tea.Cmd
+		if m.activeInput == 0 {
+			m.taskInput, cmd = m.taskInput.Update(msg)
+		} else {
+			m.projectInput, cmd = m.projectInput.Update(msg)
 		}
 		return m, cmd
 	case stateTimeInput:

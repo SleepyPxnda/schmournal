@@ -21,6 +21,8 @@ func (m Model) View() string {
 		return m.viewDayView()
 	case stateWorkForm:
 		return m.viewWorkLogForm()
+	case stateClockForm:
+		return m.viewClockForm()
 	case stateTimeInput:
 		return m.viewTimeInput()
 	case stateNotesEditor:
@@ -90,7 +92,7 @@ func (m Model) renderFooter(keys [][2]string) string {
 }
 
 func (m Model) renderTabBar() string {
-	tabs := []string{"📋  Work Log", "📊  Summary"}
+	tabs := []string{"📋  Work Log", "📊  Summary", "⏱  Clocking"}
 	var parts []string
 	for i, label := range tabs {
 		if i == m.dayViewTab {
@@ -105,10 +107,14 @@ func (m Model) renderTabBar() string {
 }
 
 func (m Model) renderDayContent() string {
-	if m.dayViewTab == 1 {
+	switch m.dayViewTab {
+	case 1:
 		return m.renderSummaryContent()
+	case 2:
+		return m.renderClockingContent()
+	default:
+		return m.renderWorkLogContent()
 	}
-	return m.renderWorkLogContent()
 }
 
 func (m Model) renderWorkLogContent() string {
@@ -363,6 +369,52 @@ func (m Model) renderSummaryContent() string {
 	return b.String()
 }
 
+// renderClockingContent renders the Clocking tab content: an animated clock
+// when running, or instructions when idle.
+func (m Model) renderClockingContent() string {
+	innerW := m.width - 2
+	if innerW < 40 {
+		innerW = 40
+	}
+	div := dayViewDividerStyle.Render(strings.Repeat("─", innerW))
+
+	var b strings.Builder
+	b.WriteString("\n")
+	b.WriteString(dayViewSectionStyle.Render("⏱  Clocking") + "\n")
+	b.WriteString(div + "\n\n")
+
+	kb := m.cfg.Keybinds.Day
+
+	if !m.clockRunning {
+		b.WriteString("  " + dayViewMutedStyle.Render("No active timer") + "\n\n")
+		b.WriteString("  " + dayViewLabelStyle.Render("Press ") +
+			helpKeyStyle.Render(kb.ClockStart) +
+			dayViewLabelStyle.Render(" to start tracking a task") + "\n")
+		return b.String()
+	}
+
+	// Animated clock emoji cycles through 12 positions.
+	clockEmojis := []string{"🕐", "🕑", "🕒", "🕓", "🕔", "🕕", "🕖", "🕗", "🕘", "🕙", "🕚", "🕛"}
+	emoji := clockEmojis[m.clockFrame%12]
+
+	elapsed := time.Since(m.clockStart)
+	totalSec := int(elapsed.Seconds())
+	hours := totalSec / 3600
+	minutes := (totalSec % 3600) / 60
+	seconds := totalSec % 60
+	elapsedStr := fmt.Sprintf("%02d:%02d:%02d", hours, minutes, seconds)
+
+	b.WriteString("  " + emoji + "  " + dayViewValueStyle.Render(elapsedStr) + "\n\n")
+	b.WriteString("  " + dayViewLabelStyle.Render("Task:    ") + " " + dayViewValueStyle.Render(m.clockTask) + "\n")
+	if m.clockProject != "" {
+		b.WriteString("  " + dayViewLabelStyle.Render("Project: ") + " " + dayViewValueStyle.Render(m.clockProject) + "\n")
+	}
+	b.WriteString("\n")
+	b.WriteString("  " + dayViewMutedStyle.Render("Press "+kb.ClockStop+" to stop and log the entry") + "\n")
+
+	return b.String()
+}
+
 func (m Model) renderEOMBanner() string {
 	now := time.Now()
 	// last day of the month: first day of next month minus one day
@@ -554,6 +606,20 @@ func (m Model) viewDayView() string {
 			{kb.Export, "export"},
 			{"esc", "back"},
 		}
+	} else if m.dayViewTab == 2 {
+		if m.clockRunning {
+			footerKeys = [][2]string{
+				{"←/→", "switch tab"},
+				{kb.ClockStop, "stop & log"},
+				{"esc", "back"},
+			}
+		} else {
+			footerKeys = [][2]string{
+				{"←/→", "switch tab"},
+				{kb.ClockStart, "start clock"},
+				{"esc", "back"},
+			}
+		}
 	} else {
 		footerKeys = [][2]string{
 			{"←/→", "switch tab"},
@@ -623,6 +689,51 @@ func (m Model) viewWorkLogForm() string {
 			formHintStyle.Render("  e.g. 1h 30m · 45m · 2h") + "\n" +
 			durBox
 	}
+
+	form := formBoxStyle.Width(formWidth).Render(body)
+
+	fh := lipgloss.Height(form)
+	topPad := (m.contentHeight() - fh) / 2
+	if topPad < 0 {
+		topPad = 0
+	}
+
+	centered := lipgloss.NewStyle().Width(m.width).Align(lipgloss.Center).Render(form)
+	return header + "\n" + strings.Repeat("\n", topPad) + centered + "\n" + footer
+}
+
+func (m Model) viewClockForm() string {
+	badge := workLogBadgeStyle.Render(" Start Clock ")
+	dateStr := m.dayRecord.Date
+	header := m.renderHeader("📔  Schmournal", badge+
+		headerSubtitleStyle.Render("  "+dateStr))
+	footer := m.renderFooter([][2]string{
+		{"tab", "next field"},
+		{"enter", "start"},
+		{"esc", "cancel"},
+	})
+
+	formWidth := m.width - 8
+	if formWidth < 40 {
+		formWidth = 40
+	}
+	inputWidth := formWidth - 8
+
+	m.taskInput.Width = inputWidth
+	m.projectInput.Width = inputWidth
+
+	renderBox := func(input textinput.Model, active bool) string {
+		if active {
+			return formActiveInputStyle.Width(inputWidth).Render(input.View())
+		}
+		return formInactiveInputStyle.Width(inputWidth).Render(input.View())
+	}
+
+	body := formLabelStyle.Render("What are you working on?") + "\n" +
+		renderBox(m.taskInput, m.activeInput == 0) + "\n\n" +
+		formLabelStyle.Render("Project") +
+		formHintStyle.Render("  optional · comma-separate for multiple projects") + "\n" +
+		renderBox(m.projectInput, m.activeInput == 1)
 
 	form := formBoxStyle.Width(formWidth).Render(body)
 

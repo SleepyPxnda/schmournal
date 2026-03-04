@@ -145,7 +145,7 @@ func (m Model) handleDayViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	case "right":
-		if m.dayViewTab < 1 {
+		if m.dayViewTab < 2 {
 			m.dayViewTab++
 			m.viewport.GotoTop()
 			m.viewport.SetContent(m.renderDayContent())
@@ -210,9 +210,30 @@ func (m Model) handleDayViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 			return exportedMsg{path: path}
 		}
+	case kb.ClockStart:
+		if !m.clockRunning {
+			return m.openClockForm()
+		}
+		return m, nil
+	case kb.ClockStop:
+		if m.clockRunning {
+			return m.stopClock()
+		}
+		return m, nil
 	case "esc":
+		clockWasRunning := m.clockRunning
+		m.clockRunning = false
+		m.clockTask = ""
+		m.clockProject = ""
 		m.state = stateList
-		return m, loadRecords
+		var cmds []tea.Cmd
+		cmds = append(cmds, loadRecords)
+		if clockWasRunning {
+			m.statusMsg = "⏱ Clock stopped"
+			m.isError = false
+			cmds = append(cmds, clearStatusCmd())
+		}
+		return m, tea.Batch(cmds...)
 	}
 	var cmd tea.Cmd
 	m.viewport, cmd = m.viewport.Update(msg)
@@ -510,4 +531,47 @@ func (m Model) handleWorkspacePickerKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.state = stateList
 	}
 	return m, nil
+}
+
+func (m Model) handleClockFormKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	const numFields = 2
+	switch msg.Type {
+	case tea.KeyTab:
+		return m.focusField((m.activeInput + 1) % numFields)
+	case tea.KeyShiftTab:
+		return m.focusField((m.activeInput - 1 + numFields) % numFields)
+
+	case tea.KeyEnter:
+		if m.activeInput < numFields-1 {
+			return m.focusField(m.activeInput + 1)
+		}
+		// Submit — start the clock.
+		task := strings.TrimSpace(m.taskInput.Value())
+		if task == "" {
+			m.statusMsg = "✗ Task name is required"
+			m.isError = true
+			return m, clearStatusCmd()
+		}
+		m.clockTask = task
+		m.clockProject = strings.TrimSpace(m.projectInput.Value())
+		m.clockStart = time.Now()
+		m.clockRunning = true
+		m.state = stateDayView
+		m.dayViewTab = 2
+		m.viewport.SetContent(m.renderDayContent())
+		return m, clockTickCmd()
+
+	case tea.KeyEsc:
+		m.state = stateDayView
+		m.dayViewTab = 2
+		return m, nil
+	}
+
+	var cmd tea.Cmd
+	if m.activeInput == 0 {
+		m.taskInput, cmd = m.taskInput.Update(msg)
+	} else {
+		m.projectInput, cmd = m.projectInput.Update(msg)
+	}
+	return m, cmd
 }
