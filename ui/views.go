@@ -217,7 +217,13 @@ func (m Model) renderEntriesPanel(w int) string {
 			if len(taskStr) > taskW {
 				taskStr = taskStr[:taskW-1] + "…"
 			}
-			taskStr = fmt.Sprintf("%-*s", taskW, taskStr)
+			// ☕ is a wide character (2 terminal cols) but counts as 1 rune,
+			// so reduce the pad width by 1 for break entries to stay within w.
+			fmtW := taskW
+			if e.IsBreak {
+				fmtW = taskW - 1
+			}
+			taskStr = fmt.Sprintf("%-*s", fmtW, taskStr)
 			durStr := fmt.Sprintf("%8s", journal.FormatDuration(e.Duration()))
 
 			line := selector + proj + taskStr + durStr
