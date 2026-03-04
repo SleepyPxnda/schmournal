@@ -396,6 +396,25 @@ func (cfg *Config) validate() error {
 	if err := checkDuplicates("week", wk.PrevWeek, wk.NextWeek, wk.SetWeeklyHours); err != nil {
 		return err
 	}
+
+	// Validate workspace names: non-empty, no surrounding whitespace, unique.
+	seen := make(map[string]struct{}, len(cfg.Workspaces))
+	for i, ws := range cfg.Workspaces {
+		name := strings.TrimSpace(ws.Name)
+		if name == "" {
+			return fmt.Errorf("config: workspace at index %d has an empty name", i)
+		}
+		if name != ws.Name {
+			return fmt.Errorf("config: workspace name %q has leading/trailing whitespace", ws.Name)
+		}
+		if _, dup := seen[name]; dup {
+			return fmt.Errorf("config: duplicate workspace name %q", name)
+		}
+		seen[name] = struct{}{}
+		if ws.WeeklyHoursGoal < 0 {
+			return fmt.Errorf("config: workspace %q has a negative weekly_hours_goal", name)
+		}
+	}
 	return nil
 }
 

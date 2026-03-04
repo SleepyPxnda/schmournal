@@ -112,7 +112,7 @@ func (m Model) weeklyGoal() float64 {
 func (m Model) openWeekHoursInput() (tea.Model, tea.Cmd) {
 	current := m.weeklyGoal()
 	m.weekHoursInput.SetValue(fmt.Sprintf("%g", current))
-	m.weekHoursInput.Placeholder = fmt.Sprintf("%g", m.cfg.WeeklyHoursGoal)
+	m.weekHoursInput.Placeholder = fmt.Sprintf("%g", m.effectiveWeeklyHoursGoal())
 	cmd := m.weekHoursInput.Focus()
 	m.state = stateWeekHoursInput
 	return m, cmd

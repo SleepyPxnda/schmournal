@@ -687,7 +687,7 @@ func (m Model) viewWeekHoursInput() string {
 	m.weekHoursInput.Width = 12
 	inputBox := formActiveInputStyle.Width(14).Render(m.weekHoursInput.View())
 
-	hint := fmt.Sprintf("hours  ·  global default: %gh  ·  leave empty to reset", m.cfg.WeeklyHoursGoal)
+	hint := fmt.Sprintf("hours  ·  default: %gh  ·  leave empty to reset", m.effectiveWeeklyHoursGoal())
 	dialog := formBoxStyle.Render(
 		formLabelStyle.Render("Set Weekly Hours Goal") + "\n" +
 			formHintStyle.Render(hint) + "\n\n" +
@@ -989,7 +989,7 @@ func (m Model) viewWorkspacePicker() string {
 		}
 		line := cursor + label
 		if i == m.workspaceIdx {
-			line = selectedEntryStyle.Render(fmt.Sprintf("%-*s", innerW, line))
+		line = selectedEntryStyle.Width(innerW).Render(line)
 		} else {
 			line = normalEntryStyle.Render(line)
 		}

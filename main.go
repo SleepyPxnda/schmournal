@@ -24,7 +24,10 @@ func main() {
 	}
 
 	// Determine the active workspace and apply its settings.
-	state, _ := config.LoadState()
+	state, err := config.LoadState()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "Warning: could not load state:", err)
+	}
 	activeWorkspace := resolveActiveWorkspace(cfg, state.ActiveWorkspace)
 
 	storagePath := cfg.StoragePath

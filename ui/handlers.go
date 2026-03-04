@@ -94,7 +94,7 @@ func (m Model) handleWeekHoursInputKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 		var hours float64
 		if raw == "" {
-			// Empty input resets to the global default.
+			// Empty input resets to the workspace/global default.
 			delete(m.weekGoals, m.weekKey())
 			m.state = stateWeekView
 			m.viewport.SetContent(m.renderWeekContent())
