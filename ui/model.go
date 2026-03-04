@@ -30,6 +30,7 @@ const (
 	stateDateInput
 	stateWeekView
 	stateWeekHoursInput
+	stateWorkspacePicker
 )
 
 const (
@@ -88,7 +89,8 @@ type Model struct {
 	height int
 	ready  bool
 
-	cfg config.Config
+	cfg             config.Config
+	activeWorkspace string // name of the currently active workspace (empty = no workspaces)
 
 	list    list.Model
 	records []journal.DayRecord
@@ -121,6 +123,8 @@ type Model struct {
 	weekGoals      journal.WeeklyGoals
 	weekHoursInput textinput.Model
 
+	workspaceIdx int // currently highlighted row in the workspace picker
+
 	statusMsg string
 	isError   bool
 }
@@ -142,7 +146,7 @@ func newDelegate() list.DefaultDelegate {
 }
 
 // New constructs the initial model using the provided configuration.
-func New(cfg config.Config) Model {
+func New(cfg config.Config, activeWorkspace string) Model {
 	l := list.New([]list.Item{}, newDelegate(), 0, 0)
 	l.SetShowTitle(false)
 	l.SetShowStatusBar(false)
@@ -206,19 +210,20 @@ func New(cfg config.Config) Model {
 	weekHoursIn.PlaceholderStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(cOverlay0))
 
 	return Model{
-		cfg:            cfg,
-		state:          stateList,
-		list:           l,
-		textarea:       ta,
-		taskInput:      taskIn,
-		projectInput:   projIn,
-		durationInput:  durIn,
-		timeInput:      timeIn,
-		dateInput:      dateIn,
-		weekHoursInput: weekHoursIn,
-		weekGoals:      journal.WeeklyGoals{},
-		selectedEntry:  -1,
-		editEntryIdx:   -1,
+		cfg:             cfg,
+		activeWorkspace: activeWorkspace,
+		state:           stateList,
+		list:            l,
+		textarea:        ta,
+		taskInput:       taskIn,
+		projectInput:    projIn,
+		durationInput:   durIn,
+		timeInput:       timeIn,
+		dateInput:       dateIn,
+		weekHoursInput:  weekHoursIn,
+		weekGoals:       journal.WeeklyGoals{},
+		selectedEntry:   -1,
+		editEntryIdx:    -1,
 	}
 }
 
@@ -318,6 +323,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.handleWeekViewKey(msg)
 		case stateWeekHoursInput:
 			return m.handleWeekHoursInputKey(msg)
+		case stateWorkspacePicker:
+			return m.handleWorkspacePickerKey(msg)
 		}
 	}
 

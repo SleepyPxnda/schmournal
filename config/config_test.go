@@ -1,6 +1,8 @@
 package config
 
 import (
+	"os"
+	"path/filepath"
 	"reflect"
 	"testing"
 )
@@ -192,4 +194,100 @@ func joinPath(p []string) string {
 		s += part
 	}
 	return s
+}
+
+// ── validate workspaces ───────────────────────────────────────────────────────
+
+func TestValidateWorkspaceEmptyNameReturnsError(t *testing.T) {
+	cfg := Default()
+	cfg.Workspaces = []WorkspaceConfig{{Name: "", StoragePath: "~/.journal/a"}}
+	if err := cfg.validate(); err == nil {
+		t.Error("validate() expected error for empty workspace name, got nil")
+	}
+}
+
+func TestValidateWorkspaceWhitespaceNameReturnsError(t *testing.T) {
+	cfg := Default()
+	cfg.Workspaces = []WorkspaceConfig{{Name: " Work", StoragePath: "~/.journal/work"}}
+	if err := cfg.validate(); err == nil {
+		t.Error("validate() expected error for workspace name with leading whitespace, got nil")
+	}
+}
+
+func TestValidateWorkspaceDuplicateNameReturnsError(t *testing.T) {
+	cfg := Default()
+	cfg.Workspaces = []WorkspaceConfig{
+		{Name: "Work", StoragePath: "~/.journal/work"},
+		{Name: "Work", StoragePath: "~/.journal/work2"},
+	}
+	if err := cfg.validate(); err == nil {
+		t.Error("validate() expected error for duplicate workspace name, got nil")
+	}
+}
+
+func TestValidateWorkspaceNegativeGoalReturnsError(t *testing.T) {
+	cfg := Default()
+	cfg.Workspaces = []WorkspaceConfig{{Name: "Work", StoragePath: "~/.journal/work", WeeklyHoursGoal: -1}}
+	if err := cfg.validate(); err == nil {
+		t.Error("validate() expected error for negative workspace weekly_hours_goal, got nil")
+	}
+}
+
+func TestValidateWorkspaceValidConfigOK(t *testing.T) {
+	cfg := Default()
+	cfg.Workspaces = []WorkspaceConfig{
+		{Name: "Personal", StoragePath: "~/.journal/personal"},
+		{Name: "Work", StoragePath: "~/.journal/work", WeeklyHoursGoal: 37.5},
+	}
+	if err := cfg.validate(); err != nil {
+		t.Errorf("validate() unexpected error for valid workspaces: %v", err)
+	}
+}
+
+// ── LoadState / SaveState ─────────────────────────────────────────────────────
+
+func withTempHome(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+	t.Setenv("HOME", dir)
+	t.Setenv("USERPROFILE", dir) // Windows
+	return dir
+}
+
+func TestLoadStateMissingFileReturnsEmpty(t *testing.T) {
+	withTempHome(t)
+	s, err := LoadState()
+	if err != nil {
+		t.Fatalf("LoadState() unexpected error: %v", err)
+	}
+	if s.ActiveWorkspace != "" {
+		t.Errorf("LoadState() ActiveWorkspace = %q, want empty", s.ActiveWorkspace)
+	}
+}
+
+func TestSaveStateCreatesFile(t *testing.T) {
+	home := withTempHome(t)
+	s := AppState{ActiveWorkspace: "Work"}
+	if err := SaveState(s); err != nil {
+		t.Fatalf("SaveState() error: %v", err)
+	}
+	stateFile := filepath.Join(home, ".config", stateFileName)
+	if _, err := os.Stat(stateFile); err != nil {
+		t.Errorf("SaveState() did not create file: %v", err)
+	}
+}
+
+func TestLoadStateRoundTrip(t *testing.T) {
+	withTempHome(t)
+	want := AppState{ActiveWorkspace: "Personal"}
+	if err := SaveState(want); err != nil {
+		t.Fatalf("SaveState() error: %v", err)
+	}
+	got, err := LoadState()
+	if err != nil {
+		t.Fatalf("LoadState() error: %v", err)
+	}
+	if got != want {
+		t.Errorf("LoadState() = %+v, want %+v", got, want)
+	}
 }

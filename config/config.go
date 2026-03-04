@@ -10,18 +10,31 @@ import (
 	"github.com/BurntSushi/toml"
 )
 
+// ── Workspace config ──────────────────────────────────────────────────────────
+
+// WorkspaceConfig holds per-workspace settings. Each workspace is an
+// independent journal directory with its own storage path and working-hours
+// goal. Individual fields fall back to the top-level config defaults when left
+// empty / zero.
+type WorkspaceConfig struct {
+	Name            string  `toml:"name"`
+	StoragePath     string  `toml:"storage_path"`
+	WeeklyHoursGoal float64 `toml:"weekly_hours_goal"`
+}
+
 // ── Keybind structs ───────────────────────────────────────────────────────────
 
 // ListKeybinds holds configurable keys for the main list view.
 type ListKeybinds struct {
-	Quit      string `toml:"quit"`
-	OpenToday string `toml:"open_today"`
-	OpenDate  string `toml:"open_date"`
-	Delete    string `toml:"delete"`
-	AddWork   string `toml:"add_work"`
-	AddBreak  string `toml:"add_break"`
-	Export    string `toml:"export"`
-	WeekView  string `toml:"week_view"`
+	Quit            string `toml:"quit"`
+	OpenToday       string `toml:"open_today"`
+	OpenDate        string `toml:"open_date"`
+	Delete          string `toml:"delete"`
+	AddWork         string `toml:"add_work"`
+	AddBreak        string `toml:"add_break"`
+	Export          string `toml:"export"`
+	WeekView        string `toml:"week_view"`
+	SwitchWorkspace string `toml:"switch_workspace"`
 }
 
 // DayKeybinds holds configurable keys for the day detail view.
@@ -56,9 +69,10 @@ type Keybinds struct {
 
 // Config is the top-level configuration structure.
 type Config struct {
-	StoragePath      string   `toml:"storage_path"`
-	WeeklyHoursGoal  float64  `toml:"weekly_hours_goal"`
-	Keybinds         Keybinds `toml:"keybinds"`
+	StoragePath     string            `toml:"storage_path"`
+	WeeklyHoursGoal float64           `toml:"weekly_hours_goal"`
+	Keybinds        Keybinds          `toml:"keybinds"`
+	Workspaces      []WorkspaceConfig `toml:"workspaces"`
 }
 
 // Default returns a Config populated with the application defaults.
@@ -68,14 +82,15 @@ func Default() Config {
 		WeeklyHoursGoal: 40,
 		Keybinds: Keybinds{
 			List: ListKeybinds{
-				Quit:      "q",
-				OpenToday: "n",
-				OpenDate:  "c",
-				Delete:    "d",
-				AddWork:   "w",
-				AddBreak:  "b",
-				Export:    "x",
-				WeekView:  "v",
+				Quit:            "q",
+				OpenToday:       "n",
+				OpenDate:        "c",
+				Delete:          "d",
+				AddWork:         "w",
+				AddBreak:        "b",
+				Export:          "x",
+				WeekView:        "v",
+				SwitchWorkspace: "p",
 			},
 			Day: DayKeybinds{
 				AddWork:        "w",
@@ -162,7 +177,9 @@ func needsMigration(md toml.MetaData) bool {
 // collectTOMLPaths recursively walks a struct type and returns the TOML key
 // path (as a []string) for every leaf field, using the "toml" struct tag as
 // the path component name. Nested structs are descended into with their tag
-// name prepended to the path.
+// name prepended to the path. Slice fields are skipped because they are
+// optional (TOML arrays of tables) and do not need to be present for the
+// config to be considered complete.
 func collectTOMLPaths(t reflect.Type, prefix []string) [][]string {
 	if t.Kind() == reflect.Ptr {
 		t = t.Elem()
@@ -172,6 +189,10 @@ func collectTOMLPaths(t reflect.Type, prefix []string) [][]string {
 		f := t.Field(i)
 		tag := strings.Split(f.Tag.Get("toml"), ",")[0]
 		if tag == "" || tag == "-" {
+			continue
+		}
+		// Skip slice fields – they are optional arrays of tables.
+		if f.Type.Kind() == reflect.Slice {
 			continue
 		}
 		path := make([]string, len(prefix), len(prefix)+1)
@@ -221,20 +242,41 @@ storage_path = %q
 # Can be overridden per-week from the weekly summary view.
 weekly_hours_goal = %g
 
+# ── Workspaces ────────────────────────────────────────────────────────────────
+# Workspaces let you maintain separate journal directories with independent
+# settings. When defined you can switch between them from the list view.
+# Press the switch_workspace key (default: p) to open the picker.
+#
+# Each [[workspaces]] entry may override storage_path and weekly_hours_goal.
+# Omitted fields fall back to the top-level defaults above.
+#
+# Example (uncomment and edit to enable):
+#
+# [[workspaces]]
+# name             = "Personal"
+# storage_path     = "~/.journal/personal"
+# weekly_hours_goal = 40
+#
+# [[workspaces]]
+# name             = "Work"
+# storage_path     = "~/.journal/work"
+# weekly_hours_goal = 37.5
+
 # ── Keybinds ──────────────────────────────────────────────────────────────────
 # Each value is a single key string as understood by the terminal
 # (e.g. "q", "x", "ctrl+s").  Arrow keys, Enter, Esc and Tab are not
 # configurable here — they always keep their default role.
 
 [keybinds.list]
-quit       = %q   # Quit the application
-open_today = %q   # Open / create today's entry
-open_date  = %q   # Open / create an entry for a specific date
-delete     = %q   # Delete the selected day record
-add_work   = %q   # Log a work entry for today
-add_break  = %q   # Log a break entry for today
-export     = %q   # Export the selected day to Markdown
-week_view  = %q   # Open the weekly overview
+quit             = %q   # Quit the application
+open_today       = %q   # Open / create today's entry
+open_date        = %q   # Open / create an entry for a specific date
+delete           = %q   # Delete the selected day record
+add_work         = %q   # Log a work entry for today
+add_break        = %q   # Log a break entry for today
+export           = %q   # Export the selected day to Markdown
+week_view        = %q   # Open the weekly overview
+switch_workspace = %q   # Open the workspace picker
 
 [keybinds.day]
 add_work        = %q   # Add a new work entry
@@ -263,6 +305,7 @@ set_weekly_hours = %q   # Set a custom hours goal for the displayed week
 		cfg.Keybinds.List.AddBreak,
 		cfg.Keybinds.List.Export,
 		cfg.Keybinds.List.WeekView,
+		cfg.Keybinds.List.SwitchWorkspace,
 		cfg.Keybinds.Day.AddWork,
 		cfg.Keybinds.Day.AddBreak,
 		cfg.Keybinds.Day.Edit,
@@ -323,6 +366,7 @@ func (cfg *Config) validate() error {
 	fill(&lk.AddBreak, dl.AddBreak)
 	fill(&lk.Export, dl.Export)
 	fill(&lk.WeekView, dl.WeekView)
+	fill(&lk.SwitchWorkspace, dl.SwitchWorkspace)
 
 	dk := &cfg.Keybinds.Day
 	dd := def.Keybinds.Day
@@ -343,7 +387,7 @@ func (cfg *Config) validate() error {
 	fill(&wk.NextWeek, dw.NextWeek)
 	fill(&wk.SetWeeklyHours, dw.SetWeeklyHours)
 
-	if err := checkDuplicates("list", lk.Quit, lk.OpenToday, lk.OpenDate, lk.Delete, lk.AddWork, lk.AddBreak, lk.Export, lk.WeekView); err != nil {
+	if err := checkDuplicates("list", lk.Quit, lk.OpenToday, lk.OpenDate, lk.Delete, lk.AddWork, lk.AddBreak, lk.Export, lk.WeekView, lk.SwitchWorkspace); err != nil {
 		return err
 	}
 	if err := checkDuplicates("day", dk.AddWork, dk.AddBreak, dk.Edit, dk.Delete, dk.SetStartNow, dk.SetStartManual, dk.SetEndNow, dk.SetEndManual, dk.Notes, dk.Export); err != nil {
@@ -351,6 +395,25 @@ func (cfg *Config) validate() error {
 	}
 	if err := checkDuplicates("week", wk.PrevWeek, wk.NextWeek, wk.SetWeeklyHours); err != nil {
 		return err
+	}
+
+	// Validate workspace names: non-empty, no surrounding whitespace, unique.
+	seen := make(map[string]struct{}, len(cfg.Workspaces))
+	for i, ws := range cfg.Workspaces {
+		name := strings.TrimSpace(ws.Name)
+		if name == "" {
+			return fmt.Errorf("config: workspace at index %d has an empty name", i)
+		}
+		if name != ws.Name {
+			return fmt.Errorf("config: workspace name %q has leading/trailing whitespace", ws.Name)
+		}
+		if _, dup := seen[name]; dup {
+			return fmt.Errorf("config: duplicate workspace name %q", name)
+		}
+		seen[name] = struct{}{}
+		if ws.WeeklyHoursGoal < 0 {
+			return fmt.Errorf("config: workspace %q has a negative weekly_hours_goal", name)
+		}
 	}
 	return nil
 }

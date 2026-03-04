@@ -33,6 +33,8 @@ func (m Model) View() string {
 		return m.viewWeekView()
 	case stateWeekHoursInput:
 		return m.viewWeekHoursInput()
+	case stateWorkspacePicker:
+		return m.viewWorkspacePicker()
 	}
 	return ""
 }
@@ -497,20 +499,29 @@ func (m Model) viewDateInput() string {
 }
 
 func (m Model) viewList() string {
-	header := m.renderHeader("📔  Schmournal", time.Now().Format("Mon, 02 Jan 2006"))
+	subtitle := time.Now().Format("Mon, 02 Jan 2006")
+	if m.activeWorkspace != "" {
+		subtitle = m.activeWorkspace + "  ·  " + subtitle
+	}
+	header := m.renderHeader("📔  Schmournal", subtitle)
 	kb := m.cfg.Keybinds.List
-	footer := m.renderFooter([][2]string{
-		{kb.OpenToday, "open today"},
-		{kb.OpenDate, "open date"},
-		{kb.AddWork, "log work"},
-		{kb.AddBreak, "log break"},
-		{"enter", "view"},
-		{kb.WeekView, "week"},
-		{kb.Delete, "delete"},
-		{kb.Export, "export"},
-		{"/", "filter"},
-		{"esc", "quit"},
-	})
+	var footerKeys [][2]string
+	footerKeys = append(footerKeys,
+		[2]string{kb.OpenToday, "open today"},
+		[2]string{kb.OpenDate, "open date"},
+		[2]string{kb.AddWork, "log work"},
+		[2]string{kb.AddBreak, "log break"},
+		[2]string{"enter", "view"},
+		[2]string{kb.WeekView, "week"},
+		[2]string{kb.Delete, "delete"},
+		[2]string{kb.Export, "export"},
+		[2]string{"/", "filter"},
+	)
+	if len(m.cfg.Workspaces) > 0 {
+		footerKeys = append(footerKeys, [2]string{kb.SwitchWorkspace, "workspace"})
+	}
+	footerKeys = append(footerKeys, [2]string{"esc", "quit"})
+	footer := m.renderFooter(footerKeys)
 	sections := []string{header, m.renderStats()}
 	if eom := m.renderEOMBanner(); eom != "" {
 		sections = append(sections, eom)
@@ -676,7 +687,7 @@ func (m Model) viewWeekHoursInput() string {
 	m.weekHoursInput.Width = 12
 	inputBox := formActiveInputStyle.Width(14).Render(m.weekHoursInput.View())
 
-	hint := fmt.Sprintf("hours  ·  global default: %gh  ·  leave empty to reset", m.cfg.WeeklyHoursGoal)
+	hint := fmt.Sprintf("hours  ·  default: %gh  ·  leave empty to reset", m.effectiveWeeklyHoursGoal())
 	dialog := formBoxStyle.Render(
 		formLabelStyle.Render("Set Weekly Hours Goal") + "\n" +
 			formHintStyle.Render(hint) + "\n\n" +
@@ -952,4 +963,48 @@ func uniqueAppend(slice []string, s string) []string {
 		}
 	}
 	return append(slice, s)
+}
+
+func (m Model) viewWorkspacePicker() string {
+	header := m.renderHeader("📔  Schmournal", "Switch Workspace")
+	innerW := 36
+	if m.width-8 > innerW {
+		innerW = m.width / 2
+	}
+	if innerW > 60 {
+		innerW = 60
+	}
+	div := dayViewDividerStyle.Render(strings.Repeat("─", innerW))
+	var rows []string
+	rows = append(rows, formLabelStyle.Render("Select a workspace:"))
+	rows = append(rows, div)
+	for i, ws := range m.cfg.Workspaces {
+		cursor := "  "
+		if i == m.workspaceIdx {
+			cursor = "▶ "
+		}
+		label := ws.Name
+		if ws.Name == m.activeWorkspace {
+			label += "  " + statusSuccessStyle.Render("✓")
+		}
+		line := cursor + label
+		if i == m.workspaceIdx {
+		line = selectedEntryStyle.Width(innerW).Render(line)
+		} else {
+			line = normalEntryStyle.Render(line)
+		}
+		rows = append(rows, line)
+	}
+	rows = append(rows, div)
+	rows = append(rows, dayViewMutedStyle.Render("j/k  navigate  ·  enter  switch  ·  esc  cancel"))
+	box := formBoxStyle.Render(lipgloss.JoinVertical(lipgloss.Left, rows...))
+	bh := lipgloss.Height(box)
+	ch := m.contentHeight()
+	topPad := (ch - bh) / 2
+	if topPad < 0 {
+		topPad = 0
+	}
+	centered := lipgloss.NewStyle().Width(m.width).Align(lipgloss.Center).Render(box)
+	footer := m.renderFooter([][2]string{{"j/k", "navigate"}, {"enter", "switch"}, {"esc", "cancel"}})
+	return lipgloss.JoinVertical(lipgloss.Left, header, strings.Repeat("\n", topPad)+centered, footer)
 }

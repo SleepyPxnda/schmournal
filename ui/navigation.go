@@ -5,6 +5,7 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/sleepypxnda/schmournal/config"
 	"github.com/sleepypxnda/schmournal/journal"
 )
 
@@ -22,12 +23,85 @@ func (m Model) weekKey() string {
 
 // weeklyGoalFor returns the effective hours goal for the week identified by
 // mondayKey ("YYYY-MM-DD" of the week's Monday): per-week override if set,
-// otherwise the global config default.
+// otherwise the workspace-specific goal (or the global config default).
 func (m Model) weeklyGoalFor(mondayKey string) float64 {
 	if h, ok := m.weekGoals[mondayKey]; ok && h > 0 {
 		return h
 	}
+	return m.effectiveWeeklyHoursGoal()
+}
+
+// activeWorkspaceConfig returns a pointer to the active WorkspaceConfig, or nil
+// when no workspaces are configured or none matches the active name.
+func (m Model) activeWorkspaceConfig() *config.WorkspaceConfig {
+	for i := range m.cfg.Workspaces {
+		if m.cfg.Workspaces[i].Name == m.activeWorkspace {
+			return &m.cfg.Workspaces[i]
+		}
+	}
+	return nil
+}
+
+// effectiveWeeklyHoursGoal returns the hours-per-week goal for the active
+// workspace, falling back to the global config default when not overridden.
+func (m Model) effectiveWeeklyHoursGoal() float64 {
+	if ws := m.activeWorkspaceConfig(); ws != nil && ws.WeeklyHoursGoal > 0 {
+		return ws.WeeklyHoursGoal
+	}
 	return m.cfg.WeeklyHoursGoal
+}
+
+// openWorkspacePicker opens the workspace picker dialog. If no workspaces are
+// configured a status message is shown instead.
+func (m Model) openWorkspacePicker() (tea.Model, tea.Cmd) {
+	if len(m.cfg.Workspaces) == 0 {
+		m.statusMsg = "No workspaces configured — add [[workspaces]] entries to your config file"
+		m.isError = false
+		return m, clearStatusCmd()
+	}
+	// Pre-select the currently active workspace.
+	m.workspaceIdx = 0
+	for i, ws := range m.cfg.Workspaces {
+		if ws.Name == m.activeWorkspace {
+			m.workspaceIdx = i
+			break
+		}
+	}
+	m.state = stateWorkspacePicker
+	return m, nil
+}
+
+// switchWorkspace applies the named workspace: updates the journal storage
+// path, records the active workspace name and reloads all data.
+func (m Model) switchWorkspace(name string) (tea.Model, tea.Cmd) {
+	storagePath := m.cfg.StoragePath
+	for _, ws := range m.cfg.Workspaces {
+		if ws.Name == name {
+			if ws.StoragePath != "" {
+				storagePath = ws.StoragePath
+			}
+			break
+		}
+	}
+	if err := journal.SetStoragePath(storagePath); err != nil {
+		m.statusMsg = "✗ " + err.Error()
+		m.isError = true
+		m.state = stateList
+		return m, clearStatusCmd()
+	}
+	m.activeWorkspace = name
+	m.state = stateList
+	m.statusMsg = fmt.Sprintf("✓ Switched to workspace %q", name)
+	m.isError = false
+	return m, tea.Batch(
+		loadRecords,
+		loadWeeklyGoals,
+		clearStatusCmd(),
+		func() tea.Msg {
+			_ = config.SaveState(config.AppState{ActiveWorkspace: name})
+			return nil
+		},
+	)
 }
 
 // weeklyGoal returns the effective hours goal for the currently displayed week.
@@ -38,7 +112,7 @@ func (m Model) weeklyGoal() float64 {
 func (m Model) openWeekHoursInput() (tea.Model, tea.Cmd) {
 	current := m.weeklyGoal()
 	m.weekHoursInput.SetValue(fmt.Sprintf("%g", current))
-	m.weekHoursInput.Placeholder = fmt.Sprintf("%g", m.cfg.WeeklyHoursGoal)
+	m.weekHoursInput.Placeholder = fmt.Sprintf("%g", m.effectiveWeeklyHoursGoal())
 	cmd := m.weekHoursInput.Focus()
 	m.state = stateWeekHoursInput
 	return m, cmd

@@ -51,6 +51,8 @@ func (m Model) handleListKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 		case kb.WeekView:
 			return m.openWeekView()
+		case kb.SwitchWorkspace:
+			return m.openWorkspacePicker()
 		}
 	}
 	var cmd tea.Cmd
@@ -92,7 +94,7 @@ func (m Model) handleWeekHoursInputKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 		var hours float64
 		if raw == "" {
-			// Empty input resets to the global default.
+			// Empty input resets to the workspace/global default.
 			delete(m.weekGoals, m.weekKey())
 			m.state = stateWeekView
 			m.viewport.SetContent(m.renderWeekContent())
@@ -485,4 +487,27 @@ func (m Model) handleDateInputKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 	m.dateInput, cmd = m.dateInput.Update(msg)
 	return m, cmd
+}
+
+func (m Model) handleWorkspacePickerKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	n := len(m.cfg.Workspaces)
+	switch msg.String() {
+	case "j", "down":
+		if m.workspaceIdx < n-1 {
+			m.workspaceIdx++
+		}
+		return m, nil
+	case "k", "up":
+		if m.workspaceIdx > 0 {
+			m.workspaceIdx--
+		}
+		return m, nil
+	case "enter":
+		if m.workspaceIdx >= 0 && m.workspaceIdx < n {
+			return m.switchWorkspace(m.cfg.Workspaces[m.workspaceIdx].Name)
+		}
+	case "esc", m.cfg.Keybinds.List.Quit:
+		m.state = stateList
+	}
+	return m, nil
 }

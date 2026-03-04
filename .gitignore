@@ -1,2 +1,5 @@
 dist/
 tui-journal
+.idea/
+schmournal
+schmournal.exe
