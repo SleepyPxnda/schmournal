@@ -2,7 +2,6 @@
 
 A minimal, distraction-free terminal journaling app built with Go and the [Charm](https://charm.sh) TUI stack, themed with **Catppuccin Mocha**.
 
-<!-- TODO: replace screenshot — this image shows the old UI without the workspace indicator in the header -->
 ![List view](images/overview.png)
 
 ## Features
@@ -31,7 +30,6 @@ Exports are written to `~/.journal/exports/export-YYYY-MM-DD.md`.
 
 ### 📋 List view
 
-<!-- TODO: replace screenshot — this image shows the old UI without the workspace indicator in the header -->
 ![List view](images/overview.png)
 
 | Key | Action |
@@ -51,10 +49,8 @@ Exports are written to `~/.journal/exports/export-YYYY-MM-DD.md`.
 
 ### 👁 Day view — Work Log tab
 
-<!-- TODO: replace screenshot — this image shows the old single-column layout without the clock panel -->
 ![Day view](images/day-worklog.png)
 
-<!-- Placeholder — take a new screenshot that shows the clock panel running on the right side -->
 ![Day view with clock running](images/day-worklog-clock.png)
 
 | Key | Action |
@@ -78,7 +74,6 @@ Exports are written to `~/.journal/exports/export-YYYY-MM-DD.md`.
 
 ### 📅 Weekly summary view
 
-<!-- TODO: replace screenshot — this image may show outdated styling/layout -->
 ![Week Summary view](images/week-overview.png)
 
 | Key | Action |
@@ -98,7 +93,6 @@ Exports are written to `~/.journal/exports/export-YYYY-MM-DD.md`.
 
 ### 📝 Work / Break log form
 
-<!-- TODO: replace screenshot — confirm this still matches the current form UI -->
 ![Work log form](images/day-worklog-form.png)
 
 | Key | Action |
@@ -141,7 +135,6 @@ The clock lets you track time against a task in real time without having to esti
 2. Press `enter` to start the timer. The Work Log tab immediately shows a live clock panel on the right-hand side next to your entry list, updating every second.
 3. Press `t` at any time to stop the timer. The elapsed duration is rounded to the nearest minute and a new work entry is added automatically. If multiple projects were supplied the duration is split evenly across them.
 
-<!-- Placeholder — take a new screenshot that shows the clock panel on the right side of the Work Log tab -->
 ![Clock panel running in Work Log tab](images/day-worklog-clock.png)
 
 ### 🗂 Workspace picker (p)
@@ -170,7 +163,6 @@ Each day record has two tabs:
 
 **Summary tab** — shows a compact summary with start time, end time, day duration, total work, total breaks, and logged notes.
 
-<!-- TODO: replace screenshot — this image shows the old single-column day view without the clock panel -->
 ![Day Summary view](images/day-summary.png)
 
 
