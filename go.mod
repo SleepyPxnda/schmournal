@@ -1,4 +1,4 @@
-module github.com/fgrohme/tui-journal
+module github.com/sleepypxnda/schmournal
 
 go 1.25.0
 

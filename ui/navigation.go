@@ -1,0 +1,216 @@
+package ui
+
+import (
+	"fmt"
+	"time"
+
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/sleepypxnda/schmournal/journal"
+)
+
+// weekKey returns the key used to store per-week goal overrides.
+// It is the Monday date of the week currently shown (format "YYYY-MM-DD").
+func (m Model) weekKey() string {
+	now := time.Now()
+	weekday := int(now.Weekday())
+	if weekday == 0 {
+		weekday = 7
+	}
+	monday := now.AddDate(0, 0, -(weekday-1)+m.weekOffset*7)
+	return monday.Format("2006-01-02")
+}
+
+// weeklyGoalFor returns the effective hours goal for the week identified by
+// mondayKey ("YYYY-MM-DD" of the week's Monday): per-week override if set,
+// otherwise the global config default.
+func (m Model) weeklyGoalFor(mondayKey string) float64 {
+	if h, ok := m.weekGoals[mondayKey]; ok && h > 0 {
+		return h
+	}
+	return m.cfg.WeeklyHoursGoal
+}
+
+// weeklyGoal returns the effective hours goal for the currently displayed week.
+func (m Model) weeklyGoal() float64 {
+	return m.weeklyGoalFor(m.weekKey())
+}
+
+func (m Model) openWeekHoursInput() (tea.Model, tea.Cmd) {
+	current := m.weeklyGoal()
+	m.weekHoursInput.SetValue(fmt.Sprintf("%g", current))
+	m.weekHoursInput.Placeholder = fmt.Sprintf("%g", m.cfg.WeeklyHoursGoal)
+	cmd := m.weekHoursInput.Focus()
+	m.state = stateWeekHoursInput
+	return m, cmd
+}
+
+func (m Model) openDayView(rec journal.DayRecord) (tea.Model, tea.Cmd) {
+	// Reload from disk to get freshest data.
+	fresh, err := journal.Load(rec.Path)
+	if err != nil {
+		fresh = rec
+	}
+	m.dayRecord = fresh
+	if m.dayRecord.Path == "" {
+		m.dayRecord.Path = rec.Path
+	}
+	m.dayViewTab = 0
+	m.selectedEntry = -1
+	if len(m.dayRecord.Entries) > 0 {
+		m.selectedEntry = 0
+	}
+	m.state = stateDayView
+	m.viewport.GotoTop()
+	m.viewport.SetContent(m.renderDayContent())
+	return m, nil
+}
+
+func (m Model) openWeekView() (tea.Model, tea.Cmd) {
+	m.weekOffset = 0
+	m.state = stateWeekView
+	m.viewport.GotoTop()
+	m.viewport.SetContent(m.renderWeekContent())
+	return m, nil
+}
+
+func (m Model) openDayViewToday() (tea.Model, tea.Cmd) {
+	path, err := journal.TodayPath()
+	if err != nil {
+		m.statusMsg = "✗ " + err.Error()
+		m.isError = true
+		return m, nil
+	}
+	rec, err := journal.Load(path)
+	if err != nil {
+		m.statusMsg = "✗ " + err.Error()
+		m.isError = true
+		return m, nil
+	}
+	if rec.Date == "" {
+		rec.Date = time.Now().Format("2006-01-02")
+	}
+	rec.Path = path
+	return m.openDayView(rec)
+}
+
+func (m Model) openWorkForm(isBreak bool, editIdx int) (tea.Model, tea.Cmd) {
+	m.isBreakEntry = isBreak
+	m.editEntryIdx = editIdx
+	m.taskInput.SetValue("")
+	m.projectInput.SetValue("")
+	m.durationInput.SetValue("")
+	if editIdx >= 0 && editIdx < len(m.dayRecord.Entries) {
+		e := m.dayRecord.Entries[editIdx]
+		m.taskInput.SetValue(e.Task)
+		m.projectInput.SetValue(e.Project)
+		m.durationInput.SetValue(journal.FormatDuration(e.Duration()))
+	}
+	if isBreak {
+		m.taskInput.Placeholder = "e.g. Lunch, coffee break, walk…"
+	} else {
+		m.taskInput.Placeholder = "e.g. Feature development, meeting, code review…"
+	}
+	m.state = stateWorkForm
+	return m.focusField(0)
+}
+
+func (m Model) openWorkFormForToday(isBreak bool) (tea.Model, tea.Cmd) {
+	path, err := journal.TodayPath()
+	if err != nil {
+		m.statusMsg = "✗ " + err.Error()
+		m.isError = true
+		return m, nil
+	}
+	rec, err := journal.Load(path)
+	if err != nil {
+		m.statusMsg = "✗ " + err.Error()
+		m.isError = true
+		return m, nil
+	}
+	if rec.Date == "" {
+		rec.Date = time.Now().Format("2006-01-02")
+	}
+	rec.Path = path
+	m.dayRecord = rec
+	if m.selectedEntry < 0 || m.selectedEntry >= len(rec.Entries) {
+		m.selectedEntry = len(rec.Entries) - 1
+	}
+	// After form submission we'll land in stateDayView.
+	return m.openWorkForm(isBreak, -1)
+}
+
+func (m Model) openNotesEditor() (tea.Model, tea.Cmd) {
+	m.textarea.SetValue(m.dayRecord.Notes)
+	blinkCmd := m.textarea.Focus()
+	m.state = stateNotesEditor
+	return m, blinkCmd
+}
+
+func (m Model) openTimeInput(isStart bool) (tea.Model, tea.Cmd) {
+	m.timeInputStart = isStart
+	m.timeInput.SetValue(time.Now().Format("15:04"))
+	m.timeInput.CursorEnd()
+	m.state = stateTimeInput
+	return m, m.timeInput.Focus()
+}
+
+func (m Model) openDateInput() (tea.Model, tea.Cmd) {
+	m.dateInput.SetValue("")
+	m.dateInput.Placeholder = time.Now().Format("2006-01-02")
+	cmd := m.dateInput.Focus()
+	m.state = stateDateInput
+	return m, cmd
+}
+
+// numFormFields returns how many fields the current work-log form has.
+func (m Model) numFormFields() int {
+	if m.isBreakEntry {
+		return 2
+	}
+	return 3
+}
+
+// focusField blurs all inputs and focuses the one at index n.
+func (m Model) focusField(n int) (Model, tea.Cmd) {
+	m.taskInput.Blur()
+	m.projectInput.Blur()
+	m.durationInput.Blur()
+	m.activeInput = n
+	switch {
+	case n == 0:
+		return m, m.taskInput.Focus()
+	case n == 1 && !m.isBreakEntry:
+		return m, m.projectInput.Focus()
+	default:
+		return m, m.durationInput.Focus()
+	}
+}
+
+func isValidHHMM(s string) bool {
+	_, err := time.Parse("15:04", s)
+	return err == nil
+}
+
+// scrollToSelected adjusts the viewport so the selected entry is visible.
+func (m *Model) scrollToSelected() {
+	const entryStartLine = 7
+	if m.selectedEntry < 0 {
+		return
+	}
+	targetLine := entryStartLine + m.selectedEntry
+	if targetLine < m.viewport.YOffset {
+		m.viewport.YOffset = targetLine
+	} else if targetLine >= m.viewport.YOffset+m.viewport.Height {
+		m.viewport.YOffset = targetLine - m.viewport.Height + 1
+	}
+}
+
+// copyWeeklyGoals returns a shallow copy of goals so that async tea.Cmd
+// closures can safely marshal it without racing against future Update calls.
+func copyWeeklyGoals(goals journal.WeeklyGoals) journal.WeeklyGoals {
+	cp := make(journal.WeeklyGoals, len(goals))
+	for k, v := range goals {
+		cp[k] = v
+	}
+	return cp
+}
