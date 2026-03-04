@@ -145,7 +145,7 @@ func (m Model) handleDayViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	case "right":
-		if m.dayViewTab < 2 {
+		if m.dayViewTab < 1 {
 			m.dayViewTab++
 			m.viewport.GotoTop()
 			m.viewport.SetContent(m.renderDayContent())
@@ -557,13 +557,13 @@ func (m Model) handleClockFormKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.clockStart = time.Now()
 		m.clockRunning = true
 		m.state = stateDayView
-		m.dayViewTab = 2
+		m.dayViewTab = 0
 		m.viewport.SetContent(m.renderDayContent())
 		return m, clockTickCmd()
 
 	case tea.KeyEsc:
 		m.state = stateDayView
-		m.dayViewTab = 2
+		m.dayViewTab = 0
 		return m, nil
 	}
 

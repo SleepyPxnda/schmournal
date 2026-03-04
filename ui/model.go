@@ -312,7 +312,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case clockTickMsg:
 		if m.clockRunning {
 			m.clockFrame++
-			if m.state == stateDayView && m.dayViewTab == 2 {
+			if m.state == stateDayView && m.dayViewTab == 0 {
 				m.viewport.SetContent(m.renderDayContent())
 			}
 			return m, clockTickCmd()

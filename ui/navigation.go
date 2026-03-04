@@ -263,7 +263,7 @@ func (m Model) stopClock() (tea.Model, tea.Cmd) {
 		m.statusMsg = "✗ Clock stopped — duration too short to log (< 1 minute)"
 		m.isError = true
 		m.state = stateDayView
-		m.dayViewTab = 2
+		m.dayViewTab = 0
 		m.viewport.SetContent(m.renderDayContent())
 		return m, clearStatusCmd()
 	}
