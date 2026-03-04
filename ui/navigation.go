@@ -236,6 +236,52 @@ func (m Model) openDateInput() (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
+// openClockForm opens the task-entry form used to start the clock timer.
+func (m Model) openClockForm() (tea.Model, tea.Cmd) {
+	m.isBreakEntry = false
+	m.taskInput.SetValue("")
+	m.projectInput.SetValue("")
+	m.taskInput.Placeholder = "e.g. Feature development, meeting, code review…"
+	m.projectInput.Placeholder = "e.g. Backend, Frontend  (optional, comma-separated)"
+	m.state = stateClockForm
+	return m.focusField(0)
+}
+
+// stopClock stops the running clock, computes the elapsed duration, creates
+// the appropriate WorkEntry values (splitting across projects if needed) and
+// saves the day record. If the elapsed time rounds down to zero minutes a
+// status message is shown instead.
+func (m Model) stopClock() (tea.Model, tea.Cmd) {
+	elapsed := time.Since(m.clockStart)
+	entries := journal.ClockEntries(m.clockTask, m.clockProject, elapsed)
+
+	m.clockRunning = false
+	m.clockTask = ""
+	m.clockProject = ""
+
+	if len(entries) == 0 {
+		m.statusMsg = "✗ Clock stopped — duration too short to log (< 1 minute)"
+		m.isError = true
+		m.state = stateDayView
+		m.dayViewTab = 0
+		m.viewport.SetContent(m.renderDayContent())
+		return m, clearStatusCmd()
+	}
+
+	m.dayRecord.Entries = append(m.dayRecord.Entries, entries...)
+	m.selectedEntry = len(m.dayRecord.Entries) - 1
+	m.state = stateDayView
+	m.dayViewTab = 0 // switch to Work Log so the new entry is visible
+	m.viewport.SetContent(m.renderDayContent())
+	m.scrollToSelected()
+
+	label := "✓ Clocked entry logged"
+	if len(entries) > 1 {
+		label = "✓ Clocked entries split across projects"
+	}
+	return m, m.saveDayCmd(label)
+}
+
 // numFormFields returns how many fields the current work-log form has.
 func (m Model) numFormFields() int {
 	if m.isBreakEntry {

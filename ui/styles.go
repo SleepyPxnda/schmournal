@@ -168,6 +168,13 @@ var (
 	normalEntryStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color(cText))
 	breakEntryStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color(cTeal))
 
+	// clockPanelBorderStyle wraps the inline clock panel in the Work Log tab.
+	// It draws a left border to visually separate it from the entries column.
+	clockPanelBorderStyle = lipgloss.NewStyle().
+				BorderLeft(true).
+				BorderStyle(lipgloss.NormalBorder()).
+				BorderForeground(lipgloss.Color(cSurface2))
+
 	activeTabStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color(cBase)).
 			Background(lipgloss.Color(cMauve)).

@@ -49,6 +49,8 @@ type DayKeybinds struct {
 	SetEndManual   string `toml:"set_end_manual"`
 	Notes          string `toml:"notes"`
 	Export         string `toml:"export"`
+	ClockStart     string `toml:"clock_start"`
+	ClockStop      string `toml:"clock_stop"`
 }
 
 // WeekKeybinds holds configurable keys for the week overview.
@@ -103,6 +105,8 @@ func Default() Config {
 				SetEndManual:   "F",
 				Notes:          "n",
 				Export:         "x",
+				ClockStart:     "c",
+				ClockStop:      "t",
 			},
 			Week: WeekKeybinds{
 				PrevWeek:       "h",
@@ -289,6 +293,8 @@ set_end_now     = %q   # Set end time to now
 set_end_manual  = %q   # Set end time manually
 notes           = %q   # Open the notes editor
 export          = %q   # Export day to Markdown
+clock_start     = %q   # Start the clock timer (Clocking tab)
+clock_stop      = %q   # Stop the clock and log the entry (Clocking tab)
 
 [keybinds.week]
 prev_week        = %q   # Go to the previous week (also ←)
@@ -316,6 +322,8 @@ set_weekly_hours = %q   # Set a custom hours goal for the displayed week
 		cfg.Keybinds.Day.SetEndManual,
 		cfg.Keybinds.Day.Notes,
 		cfg.Keybinds.Day.Export,
+		cfg.Keybinds.Day.ClockStart,
+		cfg.Keybinds.Day.ClockStop,
 		cfg.Keybinds.Week.PrevWeek,
 		cfg.Keybinds.Week.NextWeek,
 		cfg.Keybinds.Week.SetWeeklyHours,
@@ -380,6 +388,8 @@ func (cfg *Config) validate() error {
 	fill(&dk.SetEndManual, dd.SetEndManual)
 	fill(&dk.Notes, dd.Notes)
 	fill(&dk.Export, dd.Export)
+	fill(&dk.ClockStart, dd.ClockStart)
+	fill(&dk.ClockStop, dd.ClockStop)
 
 	wk := &cfg.Keybinds.Week
 	dw := def.Keybinds.Week
@@ -390,7 +400,7 @@ func (cfg *Config) validate() error {
 	if err := checkDuplicates("list", lk.Quit, lk.OpenToday, lk.OpenDate, lk.Delete, lk.AddWork, lk.AddBreak, lk.Export, lk.WeekView, lk.SwitchWorkspace); err != nil {
 		return err
 	}
-	if err := checkDuplicates("day", dk.AddWork, dk.AddBreak, dk.Edit, dk.Delete, dk.SetStartNow, dk.SetStartManual, dk.SetEndNow, dk.SetEndManual, dk.Notes, dk.Export); err != nil {
+	if err := checkDuplicates("day", dk.AddWork, dk.AddBreak, dk.Edit, dk.Delete, dk.SetStartNow, dk.SetStartManual, dk.SetEndNow, dk.SetEndManual, dk.Notes, dk.Export, dk.ClockStart, dk.ClockStop); err != nil {
 		return err
 	}
 	if err := checkDuplicates("week", wk.PrevWeek, wk.NextWeek, wk.SetWeeklyHours); err != nil {
