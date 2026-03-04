@@ -7,6 +7,8 @@ A terminal-based work journal ("Schmournal") written in Go using the Charmbracel
 - **lipgloss** — ANSI styling/layout
 - **glamour** — Markdown rendering (used in export preview)
 
+Go module: `github.com/sleepypxnda/schmournal`
+
 Data is stored as JSON files in `~/.journal/`, one file per day named `YYYY-MM-DD.json`.
 Exports go to `~/.journal/exports/export-YYYY-MM-DD.md`.
 
@@ -16,15 +18,32 @@ Exports go to `~/.journal/exports/export-YYYY-MM-DD.md`.
 
 ```
 main.go            — entry point; launches tea.NewProgram with AltScreen + MouseCellMotion
+config/
+  config.go        — Config/Keybinds structs, Load, Default, WriteDefault, ExpandPath, validate, migration
 journal/
   types.go         — WorkEntry and DayRecord structs + pure logic (WorkTotals, DayDuration, Summary, ParseDate)
   journal.go       — file I/O: Dir, TodayPath, PathForDate, Load, Save, LoadAll, Delete, NewID
   worklog.go       — ParseDuration (flexible string → time.Duration), FormatDuration
   export.go        — ExportDay (Markdown string), SaveExport, consolidateEntries
+  weekly_goals.go  — WeeklyGoals map, LoadWeeklyGoals, SaveWeeklyGoals
 ui/
-  model.go         — single bubbletea Model: all state, Init/Update/View, key handlers, nav helpers, view renderers
+  model.go         — Model struct, view-state constants, messages, dayListItem, New, Init, Update
+  commands.go      — tea.Cmd factories: loadRecords, loadWeeklyGoals, clearStatusCmd, saveDayCmd
+  handlers.go      — handle*Key methods (one per view state)
+  navigation.go    — openXxx helpers, focusField, scrollToSelected, weekKey/weeklyGoal helpers
+  views.go         — View(), all viewXxx() and renderXxx() methods, joinKeyLabels, uniqueAppend
   styles.go        — all lipgloss styles; colour palette is Catppuccin Mocha (hex constants cBase … cRosewater)
 ```
+
+### Test files
+```
+config/config_test.go   — Default, validate, collectTOMLPaths, ExpandPath
+journal/types_test.go   — WorkTotals, DayDuration, Summary, ParseDate
+journal/worklog_test.go — ParseDuration, FormatDuration (including round-trip)
+journal/export_test.go  — ExportDay sections, consolidateEntries
+```
+
+Run tests with `make test` or `go test ./...`.
 
 ---
 
@@ -61,9 +80,11 @@ stateTimeInput     — set start or end time (single textinput)
 stateNotesEditor   — freeform notes editor (bubbles/textarea)
 stateConfirmDelete — y/n confirmation for deleting a day or an entry
 stateDateInput     — open or create a record for any arbitrary date
+stateWeekView      — scrollable weekly summary with per-day totals
+stateWeekHoursInput — single textinput to set a custom weekly hours goal
 ```
 
-`Update()` dispatches `tea.KeyMsg` to a `handle*Key()` method per state. Non-key messages are forwarded to the active sub-model afterwards.
+`Update()` in `ui/model.go` dispatches `tea.KeyMsg` to a `handle*Key()` method per state (defined in `ui/handlers.go`). Non-key messages are forwarded to the active sub-model afterwards.
 
 ---
 
@@ -99,3 +120,4 @@ The `editorBorderStyle` wraps the textarea with a rounded border and 1-column ho
 ## Export
 
 `journal.ExportDay(rec)` returns a Markdown string. Work entries are grouped by project; duplicate task names within a project are consolidated (durations summed). Breaks are consolidated by label (case-sensitive in export, case-insensitive when logging). The output is written to `~/.journal/exports/export-YYYY-MM-DD.md` by `journal.SaveExport`.
+

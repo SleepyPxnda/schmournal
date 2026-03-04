@@ -5,9 +5,9 @@ import (
 	"os"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/fgrohme/tui-journal/config"
-	"github.com/fgrohme/tui-journal/journal"
-	"github.com/fgrohme/tui-journal/ui"
+	"github.com/sleepypxnda/schmournal/config"
+	"github.com/sleepypxnda/schmournal/journal"
+	"github.com/sleepypxnda/schmournal/ui"
 )
 
 var version = "dev"
