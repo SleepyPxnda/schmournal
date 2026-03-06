@@ -34,6 +34,7 @@ type ListKeybinds struct {
 	AddBreak        string `toml:"add_break"`
 	Export          string `toml:"export"`
 	WeekView        string `toml:"week_view"`
+	StatsView       string `toml:"stats_view"`
 	SwitchWorkspace string `toml:"switch_workspace"`
 }
 
@@ -92,6 +93,7 @@ func Default() Config {
 				AddBreak:        "b",
 				Export:          "x",
 				WeekView:        "v",
+				StatsView:       "s",
 				SwitchWorkspace: "p",
 			},
 			Day: DayKeybinds{
@@ -280,6 +282,7 @@ add_work         = %q   # Log a work entry for today
 add_break        = %q   # Log a break entry for today
 export           = %q   # Export the selected day to Markdown
 week_view        = %q   # Open the weekly overview
+stats_view       = %q   # Open the stats overview
 switch_workspace = %q   # Open the workspace picker
 
 [keybinds.day]
@@ -311,6 +314,7 @@ set_weekly_hours = %q   # Set a custom hours goal for the displayed week
 		cfg.Keybinds.List.AddBreak,
 		cfg.Keybinds.List.Export,
 		cfg.Keybinds.List.WeekView,
+		cfg.Keybinds.List.StatsView,
 		cfg.Keybinds.List.SwitchWorkspace,
 		cfg.Keybinds.Day.AddWork,
 		cfg.Keybinds.Day.AddBreak,
@@ -374,6 +378,7 @@ func (cfg *Config) validate() error {
 	fill(&lk.AddBreak, dl.AddBreak)
 	fill(&lk.Export, dl.Export)
 	fill(&lk.WeekView, dl.WeekView)
+	fill(&lk.StatsView, dl.StatsView)
 	fill(&lk.SwitchWorkspace, dl.SwitchWorkspace)
 
 	dk := &cfg.Keybinds.Day
@@ -397,7 +402,7 @@ func (cfg *Config) validate() error {
 	fill(&wk.NextWeek, dw.NextWeek)
 	fill(&wk.SetWeeklyHours, dw.SetWeeklyHours)
 
-	if err := checkDuplicates("list", lk.Quit, lk.OpenToday, lk.OpenDate, lk.Delete, lk.AddWork, lk.AddBreak, lk.Export, lk.WeekView, lk.SwitchWorkspace); err != nil {
+	if err := checkDuplicates("list", lk.Quit, lk.OpenToday, lk.OpenDate, lk.Delete, lk.AddWork, lk.AddBreak, lk.Export, lk.WeekView, lk.StatsView, lk.SwitchWorkspace); err != nil {
 		return err
 	}
 	if err := checkDuplicates("day", dk.AddWork, dk.AddBreak, dk.Edit, dk.Delete, dk.SetStartNow, dk.SetStartManual, dk.SetEndNow, dk.SetEndManual, dk.Notes, dk.Export, dk.ClockStart, dk.ClockStop); err != nil {

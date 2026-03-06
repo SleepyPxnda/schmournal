@@ -32,6 +32,7 @@ const (
 	stateWeekView
 	stateWeekHoursInput
 	stateWorkspacePicker
+	stateStats
 )
 
 const (
@@ -346,6 +347,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.handleWeekHoursInputKey(msg)
 		case stateWorkspacePicker:
 			return m.handleWorkspacePickerKey(msg)
+		case stateStats:
+			return m.handleStatsKey(msg)
 		}
 	}
 
@@ -355,7 +358,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		var cmd tea.Cmd
 		m.list, cmd = m.list.Update(msg)
 		return m, cmd
-	case stateDayView, stateWeekView:
+	case stateDayView, stateWeekView, stateStats:
 		var cmd tea.Cmd
 		m.viewport, cmd = m.viewport.Update(msg)
 		return m, cmd

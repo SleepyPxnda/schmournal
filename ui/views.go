@@ -37,6 +37,8 @@ func (m Model) View() string {
 		return m.viewWeekHoursInput()
 	case stateWorkspacePicker:
 		return m.viewWorkspacePicker()
+	case stateStats:
+		return m.viewStats()
 	}
 	return ""
 }
@@ -602,6 +604,7 @@ func (m Model) viewList() string {
 		[2]string{kb.AddBreak, "log break"},
 		[2]string{"enter", "view"},
 		[2]string{kb.WeekView, "week"},
+		[2]string{kb.StatsView, "stats"},
 		[2]string{kb.Delete, "delete"},
 		[2]string{kb.Export, "export"},
 		[2]string{"/", "filter"},
@@ -1148,4 +1151,329 @@ func (m Model) viewWorkspacePicker() string {
 	centered := lipgloss.NewStyle().Width(m.width).Align(lipgloss.Center).Render(box)
 	footer := m.renderFooter([][2]string{{"j/k", "navigate"}, {"enter", "switch"}, {"esc", "cancel"}})
 	return lipgloss.JoinVertical(lipgloss.Left, header, strings.Repeat("\n", topPad)+centered, footer)
+}
+
+func (m Model) viewStats() string {
+	header := m.renderHeader("📊  Stats", "Overview")
+	sep := dayViewDividerStyle.Render(strings.Repeat("─", m.width))
+	subHeader := "\n" + sep
+	footer := m.renderFooter([][2]string{
+		{"j/k", "scroll"},
+		{"esc", "back"},
+	})
+	return lipgloss.JoinVertical(lipgloss.Left, header, subHeader, m.viewport.View(), footer)
+}
+
+// renderStatsContent builds the scrollable content for the stats view.
+func (m Model) renderStatsContent() string {
+	now := time.Now()
+	innerW := m.width - 2
+	if innerW < 40 {
+		innerW = 40
+	}
+	div := dayViewDividerStyle.Render(strings.Repeat("─", innerW))
+
+	// Build date set and date→record map.
+	dated := make(map[string]bool, len(m.records))
+	recByDate := make(map[string]journal.DayRecord, len(m.records))
+	for _, r := range m.records {
+		dated[r.Date] = true
+		recByDate[r.Date] = r
+	}
+
+	var b strings.Builder
+	b.WriteString("\n")
+
+	// ── Streaks ───────────────────────────────────────────────────────────────
+	b.WriteString("  " + dayViewSectionStyle.Render("Streaks") + "\n")
+	b.WriteString("  " + div + "\n")
+
+	// Current streak: consecutive days going back from today.
+	currentStreak := 0
+	for check := now; ; check = check.AddDate(0, 0, -1) {
+		if !dated[check.Format("2006-01-02")] {
+			break
+		}
+		currentStreak++
+	}
+
+	// Longest streak: scan all dated records.
+	longestStreak := 0
+	if len(m.records) > 0 {
+		// Collect all dated days, parse them, sort ascending.
+		type dateEntry struct{ t time.Time }
+		var days []dateEntry
+		for _, r := range m.records {
+			if t, err := r.ParseDate(); err == nil {
+				days = append(days, dateEntry{t})
+			}
+		}
+		// Sort ascending.
+		for i := 1; i < len(days); i++ {
+			for j := i; j > 0 && days[j].t.Before(days[j-1].t); j-- {
+				days[j], days[j-1] = days[j-1], days[j]
+			}
+		}
+		run := 1
+		for i := 1; i < len(days); i++ {
+			diff := days[i].t.Sub(days[i-1].t)
+			if diff == 24*time.Hour {
+				run++
+				if run > longestStreak {
+					longestStreak = run
+				}
+			} else {
+				if run > longestStreak {
+					longestStreak = run
+				}
+				run = 1
+			}
+		}
+		if run > longestStreak {
+			longestStreak = run
+		}
+	}
+
+	totalDays := len(m.records)
+	var streakLine string
+	if currentStreak > 0 {
+		streakLine = "  🔥 " + statsStreakStyle.Render(fmt.Sprintf("%d", currentStreak)) +
+			statsLabelStyle.Render(" day streak")
+	} else {
+		streakLine = "  " + statsLabelStyle.Render("No active streak")
+	}
+	streakLine += statsLabelStyle.Render("  ·  Longest: ") +
+		statsValueStyle.Render(fmt.Sprintf("%d", longestStreak)) +
+		statsLabelStyle.Render(" days") +
+		statsLabelStyle.Render("  ·  Total logged: ") +
+		statsValueStyle.Render(fmt.Sprintf("%d", totalDays)) +
+		statsLabelStyle.Render(" days")
+	b.WriteString(streakLine + "\n\n")
+
+	// ── Activity heatmap (last 16 weeks) ──────────────────────────────────────
+	b.WriteString("  " + dayViewSectionStyle.Render("Activity  (last 16 weeks)") + "\n")
+	b.WriteString("  " + div + "\n")
+
+	// Find Monday of current week.
+	weekday := int(now.Weekday())
+	if weekday == 0 {
+		weekday = 7
+	}
+	thisMonday := now.AddDate(0, 0, -(weekday - 1))
+
+	const heatmapWeeks = 16
+	const filled = "▓"
+	const empty = "░"
+
+	// Header row: day initials
+	dayInitials := [7]string{"M", "T", "W", "T", "F", "S", "S"}
+	var headerCols []string
+	headerCols = append(headerCols, "        ") // month label column width
+	for _, lbl := range dayInitials {
+		headerCols = append(headerCols, statsLabelStyle.Render(lbl))
+	}
+	b.WriteString("  " + strings.Join(headerCols, " ") + "\n")
+
+	for w := heatmapWeeks - 1; w >= 0; w-- {
+		monday := thisMonday.AddDate(0, 0, -w*7)
+		// Month label for this row (show if first week or month changes).
+		var monthLabel string
+		if w == heatmapWeeks-1 || monday.Month() != monday.AddDate(0, 0, -7).Month() {
+			monthLabel = monday.Format("Jan")
+		}
+		row := fmt.Sprintf("  %-6s  ", monthLabel)
+		for i := 0; i < 7; i++ {
+			d := monday.AddDate(0, 0, i)
+			dateStr := d.Format("2006-01-02")
+			var block string
+			switch {
+			case dated[dateStr]:
+				block = statsBlockFilledStyle.Render(filled)
+			case d.After(now):
+				block = statsBlockFutureStyle.Render(empty)
+			default:
+				block = statsBlockEmptyStyle.Render(empty)
+			}
+			if i > 0 {
+				row += " "
+			}
+			row += block
+		}
+		b.WriteString(row + "\n")
+	}
+	b.WriteString("\n")
+
+	// ── This Month ────────────────────────────────────────────────────────────
+	monthKey := now.Format("2006-01")
+	monthName := now.Format("January 2006")
+
+	monthProjMap := make(map[string]time.Duration)
+	var monthWork time.Duration
+	monthDays := 0
+	for _, r := range m.records {
+		if !strings.HasPrefix(r.Date, monthKey) {
+			continue
+		}
+		monthDays++
+		for _, e := range r.Entries {
+			if e.IsBreak {
+				continue
+			}
+			proj := e.Project
+			if proj == "" {
+				proj = "Other"
+			}
+			monthProjMap[proj] += e.Duration()
+			monthWork += e.Duration()
+		}
+	}
+
+	b.WriteString("  " + dayViewSectionStyle.Render("This Month") +
+		dayViewMutedStyle.Render("  "+monthName) +
+		"    " +
+		statsLabelStyle.Render("Total: ") + statsValueStyle.Render(journal.FormatDuration(monthWork)) +
+		statsLabelStyle.Render(fmt.Sprintf("  ·  %d days", monthDays)) +
+		"\n")
+	b.WriteString("  " + div + "\n")
+	if len(monthProjMap) == 0 {
+		b.WriteString("  " + dayViewMutedStyle.Render("No work entries this month") + "\n")
+	} else {
+		b.WriteString(renderProjectBars(monthProjMap, monthWork))
+	}
+	b.WriteString("\n")
+
+	// ── This Year ─────────────────────────────────────────────────────────────
+	yearKey := now.Format("2006")
+	yearName := yearKey
+
+	yearProjMap := make(map[string]time.Duration)
+	var yearWork time.Duration
+	yearDays := 0
+	monthlyWork := make(map[string]time.Duration) // "2006-01" → duration
+	for _, r := range m.records {
+		if !strings.HasPrefix(r.Date, yearKey) {
+			continue
+		}
+		yearDays++
+		mk := r.Date[:7] // "YYYY-MM"
+		for _, e := range r.Entries {
+			if e.IsBreak {
+				continue
+			}
+			proj := e.Project
+			if proj == "" {
+				proj = "Other"
+			}
+			yearProjMap[proj] += e.Duration()
+			yearWork += e.Duration()
+			monthlyWork[mk] += e.Duration()
+		}
+	}
+
+	b.WriteString("  " + dayViewSectionStyle.Render("This Year") +
+		dayViewMutedStyle.Render("  "+yearName) +
+		"    " +
+		statsLabelStyle.Render("Total: ") + statsValueStyle.Render(journal.FormatDuration(yearWork)) +
+		statsLabelStyle.Render(fmt.Sprintf("  ·  %d days", yearDays)) +
+		"\n")
+	b.WriteString("  " + div + "\n")
+
+	// Monthly bar chart for current year.
+	if yearWork > 0 {
+		// Find max monthly work for scaling.
+		var maxMonthWork time.Duration
+		for _, d := range monthlyWork {
+			if d > maxMonthWork {
+				maxMonthWork = d
+			}
+		}
+		const monthBarW = 16
+		for mo := 1; mo <= int(now.Month()); mo++ {
+			mk := fmt.Sprintf("%s-%02d", yearKey, mo)
+			d := monthlyWork[mk]
+			moLabel := time.Month(mo).String()[:3]
+			pct := float64(d) / float64(maxMonthWork)
+			filledCount := int(pct * monthBarW)
+			bar := statsBlockFilledStyle.Render(strings.Repeat("█", filledCount)) +
+				statsBlockEmptyStyle.Render(strings.Repeat("░", monthBarW-filledCount))
+			durStr := fmt.Sprintf("%-8s", journal.FormatDuration(d))
+			b.WriteString("  " + statsLabelStyle.Render(moLabel+"  ") +
+				bar + "  " +
+				statsValueStyle.Render(durStr) + "\n")
+		}
+		b.WriteString("\n")
+		b.WriteString(renderProjectBars(yearProjMap, yearWork))
+	} else {
+		b.WriteString("  " + dayViewMutedStyle.Render("No work entries this year") + "\n")
+	}
+	b.WriteString("\n")
+
+	// ── All-time top projects ─────────────────────────────────────────────────
+	allProjMap := make(map[string]time.Duration)
+	var allWork time.Duration
+	for _, r := range m.records {
+		for _, e := range r.Entries {
+			if e.IsBreak {
+				continue
+			}
+			proj := e.Project
+			if proj == "" {
+				proj = "Other"
+			}
+			allProjMap[proj] += e.Duration()
+			allWork += e.Duration()
+		}
+	}
+
+	b.WriteString("  " + dayViewSectionStyle.Render("All-time Top Projects") +
+		"    " +
+		statsLabelStyle.Render("Total: ") + statsValueStyle.Render(journal.FormatDuration(allWork)) +
+		"\n")
+	b.WriteString("  " + div + "\n")
+	if len(allProjMap) == 0 {
+		b.WriteString("  " + dayViewMutedStyle.Render("No work entries") + "\n")
+	} else {
+		b.WriteString(renderProjectBars(allProjMap, allWork))
+	}
+	b.WriteString("\n")
+
+	return b.String()
+}
+
+// renderProjectBars renders a sorted list of project durations with inline bar
+// charts relative to the total work duration.
+func renderProjectBars(projMap map[string]time.Duration, total time.Duration) string {
+	type ps struct {
+		name string
+		dur  time.Duration
+	}
+	var projects []ps
+	for name, dur := range projMap {
+		projects = append(projects, ps{name, dur})
+	}
+	// Sort descending by duration.
+	for i := 1; i < len(projects); i++ {
+		for j := i; j > 0 && projects[j].dur > projects[j-1].dur; j-- {
+			projects[j], projects[j-1] = projects[j-1], projects[j]
+		}
+	}
+
+	const barW = 20
+	var sb strings.Builder
+	for _, p := range projects {
+		pct := float64(0)
+		if total > 0 {
+			pct = float64(p.dur) / float64(total)
+		}
+		filledCount := int(pct * barW)
+		bar := statsBlockFilledStyle.Render(strings.Repeat("█", filledCount)) +
+			statsBlockEmptyStyle.Render(strings.Repeat("░", barW-filledCount))
+		durStr := fmt.Sprintf("%-8s", journal.FormatDuration(p.dur))
+		pctStr := fmt.Sprintf("%3.0f%%", pct*100)
+		sb.WriteString("  " + dayViewTotalsStyle.Render(durStr) +
+			"  " + dayViewSectionStyle.Render(p.name) +
+			"  " + bar +
+			"  " + statsLabelStyle.Render(pctStr) + "\n")
+	}
+	return sb.String()
 }

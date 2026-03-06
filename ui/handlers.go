@@ -51,6 +51,8 @@ func (m Model) handleListKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 		case kb.WeekView:
 			return m.openWeekView()
+		case kb.StatsView:
+			return m.openStatsView()
 		case kb.SwitchWorkspace:
 			return m.openWorkspacePicker()
 		}
@@ -573,5 +575,16 @@ func (m Model) handleClockFormKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	} else {
 		m.projectInput, cmd = m.projectInput.Update(msg)
 	}
+	return m, cmd
+}
+
+func (m Model) handleStatsKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "esc", m.cfg.Keybinds.List.Quit:
+		m.state = stateList
+		return m, nil
+	}
+	var cmd tea.Cmd
+	m.viewport, cmd = m.viewport.Update(msg)
 	return m, cmd
 }
