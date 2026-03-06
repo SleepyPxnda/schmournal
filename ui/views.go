@@ -2,6 +2,7 @@ package ui
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -1201,23 +1202,17 @@ func (m Model) renderStatsContent() string {
 	longestStreak := 0
 	if len(m.records) > 0 {
 		// Collect all dated days, parse them, sort ascending.
-		type dateEntry struct{ t time.Time }
-		var days []dateEntry
+		var days []time.Time
 		for _, r := range m.records {
 			if t, err := r.ParseDate(); err == nil {
-				days = append(days, dateEntry{t})
+				days = append(days, t)
 			}
 		}
-		// Sort ascending.
-		for i := 1; i < len(days); i++ {
-			for j := i; j > 0 && days[j].t.Before(days[j-1].t); j-- {
-				days[j], days[j-1] = days[j-1], days[j]
-			}
-		}
+		sort.Slice(days, func(i, j int) bool { return days[i].Before(days[j]) })
 		run := 1
 		for i := 1; i < len(days); i++ {
-			diff := days[i].t.Sub(days[i-1].t)
-			if diff == 24*time.Hour {
+			// Use AddDate for DST-safe consecutive-day check.
+			if days[i-1].AddDate(0, 0, 1).Equal(days[i]) {
 				run++
 				if run > longestStreak {
 					longestStreak = run
@@ -1452,11 +1447,7 @@ func renderProjectBars(projMap map[string]time.Duration, total time.Duration) st
 		projects = append(projects, ps{name, dur})
 	}
 	// Sort descending by duration.
-	for i := 1; i < len(projects); i++ {
-		for j := i; j > 0 && projects[j].dur > projects[j-1].dur; j-- {
-			projects[j], projects[j-1] = projects[j-1], projects[j]
-		}
-	}
+	sort.Slice(projects, func(i, j int) bool { return projects[i].dur > projects[j].dur })
 
 	const barW = 20
 	var sb strings.Builder
