@@ -4,7 +4,9 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
+	"time"
 )
 
 // ── Default ───────────────────────────────────────────────────────────────────
@@ -242,6 +244,189 @@ func TestValidateWorkspaceValidConfigOK(t *testing.T) {
 	}
 	if err := cfg.validate(); err != nil {
 		t.Errorf("validate() unexpected error for valid workspaces: %v", err)
+	}
+}
+
+func TestValidateWorkspaceInvalidWorkDayReturnsError(t *testing.T) {
+	cfg := Default()
+	cfg.Workspaces = []WorkspaceConfig{
+		{Name: "Work", StoragePath: "~/.journal/work", WorkDays: []string{"monday", "funday"}},
+	}
+	if err := cfg.validate(); err == nil {
+		t.Error("validate() expected error for invalid workspace work_day, got nil")
+	}
+}
+
+func TestValidateWorkspaceWorkDaysNormalisedToLowercase(t *testing.T) {
+	cfg := Default()
+	cfg.Workspaces = []WorkspaceConfig{
+		{Name: "Work", StoragePath: "~/.journal/work", WorkDays: []string{"Monday", "TUESDAY"}},
+	}
+	if err := cfg.validate(); err != nil {
+		t.Fatalf("validate() error: %v", err)
+	}
+	for _, d := range cfg.Workspaces[0].WorkDays {
+		for _, r := range d {
+			if r >= 'A' && r <= 'Z' {
+				t.Errorf("workspace WorkDays entry %q still has uppercase after validate()", d)
+			}
+		}
+	}
+}
+
+func TestValidateWorkspaceEmptyWorkDaysFallsBackToTopLevel(t *testing.T) {
+	cfg := Default()
+	cfg.Workspaces = []WorkspaceConfig{
+		{Name: "Work", StoragePath: "~/.journal/work"},
+	}
+	if err := cfg.validate(); err != nil {
+		t.Fatalf("validate() error: %v", err)
+	}
+	// Empty workspace WorkDays is valid — it means "inherit from top-level config".
+	if len(cfg.Workspaces[0].WorkDays) != 0 {
+		t.Errorf("validate() should leave empty workspace WorkDays untouched, got %v", cfg.Workspaces[0].WorkDays)
+	}
+}
+
+func TestMigrateConfigFillsWorkspaceWorkDays(t *testing.T) {
+	home := withTempHome(t)
+	cfgPath := filepath.Join(home, ".config", "schmournal.config")
+
+	// Write a config that has a workspace but no work_days for it.
+	raw := `storage_path = "~/.journal"
+weekly_hours_goal = 40.0
+work_days = ["monday", "tuesday", "wednesday", "thursday", "friday"]
+
+[[workspaces]]
+name         = "Work"
+storage_path = "~/.journal/work"
+`
+	if err := os.MkdirAll(filepath.Dir(cfgPath), 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	if err := os.WriteFile(cfgPath, []byte(raw), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error: %v", err)
+	}
+
+	// After migration the workspace should have work_days = all 7 days.
+	if len(cfg.Workspaces) == 0 {
+		t.Fatal("Load() lost workspace definitions during migration")
+	}
+	ws := cfg.Workspaces[0]
+	if len(ws.WorkDays) == 0 {
+		t.Error("migrated workspace has empty WorkDays, want all 7 days")
+	}
+	allDays := []string{"monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"}
+	if len(ws.WorkDays) != len(allDays) {
+		t.Errorf("migrated workspace WorkDays = %v, want %v", ws.WorkDays, allDays)
+	}
+}
+
+func TestGenerateWorkspacesTOMLEmpty(t *testing.T) {
+	if got := generateWorkspacesTOML(nil); got != "" {
+		t.Errorf("generateWorkspacesTOML(nil) = %q, want empty string", got)
+	}
+}
+
+func TestGenerateWorkspacesTOMLWithWorkDays(t *testing.T) {
+	ws := []WorkspaceConfig{
+		{
+			Name:        "Work",
+			StoragePath: "~/.journal/work",
+			WorkDays:    []string{"monday", "tuesday"},
+		},
+	}
+	got := generateWorkspacesTOML(ws)
+	if !strings.Contains(got, `[[workspaces]]`) {
+		t.Error("generateWorkspacesTOML missing [[workspaces]] header")
+	}
+	if !strings.Contains(got, `"monday"`) {
+		t.Error("generateWorkspacesTOML missing work_days monday")
+	}
+}
+
+// ── WorkDays / IsWorkDay ──────────────────────────────────────────────────────
+
+func TestDefaultWorkDaysIsMonToFri(t *testing.T) {
+	cfg := Default()
+	want := []string{"monday", "tuesday", "wednesday", "thursday", "friday"}
+	if len(cfg.WorkDays) != len(want) {
+		t.Fatalf("WorkDays len = %d, want %d", len(cfg.WorkDays), len(want))
+	}
+	for i, d := range want {
+		if cfg.WorkDays[i] != d {
+			t.Errorf("WorkDays[%d] = %q, want %q", i, cfg.WorkDays[i], d)
+		}
+	}
+}
+
+func TestIsWorkDayDefaultConfig(t *testing.T) {
+	cfg := Default()
+	// Monday (weekday) should be a work day.
+	monday := time.Date(2026, 3, 2, 0, 0, 0, 0, time.UTC) // Monday
+	if !cfg.IsWorkDay(monday) {
+		t.Error("IsWorkDay(monday) = false, want true")
+	}
+	// Saturday should not be a work day with default config.
+	saturday := time.Date(2026, 3, 7, 0, 0, 0, 0, time.UTC) // Saturday
+	if cfg.IsWorkDay(saturday) {
+		t.Error("IsWorkDay(saturday) = true, want false")
+	}
+	// Sunday should not be a work day with default config.
+	sunday := time.Date(2026, 3, 8, 0, 0, 0, 0, time.UTC) // Sunday
+	if cfg.IsWorkDay(sunday) {
+		t.Error("IsWorkDay(sunday) = true, want false")
+	}
+}
+
+func TestIsWorkDayCustomConfig(t *testing.T) {
+	cfg := Default()
+	cfg.WorkDays = []string{"saturday", "sunday"}
+	saturday := time.Date(2026, 3, 7, 0, 0, 0, 0, time.UTC)
+	if !cfg.IsWorkDay(saturday) {
+		t.Error("IsWorkDay(saturday) = false with custom work_days, want true")
+	}
+	monday := time.Date(2026, 3, 2, 0, 0, 0, 0, time.UTC)
+	if cfg.IsWorkDay(monday) {
+		t.Error("IsWorkDay(monday) = true with custom work_days, want false")
+	}
+}
+
+func TestValidateEmptyWorkDaysFillsDefault(t *testing.T) {
+	cfg := Config{WeeklyHoursGoal: 40}
+	if err := cfg.validate(); err != nil {
+		t.Fatalf("validate() error: %v", err)
+	}
+	if len(cfg.WorkDays) == 0 {
+		t.Error("validate() left WorkDays empty, want defaults filled in")
+	}
+}
+
+func TestValidateInvalidWorkDayReturnsError(t *testing.T) {
+	cfg := Default()
+	cfg.WorkDays = []string{"monday", "funday"}
+	if err := cfg.validate(); err == nil {
+		t.Error("validate() expected error for invalid work_day, got nil")
+	}
+}
+
+func TestValidateWorkDaysNormalisedToLowercase(t *testing.T) {
+	cfg := Default()
+	cfg.WorkDays = []string{"Monday", "TUESDAY", "Wednesday"}
+	if err := cfg.validate(); err != nil {
+		t.Fatalf("validate() error: %v", err)
+	}
+	for _, d := range cfg.WorkDays {
+		for _, r := range d {
+			if r >= 'A' && r <= 'Z' {
+				t.Errorf("WorkDays entry %q still has uppercase after validate()", d)
+			}
+		}
 	}
 }
 

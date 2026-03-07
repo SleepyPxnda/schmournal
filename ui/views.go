@@ -494,6 +494,8 @@ func (m Model) renderStats() string {
 			block = statsBlockFilledStyle.Render(filled)
 		case d.After(now):
 			block = statsBlockFutureStyle.Render(empty)
+		case !m.effectiveIsWorkDay(d):
+			block = statsBlockNonWorkStyle.Render(empty)
 		default:
 			block = statsBlockEmptyStyle.Render(empty)
 		}
@@ -512,13 +514,22 @@ func (m Model) renderStats() string {
 	monthStr := statsLabelStyle.Render(now.Format("Jan")+": ") +
 		statsValueStyle.Render(fmt.Sprintf("%d", monthCount))
 
-	// Streak: consecutive days going back from today.
+	// Streak: consecutive working days going back from today.
+	// Non-working days are skipped — they neither add to the count nor break
+	// the streak — so a weekend or public holiday never resets the counter.
+	// A hard cap of 500 iterations prevents an infinite loop if the user has
+	// no records at all.
 	streak := 0
-	for check := now; ; check = check.AddDate(0, 0, -1) {
-		if !dated[check.Format("2006-01-02")] {
+	for i := 0; i < 500; i++ {
+		check := now.AddDate(0, 0, -i)
+		dateStr := check.Format("2006-01-02")
+		if dated[dateStr] {
+			streak++
+		} else if m.effectiveIsWorkDay(check) {
+			// A working day with no entry breaks the streak.
 			break
 		}
-		streak++
+		// Non-working day without an entry: continue (streak passes through).
 	}
 	var streakStr string
 	if streak > 0 {
@@ -972,16 +983,21 @@ func (m Model) renderWeekContent() string {
 
 		// Day header line.
 		dayLabel := d.Format("Mon  02 Jan 2006")
+		isWorkDay := m.effectiveIsWorkDay(d)
+		dayLabelStyle := dayViewSectionStyle
+		if !isWorkDay {
+			dayLabelStyle = weekNonWorkDayStyle
+		}
 		var headerLine string
 		if hasRec && (work+breaks) > 0 {
-			headerLine = dayViewSectionStyle.Render(dayLabel) +
+			headerLine = dayLabelStyle.Render(dayLabel) +
 				dayViewMutedStyle.Render("  ·  ") +
 				dayViewValueStyle.Render(journal.FormatDuration(work)+" work")
 			if breaks > 0 {
 				headerLine += dayViewMutedStyle.Render("  ·  " + journal.FormatDuration(breaks) + " breaks")
 			}
 		} else {
-			headerLine = dayViewSectionStyle.Render(dayLabel) +
+			headerLine = dayLabelStyle.Render(dayLabel) +
 				dayViewMutedStyle.Render("  ·  no entries")
 		}
 		b.WriteString(headerLine + "\n")
