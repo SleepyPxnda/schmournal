@@ -1154,19 +1154,52 @@ func (m Model) viewWorkspacePicker() string {
 	return lipgloss.JoinVertical(lipgloss.Left, header, strings.Repeat("\n", topPad)+centered, footer)
 }
 
+// statsDurFieldW is the fixed column width used for rendered durations in the
+// stats view (e.g. "10h30m   ") so bars and columns align across rows.
+const statsDurFieldW = 9
+
 func (m Model) viewStats() string {
 	header := m.renderHeader("📊  Stats", "Overview")
-	sep := dayViewDividerStyle.Render(strings.Repeat("─", m.width))
-	subHeader := "\n" + sep
+	tabBar := m.renderStatsTabBar()
 	footer := m.renderFooter([][2]string{
+		{"←/→", "switch tab"},
 		{"j/k", "scroll"},
 		{"esc", "back"},
 	})
-	return lipgloss.JoinVertical(lipgloss.Left, header, subHeader, m.viewport.View(), footer)
+	return lipgloss.JoinVertical(lipgloss.Left, header, tabBar, m.viewport.View(), footer)
 }
 
-// renderStatsContent builds the scrollable content for the stats view.
-func (m Model) renderStatsContent() string {
+func (m Model) renderStatsTabBar() string {
+	tabs := []string{"🔥  Overview", "📆  Monthly", "📈  Yearly", "🏆  All-time"}
+	var parts []string
+	for i, label := range tabs {
+		if i == m.statsTab {
+			parts = append(parts, activeTabStyle.Render(" "+label+" "))
+		} else {
+			parts = append(parts, inactiveTabStyle.Render(" "+label+" "))
+		}
+	}
+	bar := strings.Join(parts, inactiveTabStyle.Render("  "))
+	sep := dayViewDividerStyle.Render(strings.Repeat("─", m.width))
+	return bar + "\n" + sep
+}
+
+// renderStatsTabContent dispatches to the appropriate tab renderer.
+func (m Model) renderStatsTabContent() string {
+	switch m.statsTab {
+	case 1:
+		return m.renderStatsMonthly()
+	case 2:
+		return m.renderStatsYearly()
+	case 3:
+		return m.renderStatsAllTime()
+	default:
+		return m.renderStatsOverview()
+	}
+}
+
+// renderStatsOverview renders the Overview tab: streaks + 16-week activity heatmap.
+func (m Model) renderStatsOverview() string {
 	now := time.Now()
 	innerW := m.width - 2
 	if innerW < 40 {
@@ -1199,7 +1232,6 @@ func (m Model) renderStatsContent() string {
 	// Longest streak: scan all dated records.
 	longestStreak := 0
 	if len(m.records) > 0 {
-		// Collect all dated days, parse them, sort ascending.
 		var days []time.Time
 		for _, r := range m.records {
 			if t, err := r.ParseDate(); err == nil {
@@ -1209,7 +1241,6 @@ func (m Model) renderStatsContent() string {
 		sort.Slice(days, func(i, j int) bool { return days[i].Before(days[j]) })
 		run := 1
 		for i := 1; i < len(days); i++ {
-			// Use AddDate for DST-safe consecutive-day check.
 			if days[i-1].AddDate(0, 0, 1).Equal(days[i]) {
 				run++
 				if run > longestStreak {
@@ -1258,7 +1289,7 @@ func (m Model) renderStatsContent() string {
 	const filled = "▓"
 	const empty = "░"
 
-	// Header row: day initials
+	// Header row: day initials.
 	dayInitials := [7]string{"M", "T", "W", "T", "F", "S", "S"}
 	var headerCols []string
 	headerCols = append(headerCols, "        ") // month label column width
@@ -1295,19 +1326,29 @@ func (m Model) renderStatsContent() string {
 		b.WriteString(row + "\n")
 	}
 	b.WriteString("\n")
+	return b.String()
+}
 
-	// ── This Month ────────────────────────────────────────────────────────────
+// renderStatsMonthly renders the Monthly tab.
+func (m Model) renderStatsMonthly() string {
+	now := time.Now()
+	innerW := m.width - 2
+	if innerW < 40 {
+		innerW = 40
+	}
+	div := dayViewDividerStyle.Render(strings.Repeat("─", innerW))
+
 	monthKey := now.Format("2006-01")
 	monthName := now.Format("January 2006")
 
-	monthProjMap := make(map[string]time.Duration)
-	var monthWork time.Duration
-	monthDays := 0
+	projMap := make(map[string]time.Duration)
+	var totalWork time.Duration
+	days := 0
 	for _, r := range m.records {
 		if !strings.HasPrefix(r.Date, monthKey) {
 			continue
 		}
-		monthDays++
+		days++
 		for _, e := range r.Entries {
 			if e.IsBreak {
 				continue
@@ -1316,39 +1357,49 @@ func (m Model) renderStatsContent() string {
 			if proj == "" {
 				proj = "Other"
 			}
-			monthProjMap[proj] += e.Duration()
-			monthWork += e.Duration()
+			projMap[proj] += e.Duration()
+			totalWork += e.Duration()
 		}
 	}
 
+	var b strings.Builder
+	b.WriteString("\n")
 	b.WriteString("  " + dayViewSectionStyle.Render("This Month") +
 		dayViewMutedStyle.Render("  "+monthName) +
 		"    " +
-		statsLabelStyle.Render("Total: ") + statsValueStyle.Render(journal.FormatDuration(monthWork)) +
-		statsLabelStyle.Render(fmt.Sprintf("  ·  %d days", monthDays)) +
+		statsLabelStyle.Render("Total: ") + statsValueStyle.Render(journal.FormatDuration(totalWork)) +
+		statsLabelStyle.Render(fmt.Sprintf("  ·  %d days", days)) +
 		"\n")
 	b.WriteString("  " + div + "\n")
-	if len(monthProjMap) == 0 {
+	if len(projMap) == 0 {
 		b.WriteString("  " + dayViewMutedStyle.Render("No work entries this month") + "\n")
 	} else {
-		b.WriteString(renderProjectBars(monthProjMap, monthWork))
+		b.WriteString(renderProjectBars(projMap, totalWork))
 	}
-	b.WriteString("\n")
+	return b.String()
+}
 
-	// ── This Year ─────────────────────────────────────────────────────────────
+// renderStatsYearly renders the Yearly tab.
+func (m Model) renderStatsYearly() string {
+	now := time.Now()
+	innerW := m.width - 2
+	if innerW < 40 {
+		innerW = 40
+	}
+	div := dayViewDividerStyle.Render(strings.Repeat("─", innerW))
+
 	yearKey := now.Format("2006")
-	yearName := yearKey
 
-	yearProjMap := make(map[string]time.Duration)
-	var yearWork time.Duration
-	yearDays := 0
-	monthlyWork := make(map[string]time.Duration) // "2006-01" → duration
+	projMap := make(map[string]time.Duration)
+	monthlyWork := make(map[string]time.Duration)
+	var totalWork time.Duration
+	days := 0
 	for _, r := range m.records {
 		if !strings.HasPrefix(r.Date, yearKey) {
 			continue
 		}
-		yearDays++
-		mk := r.Date[:7] // "YYYY-MM"
+		days++
+		mk := r.Date[:7]
 		for _, e := range r.Entries {
 			if e.IsBreak {
 				continue
@@ -1357,53 +1408,64 @@ func (m Model) renderStatsContent() string {
 			if proj == "" {
 				proj = "Other"
 			}
-			yearProjMap[proj] += e.Duration()
-			yearWork += e.Duration()
+			projMap[proj] += e.Duration()
+			totalWork += e.Duration()
 			monthlyWork[mk] += e.Duration()
 		}
 	}
 
+	var b strings.Builder
+	b.WriteString("\n")
 	b.WriteString("  " + dayViewSectionStyle.Render("This Year") +
-		dayViewMutedStyle.Render("  "+yearName) +
+		dayViewMutedStyle.Render("  "+yearKey) +
 		"    " +
-		statsLabelStyle.Render("Total: ") + statsValueStyle.Render(journal.FormatDuration(yearWork)) +
-		statsLabelStyle.Render(fmt.Sprintf("  ·  %d days", yearDays)) +
+		statsLabelStyle.Render("Total: ") + statsValueStyle.Render(journal.FormatDuration(totalWork)) +
+		statsLabelStyle.Render(fmt.Sprintf("  ·  %d days", days)) +
 		"\n")
 	b.WriteString("  " + div + "\n")
 
-	// Monthly bar chart for current year.
-	if yearWork > 0 {
-		// Find max monthly work for scaling.
-		var maxMonthWork time.Duration
-		for _, d := range monthlyWork {
-			if d > maxMonthWork {
-				maxMonthWork = d
-			}
-		}
-		const monthBarW = 16
-		for mo := 1; mo <= int(now.Month()); mo++ {
-			mk := fmt.Sprintf("%s-%02d", yearKey, mo)
-			d := monthlyWork[mk]
-			moLabel := time.Month(mo).String()[:3]
-			pct := float64(d) / float64(maxMonthWork)
-			filledCount := int(pct * monthBarW)
-			bar := statsBlockFilledStyle.Render(strings.Repeat("█", filledCount)) +
-				statsBlockEmptyStyle.Render(strings.Repeat("░", monthBarW-filledCount))
-			durStr := fmt.Sprintf("%-8s", journal.FormatDuration(d))
-			b.WriteString("  " + statsLabelStyle.Render(moLabel+"  ") +
-				bar + "  " +
-				statsValueStyle.Render(durStr) + "\n")
-		}
-		b.WriteString("\n")
-		b.WriteString(renderProjectBars(yearProjMap, yearWork))
-	} else {
+	if totalWork == 0 {
 		b.WriteString("  " + dayViewMutedStyle.Render("No work entries this year") + "\n")
+		return b.String()
+	}
+
+	// Month-by-month bar chart (relative to busiest month).
+	var maxMonthWork time.Duration
+	for _, d := range monthlyWork {
+		if d > maxMonthWork {
+			maxMonthWork = d
+		}
+	}
+	const monthBarW = 16
+	for mo := 1; mo <= int(now.Month()); mo++ {
+		mk := fmt.Sprintf("%s-%02d", yearKey, mo)
+		d := monthlyWork[mk]
+		moLabel := time.Month(mo).String()[:3]
+		pct := float64(d) / float64(maxMonthWork)
+		filledCount := int(pct * monthBarW)
+		bar := statsBlockFilledStyle.Render(strings.Repeat("█", filledCount)) +
+			statsBlockEmptyStyle.Render(strings.Repeat("░", monthBarW-filledCount))
+		durStr := fmt.Sprintf("%-*s", statsDurFieldW, journal.FormatDuration(d))
+		b.WriteString("  " + statsLabelStyle.Render(moLabel+"  ") +
+			bar + "  " +
+			statsValueStyle.Render(durStr) + "\n")
 	}
 	b.WriteString("\n")
+	b.WriteString("  " + div + "\n")
+	b.WriteString(renderProjectBars(projMap, totalWork))
+	return b.String()
+}
 
-	// ── All-time top projects ─────────────────────────────────────────────────
-	allProjMap := make(map[string]time.Duration)
-	var allWork time.Duration
+// renderStatsAllTime renders the All-time tab.
+func (m Model) renderStatsAllTime() string {
+	innerW := m.width - 2
+	if innerW < 40 {
+		innerW = 40
+	}
+	div := dayViewDividerStyle.Render(strings.Repeat("─", innerW))
+
+	projMap := make(map[string]time.Duration)
+	var totalWork time.Duration
 	for _, r := range m.records {
 		for _, e := range r.Entries {
 			if e.IsBreak {
@@ -1413,28 +1475,28 @@ func (m Model) renderStatsContent() string {
 			if proj == "" {
 				proj = "Other"
 			}
-			allProjMap[proj] += e.Duration()
-			allWork += e.Duration()
+			projMap[proj] += e.Duration()
+			totalWork += e.Duration()
 		}
 	}
 
+	var b strings.Builder
+	b.WriteString("\n")
 	b.WriteString("  " + dayViewSectionStyle.Render("All-time Top Projects") +
 		"    " +
-		statsLabelStyle.Render("Total: ") + statsValueStyle.Render(journal.FormatDuration(allWork)) +
+		statsLabelStyle.Render("Total: ") + statsValueStyle.Render(journal.FormatDuration(totalWork)) +
 		"\n")
 	b.WriteString("  " + div + "\n")
-	if len(allProjMap) == 0 {
+	if len(projMap) == 0 {
 		b.WriteString("  " + dayViewMutedStyle.Render("No work entries") + "\n")
 	} else {
-		b.WriteString(renderProjectBars(allProjMap, allWork))
+		b.WriteString(renderProjectBars(projMap, totalWork))
 	}
-	b.WriteString("\n")
-
 	return b.String()
 }
 
 // renderProjectBars renders a sorted list of project durations with inline bar
-// charts relative to the total work duration.
+// charts relative to the total work duration. All bars start at the same column.
 func renderProjectBars(projMap map[string]time.Duration, total time.Duration) string {
 	type ps struct {
 		name string
@@ -1447,6 +1509,14 @@ func renderProjectBars(projMap map[string]time.Duration, total time.Duration) st
 	// Sort descending by duration.
 	sort.Slice(projects, func(i, j int) bool { return projects[i].dur > projects[j].dur })
 
+	// Find the widest rendered project name so all bars start at the same column.
+	maxNameW := 0
+	for _, p := range projects {
+		if w := lipgloss.Width(p.name); w > maxNameW {
+			maxNameW = w
+		}
+	}
+
 	const barW = 20
 	var sb strings.Builder
 	for _, p := range projects {
@@ -1457,10 +1527,12 @@ func renderProjectBars(projMap map[string]time.Duration, total time.Duration) st
 		filledCount := int(pct * barW)
 		bar := statsBlockFilledStyle.Render(strings.Repeat("█", filledCount)) +
 			statsBlockEmptyStyle.Render(strings.Repeat("░", barW-filledCount))
-		durStr := fmt.Sprintf("%-8s", journal.FormatDuration(p.dur))
+		durStr := fmt.Sprintf("%-*s", statsDurFieldW, journal.FormatDuration(p.dur))
 		pctStr := fmt.Sprintf("%3.0f%%", pct*100)
+		// Width() on the style pads the name to a uniform column width.
+		nameStr := dayViewSectionStyle.Width(maxNameW).Render(p.name)
 		sb.WriteString("  " + dayViewTotalsStyle.Render(durStr) +
-			"  " + dayViewSectionStyle.Render(p.name) +
+			"  " + nameStr +
 			"  " + bar +
 			"  " + statsLabelStyle.Render(pctStr) + "\n")
 	}

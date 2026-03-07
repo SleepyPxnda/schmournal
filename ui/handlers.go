@@ -579,9 +579,24 @@ func (m Model) handleClockFormKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) handleStatsKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	const numStatsTabs = 4
 	switch msg.String() {
 	case "esc", m.cfg.Keybinds.List.Quit:
 		m.state = stateList
+		return m, nil
+	case "left":
+		if m.statsTab > 0 {
+			m.statsTab--
+			m.viewport.GotoTop()
+			m.viewport.SetContent(m.renderStatsTabContent())
+		}
+		return m, nil
+	case "right":
+		if m.statsTab < numStatsTabs-1 {
+			m.statsTab++
+			m.viewport.GotoTop()
+			m.viewport.SetContent(m.renderStatsTabContent())
+		}
 		return m, nil
 	}
 	var cmd tea.Cmd

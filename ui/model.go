@@ -126,6 +126,8 @@ type Model struct {
 	weekGoals      journal.WeeklyGoals
 	weekHoursInput textinput.Model
 
+	statsTab int // 0=Overview 1=Monthly 2=Yearly 3=All-time
+
 	workspaceIdx int // currently highlighted row in the workspace picker
 
 	// ── Clock (Clocking tab) ──────────────────────────────────────────────────
