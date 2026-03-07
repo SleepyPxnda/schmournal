@@ -147,6 +147,14 @@ func (m Model) openWeekView() (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+func (m Model) openStatsView() (tea.Model, tea.Cmd) {
+	m.state = stateStats
+	m.statsTab = 0
+	m.viewport.GotoTop()
+	m.viewport.SetContent(m.renderStatsTabContent())
+	return m, nil
+}
+
 func (m Model) openDayViewToday() (tea.Model, tea.Cmd) {
 	path, err := journal.TodayPath()
 	if err != nil {

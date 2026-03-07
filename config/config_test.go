@@ -42,6 +42,7 @@ func TestDefaultKeybindsNotEmpty(t *testing.T) {
 	checkNotEmpty("list.add_break", lk.AddBreak)
 	checkNotEmpty("list.export", lk.Export)
 	checkNotEmpty("list.week_view", lk.WeekView)
+	checkNotEmpty("list.stats_view", lk.StatsView)
 
 	dk := cfg.Keybinds.Day
 	checkNotEmpty("day.add_work", dk.AddWork)

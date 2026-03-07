@@ -32,6 +32,7 @@ const (
 	stateWeekView
 	stateWeekHoursInput
 	stateWorkspacePicker
+	stateStats
 )
 
 const (
@@ -124,6 +125,8 @@ type Model struct {
 	weekOffset     int // 0 = current week, -1 = last week, etc.
 	weekGoals      journal.WeeklyGoals
 	weekHoursInput textinput.Model
+
+	statsTab int // 0=Overview 1=Monthly 2=Yearly 3=All-time
 
 	workspaceIdx int // currently highlighted row in the workspace picker
 
@@ -346,6 +349,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.handleWeekHoursInputKey(msg)
 		case stateWorkspacePicker:
 			return m.handleWorkspacePickerKey(msg)
+		case stateStats:
+			return m.handleStatsKey(msg)
 		}
 	}
 
@@ -355,7 +360,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		var cmd tea.Cmd
 		m.list, cmd = m.list.Update(msg)
 		return m, cmd
-	case stateDayView, stateWeekView:
+	case stateDayView, stateWeekView, stateStats:
 		var cmd tea.Cmd
 		m.viewport, cmd = m.viewport.Update(msg)
 		return m, cmd
