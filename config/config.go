@@ -400,7 +400,7 @@ func (cfg *Config) validate() error {
 		for i, d := range cfg.WorkDays {
 			lower := strings.ToLower(d)
 			if !validDays[lower] {
-				return fmt.Errorf("config: invalid work_day %q (must be a weekday name, e.g. \"monday\")", d)
+				return fmt.Errorf("config: invalid work_day %q (must be a day-of-the-week name, e.g. \"monday\")", d)
 			}
 			cfg.WorkDays[i] = lower
 		}
