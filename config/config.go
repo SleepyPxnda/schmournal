@@ -270,7 +270,7 @@ weekly_hours_goal = %g
 
 # Days of the week that count as working days.
 # Non-working days are skipped when calculating your streak (so a weekend
-# never breaks it) and are highlighted in the week overview.
+# never breaks it) and are highlighted in the week bar and the weekly view.
 # Logging on a non-working day is always allowed.
 # Valid values (case-insensitive): monday, tuesday, wednesday, thursday,
 #   friday, saturday, sunday

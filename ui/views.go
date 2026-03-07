@@ -978,16 +978,21 @@ func (m Model) renderWeekContent() string {
 
 		// Day header line.
 		dayLabel := d.Format("Mon  02 Jan 2006")
+		isWorkDay := m.cfg.IsWorkDay(d)
+		dayLabelStyle := dayViewSectionStyle
+		if !isWorkDay {
+			dayLabelStyle = weekNonWorkDayStyle
+		}
 		var headerLine string
 		if hasRec && (work+breaks) > 0 {
-			headerLine = dayViewSectionStyle.Render(dayLabel) +
+			headerLine = dayLabelStyle.Render(dayLabel) +
 				dayViewMutedStyle.Render("  ·  ") +
 				dayViewValueStyle.Render(journal.FormatDuration(work)+" work")
 			if breaks > 0 {
 				headerLine += dayViewMutedStyle.Render("  ·  " + journal.FormatDuration(breaks) + " breaks")
 			}
 		} else {
-			headerLine = dayViewSectionStyle.Render(dayLabel) +
+			headerLine = dayLabelStyle.Render(dayLabel) +
 				dayViewMutedStyle.Render("  ·  no entries")
 		}
 		b.WriteString(headerLine + "\n")

@@ -164,8 +164,9 @@ var (
 
 // ── Day view styles ───────────────────────────────────────────────────────────
 var (
-	dayViewSectionStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(cLavender)).Bold(true)
-	dayViewDividerStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(cSurface2))
+	dayViewSectionStyle      = lipgloss.NewStyle().Foreground(lipgloss.Color(cLavender)).Bold(true)
+	weekNonWorkDayStyle      = lipgloss.NewStyle().Foreground(lipgloss.Color(cMaroon)).Bold(true)
+	dayViewDividerStyle      = lipgloss.NewStyle().Foreground(lipgloss.Color(cSurface2))
 	dayViewLabelStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color(cSubtext1))
 	dayViewValueStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color(cText)).Bold(true)
 	dayViewMutedStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color(cOverlay1))
