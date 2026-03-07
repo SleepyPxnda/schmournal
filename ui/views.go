@@ -787,6 +787,7 @@ func (m Model) viewTimeInput() string {
 	header := m.renderHeader("📔  Schmournal", badge)
 	footer := m.renderFooter([][2]string{
 		{"enter", "confirm"},
+		{"r", "reset"},
 		{"esc", "cancel"},
 	})
 

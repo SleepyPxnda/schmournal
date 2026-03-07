@@ -408,6 +408,21 @@ func (m Model) handleTimeInputKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.state = stateDayView
 		return m, nil
 	}
+	switch msg.String() {
+	case "r":
+		if m.timeInputStart {
+			m.dayRecord.StartTime = ""
+		} else {
+			m.dayRecord.EndTime = ""
+		}
+		m.state = stateDayView
+		m.viewport.SetContent(m.renderDayContent())
+		label := "✓ End time cleared"
+		if m.timeInputStart {
+			label = "✓ Start time cleared"
+		}
+		return m, m.saveDayCmd(label)
+	}
 	var cmd tea.Cmd
 	m.timeInput, cmd = m.timeInput.Update(msg)
 	return m, cmd

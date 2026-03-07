@@ -222,7 +222,15 @@ func (m Model) openNotesEditor() (tea.Model, tea.Cmd) {
 
 func (m Model) openTimeInput(isStart bool) (tea.Model, tea.Cmd) {
 	m.timeInputStart = isStart
-	m.timeInput.SetValue(time.Now().Format("15:04"))
+	existing := m.dayRecord.StartTime
+	if !isStart {
+		existing = m.dayRecord.EndTime
+	}
+	if existing != "" {
+		m.timeInput.SetValue(existing)
+	} else {
+		m.timeInput.SetValue(time.Now().Format("15:04"))
+	}
 	m.timeInput.CursorEnd()
 	m.state = stateTimeInput
 	return m, m.timeInput.Focus()

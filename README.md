@@ -114,6 +114,7 @@ Duration examples: `1h 30m` · `45m` · `2h` · `1.5h` · `90` (bare number = mi
 | Key | Action |
 |-----|--------|
 | `enter` | Confirm time |
+| `r` | Reset / clear the time |
 | `esc` | Cancel |
 
 Input format: `HH:MM` (e.g. `09:00`, `14:30`)
