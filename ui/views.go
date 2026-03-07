@@ -491,7 +491,7 @@ func (m Model) renderStats() string {
 			block = statsBlockFilledStyle.Render(filled)
 		case d.After(now):
 			block = statsBlockFutureStyle.Render(empty)
-		case !m.cfg.IsWorkDay(d):
+		case !m.effectiveIsWorkDay(d):
 			block = statsBlockNonWorkStyle.Render(empty)
 		default:
 			block = statsBlockEmptyStyle.Render(empty)
@@ -522,7 +522,7 @@ func (m Model) renderStats() string {
 		dateStr := check.Format("2006-01-02")
 		if dated[dateStr] {
 			streak++
-		} else if m.cfg.IsWorkDay(check) {
+		} else if m.effectiveIsWorkDay(check) {
 			// A working day with no entry breaks the streak.
 			break
 		}
@@ -978,7 +978,7 @@ func (m Model) renderWeekContent() string {
 
 		// Day header line.
 		dayLabel := d.Format("Mon  02 Jan 2006")
-		isWorkDay := m.cfg.IsWorkDay(d)
+		isWorkDay := m.effectiveIsWorkDay(d)
 		dayLabelStyle := dayViewSectionStyle
 		if !isWorkDay {
 			dayLabelStyle = weekNonWorkDayStyle

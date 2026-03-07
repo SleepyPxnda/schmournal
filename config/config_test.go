@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 )
@@ -242,6 +243,109 @@ func TestValidateWorkspaceValidConfigOK(t *testing.T) {
 	}
 	if err := cfg.validate(); err != nil {
 		t.Errorf("validate() unexpected error for valid workspaces: %v", err)
+	}
+}
+
+func TestValidateWorkspaceInvalidWorkDayReturnsError(t *testing.T) {
+	cfg := Default()
+	cfg.Workspaces = []WorkspaceConfig{
+		{Name: "Work", StoragePath: "~/.journal/work", WorkDays: []string{"monday", "funday"}},
+	}
+	if err := cfg.validate(); err == nil {
+		t.Error("validate() expected error for invalid workspace work_day, got nil")
+	}
+}
+
+func TestValidateWorkspaceWorkDaysNormalisedToLowercase(t *testing.T) {
+	cfg := Default()
+	cfg.Workspaces = []WorkspaceConfig{
+		{Name: "Work", StoragePath: "~/.journal/work", WorkDays: []string{"Monday", "TUESDAY"}},
+	}
+	if err := cfg.validate(); err != nil {
+		t.Fatalf("validate() error: %v", err)
+	}
+	for _, d := range cfg.Workspaces[0].WorkDays {
+		for _, r := range d {
+			if r >= 'A' && r <= 'Z' {
+				t.Errorf("workspace WorkDays entry %q still has uppercase after validate()", d)
+			}
+		}
+	}
+}
+
+func TestValidateWorkspaceEmptyWorkDaysFallsBackToTopLevel(t *testing.T) {
+	cfg := Default()
+	cfg.Workspaces = []WorkspaceConfig{
+		{Name: "Work", StoragePath: "~/.journal/work"},
+	}
+	if err := cfg.validate(); err != nil {
+		t.Fatalf("validate() error: %v", err)
+	}
+	// Empty workspace WorkDays is valid — it means "inherit from top-level config".
+	if len(cfg.Workspaces[0].WorkDays) != 0 {
+		t.Errorf("validate() should leave empty workspace WorkDays untouched, got %v", cfg.Workspaces[0].WorkDays)
+	}
+}
+
+func TestMigrateConfigFillsWorkspaceWorkDays(t *testing.T) {
+	home := withTempHome(t)
+	cfgPath := filepath.Join(home, ".config", "schmournal.config")
+
+	// Write a config that has a workspace but no work_days for it.
+	raw := `storage_path = "~/.journal"
+weekly_hours_goal = 40.0
+work_days = ["monday", "tuesday", "wednesday", "thursday", "friday"]
+
+[[workspaces]]
+name         = "Work"
+storage_path = "~/.journal/work"
+`
+	if err := os.MkdirAll(filepath.Dir(cfgPath), 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	if err := os.WriteFile(cfgPath, []byte(raw), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error: %v", err)
+	}
+
+	// After migration the workspace should have work_days = all 7 days.
+	if len(cfg.Workspaces) == 0 {
+		t.Fatal("Load() lost workspace definitions during migration")
+	}
+	ws := cfg.Workspaces[0]
+	if len(ws.WorkDays) == 0 {
+		t.Error("migrated workspace has empty WorkDays, want all 7 days")
+	}
+	allDays := []string{"monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"}
+	if len(ws.WorkDays) != len(allDays) {
+		t.Errorf("migrated workspace WorkDays = %v, want %v", ws.WorkDays, allDays)
+	}
+}
+
+func TestGenerateWorkspacesTOMLEmpty(t *testing.T) {
+	if got := generateWorkspacesTOML(nil); got != "" {
+		t.Errorf("generateWorkspacesTOML(nil) = %q, want empty string", got)
+	}
+}
+
+func TestGenerateWorkspacesTOMLWithWorkDays(t *testing.T) {
+	ws := []WorkspaceConfig{
+		{
+			Name:        "Work",
+			StoragePath: "~/.journal/work",
+			WorkDays:    []string{"monday", "tuesday"},
+		},
+	}
+	got := generateWorkspacesTOML(ws)
+	if !strings.Contains(got, `[[workspaces]]`) {
+		t.Error("generateWorkspacesTOML missing [[workspaces]] header")
+	}
+	if !strings.Contains(got, `"monday"`) {
+		t.Error("generateWorkspacesTOML missing work_days monday")
 	}
 }
 

@@ -2,6 +2,7 @@ package ui
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -21,7 +22,22 @@ func (m Model) weekKey() string {
 	return monday.Format("2006-01-02")
 }
 
-// weeklyGoalFor returns the effective hours goal for the week identified by
+// effectiveIsWorkDay reports whether t is a work day for the active workspace.
+// When the active workspace has its own work_days override, that list is used;
+// otherwise the top-level config's work_days is consulted.
+func (m Model) effectiveIsWorkDay(t time.Time) bool {
+	if ws := m.activeWorkspaceConfig(); ws != nil && len(ws.WorkDays) > 0 {
+		wd := strings.ToLower(t.Weekday().String())
+		for _, d := range ws.WorkDays {
+			if d == wd {
+				return true
+			}
+		}
+		return false
+	}
+	return m.cfg.IsWorkDay(t)
+}
+
 // mondayKey ("YYYY-MM-DD" of the week's Monday): per-week override if set,
 // otherwise the workspace-specific goal (or the global config default).
 func (m Model) weeklyGoalFor(mondayKey string) float64 {

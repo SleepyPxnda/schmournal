@@ -295,7 +295,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		for i, r := range m.records {
 			isWork := true
 			if t, err := r.ParseDate(); err == nil {
-				isWork = m.cfg.IsWorkDay(t)
+				isWork = m.effectiveIsWorkDay(t)
 			}
 			items[i] = dayListItem{rec: r, isWorkDay: isWork}
 		}
