@@ -1174,12 +1174,10 @@ func (m Model) renderStatsContent() string {
 	}
 	div := dayViewDividerStyle.Render(strings.Repeat("─", innerW))
 
-	// Build date set and date→record map.
+	// Build a set of dates for which records exist.
 	dated := make(map[string]bool, len(m.records))
-	recByDate := make(map[string]journal.DayRecord, len(m.records))
 	for _, r := range m.records {
 		dated[r.Date] = true
-		recByDate[r.Date] = r
 	}
 
 	var b strings.Builder
