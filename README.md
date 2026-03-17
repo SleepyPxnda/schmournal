@@ -38,8 +38,6 @@ Exports are written to `~/.journal/exports/export-YYYY-MM-DD.md`.
 | `c` | Open or create an entry for any date |
 | `enter` | View selected day |
 | `d` | Delete selected day (with confirmation) |
-| `w` | Log a work item for today |
-| `b` | Log a break for today |
 | `x` | Export the selected day's work log |
 | `v` | Weekly summary view |
 | `p` | Open the workspace picker |

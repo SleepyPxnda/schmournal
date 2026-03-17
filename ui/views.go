@@ -612,8 +612,6 @@ func (m Model) viewList() string {
 	footerKeys = append(footerKeys,
 		[2]string{kb.OpenToday, "open today"},
 		[2]string{kb.OpenDate, "open date"},
-		[2]string{kb.AddWork, "log work"},
-		[2]string{kb.AddBreak, "log break"},
 		[2]string{"enter", "view"},
 		[2]string{kb.WeekView, "week"},
 		[2]string{kb.StatsView, "stats"},
