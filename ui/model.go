@@ -161,9 +161,11 @@ func (d workDayDelegate) Render(w io.Writer, m list.Model, index int, item list.
 	// Take an explicit local copy of the inner delegate so that per-item style
 	// changes are confined to this call and never leak to subsequent items.
 	inner := d.DefaultDelegate
-	if di, ok := item.(dayListItem); ok && !di.isWorkDay && index != m.Index() && m.FilterState() == list.Unfiltered {
+	if di, ok := item.(dayListItem); ok && !di.isWorkDay && m.FilterState() == list.Unfiltered {
 		inner.Styles.NormalTitle = listNonWorkDayTitle
 		inner.Styles.NormalDesc = listNonWorkDayDesc
+		inner.Styles.SelectedTitle = listNonWorkDaySelectedTitle
+		inner.Styles.SelectedDesc = listNonWorkDaySelectedDesc
 	}
 	inner.Render(w, m, index, item)
 }
