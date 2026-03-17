@@ -11,6 +11,10 @@ import (
 	"github.com/sleepypxnda/schmournal/journal"
 )
 
+// maxStreakDays is the upper bound on iterations when calculating the current
+// streak. It prevents an infinite loop when no records exist.
+const maxStreakDays = 500
+
 func (m Model) View() string {
 	if !m.ready {
 		return "\n  " + lipgloss.NewStyle().Foreground(lipgloss.Color(cMauve)).Render("Loading…")
@@ -520,7 +524,7 @@ func (m Model) renderStats() string {
 	// A hard cap of 500 iterations prevents an infinite loop if the user has
 	// no records at all.
 	streak := 0
-	for i := 0; i < 500; i++ {
+	for i := 0; i < maxStreakDays; i++ {
 		check := now.AddDate(0, 0, -i)
 		dateStr := check.Format("2006-01-02")
 		if dated[dateStr] {
@@ -1237,13 +1241,20 @@ func (m Model) renderStatsOverview() string {
 	b.WriteString("  " + dayViewSectionStyle.Render("Streaks") + "\n")
 	b.WriteString("  " + div + "\n")
 
-	// Current streak: consecutive days going back from today.
+	// Current streak: consecutive working days going back from today.
+	// Non-working days are skipped so that a weekend never breaks the count.
+	// A hard cap of 500 iterations prevents an infinite loop when no records exist.
 	currentStreak := 0
-	for check := now; ; check = check.AddDate(0, 0, -1) {
-		if !dated[check.Format("2006-01-02")] {
+	for i := 0; i < maxStreakDays; i++ {
+		check := now.AddDate(0, 0, -i)
+		dateStr := check.Format("2006-01-02")
+		if dated[dateStr] {
+			currentStreak++
+		} else if m.effectiveIsWorkDay(check) {
+			// A working day with no entry breaks the streak.
 			break
 		}
-		currentStreak++
+		// Non-working day without an entry: continue (streak passes through).
 	}
 
 	// Longest streak: scan all dated records.
@@ -1258,7 +1269,20 @@ func (m Model) renderStatsOverview() string {
 		sort.Slice(days, func(i, j int) bool { return days[i].Before(days[j]) })
 		run := 1
 		for i := 1; i < len(days); i++ {
-			if days[i-1].AddDate(0, 0, 1).Equal(days[i]) {
+			// Fast path: directly adjacent days are always consecutive.
+			// Otherwise check that every day in the gap is a non-working day
+			// (e.g. Fri → Mon across a weekend).
+			gapOK := days[i-1].AddDate(0, 0, 1).Equal(days[i])
+			if !gapOK {
+				gapOK = true
+				for d := days[i-1].AddDate(0, 0, 1); d.Before(days[i]); d = d.AddDate(0, 0, 1) {
+					if m.effectiveIsWorkDay(d) {
+						gapOK = false
+						break
+					}
+				}
+			}
+			if gapOK {
 				run++
 				if run > longestStreak {
 					longestStreak = run
@@ -1332,6 +1356,8 @@ func (m Model) renderStatsOverview() string {
 				block = statsBlockFilledStyle.Render(filled)
 			case d.After(now):
 				block = statsBlockFutureStyle.Render(empty)
+			case !m.effectiveIsWorkDay(d):
+				block = statsBlockNonWorkStyle.Render(empty)
 			default:
 				block = statsBlockEmptyStyle.Render(empty)
 			}
