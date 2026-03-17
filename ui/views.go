@@ -1110,8 +1110,9 @@ func (m Model) renderWeekContent() string {
 			pct = 1
 		}
 		goalLabel := fmt.Sprintf(" / %gh  ", goalHours)
-		// Annotate if this week uses a custom override.
-		if _, hasOverride := m.weekGoals[m.weekKey()]; hasOverride {
+		// Annotate if this week uses a custom override (value must be > 0,
+		// matching the condition in weeklyGoalFor).
+		if h, hasOverride := m.weekGoals[m.weekKey()]; hasOverride && h > 0 {
 			goalLabel = fmt.Sprintf(" / %gh (custom)  ", goalHours)
 		}
 		const barW = 24
