@@ -559,21 +559,27 @@ func (m Model) renderStats() string {
 	// Use the per-week override (if any) for the current week, else global default.
 	currentWeekKey := monday.Format("2006-01-02")
 	goalHours := m.weeklyGoalFor(currentWeekKey)
-	weeklyGoal := time.Duration(goalHours * float64(time.Hour))
-	pct := float64(weekWork) / float64(weeklyGoal)
-	if pct > 1 {
-		pct = 1
+	var weekHoursStr string
+	if goalHours == 0 {
+		weekHoursStr = "  " + statsLabelStyle.Render("Week: ") +
+			statsValueStyle.Render(journal.FormatDuration(weekWork))
+	} else {
+		weeklyGoal := time.Duration(goalHours * float64(time.Hour))
+		pct := float64(weekWork) / float64(weeklyGoal)
+		if pct > 1 {
+			pct = 1
+		}
+		goalLabel := fmt.Sprintf(" / %gh  ", goalHours)
+		const progressBarWidth = 20
+		filledCount := int(pct * progressBarWidth)
+		progressBar := statsBlockFilledStyle.Render(strings.Repeat("█", filledCount)) +
+			statsBlockEmptyStyle.Render(strings.Repeat("░", progressBarWidth-filledCount))
+		weekHoursStr = "  " + statsLabelStyle.Render("Week: ") +
+			statsValueStyle.Render(journal.FormatDuration(weekWork)) +
+			statsLabelStyle.Render(goalLabel) +
+			progressBar +
+			statsLabelStyle.Render(fmt.Sprintf("  %.0f%%", pct*100))
 	}
-	goalLabel := fmt.Sprintf(" / %gh  ", goalHours)
-	const progressBarWidth = 20
-	filledCount := int(pct * progressBarWidth)
-	progressBar := statsBlockFilledStyle.Render(strings.Repeat("█", filledCount)) +
-		statsBlockEmptyStyle.Render(strings.Repeat("░", progressBarWidth-filledCount))
-	weekHoursStr := "  " + statsLabelStyle.Render("Week: ") +
-		statsValueStyle.Render(journal.FormatDuration(weekWork)) +
-		statsLabelStyle.Render(goalLabel) +
-		progressBar +
-		statsLabelStyle.Render(fmt.Sprintf("  %.0f%%", pct*100))
 
 	return line + "\n" + weekHoursStr + "\n" + sep
 }
@@ -1093,25 +1099,31 @@ func (m Model) renderWeekContent() string {
 	// Week total + progress bar.
 	b.WriteString("\n" + div + "\n")
 	goalHours := m.weeklyGoal()
-	weeklyGoal := time.Duration(goalHours * float64(time.Hour))
-	pct := float64(weekWork) / float64(weeklyGoal)
-	if pct > 1 {
-		pct = 1
+	var totalLine string
+	if goalHours == 0 {
+		totalLine = "  " + dayViewLabelStyle.Render("Week total: ") +
+			dayViewValueStyle.Render(journal.FormatDuration(weekWork))
+	} else {
+		weeklyGoal := time.Duration(goalHours * float64(time.Hour))
+		pct := float64(weekWork) / float64(weeklyGoal)
+		if pct > 1 {
+			pct = 1
+		}
+		goalLabel := fmt.Sprintf(" / %gh  ", goalHours)
+		// Annotate if this week uses a custom override.
+		if _, hasOverride := m.weekGoals[m.weekKey()]; hasOverride {
+			goalLabel = fmt.Sprintf(" / %gh (custom)  ", goalHours)
+		}
+		const barW = 24
+		filledCount := int(pct * barW)
+		bar := statsBlockFilledStyle.Render(strings.Repeat("█", filledCount)) +
+			statsBlockEmptyStyle.Render(strings.Repeat("░", barW-filledCount))
+		totalLine = "  " + dayViewLabelStyle.Render("Week total: ") +
+			dayViewValueStyle.Render(journal.FormatDuration(weekWork)) +
+			dayViewMutedStyle.Render(goalLabel) +
+			bar +
+			dayViewMutedStyle.Render(fmt.Sprintf("  %.0f%%", pct*100))
 	}
-	goalLabel := fmt.Sprintf(" / %gh  ", goalHours)
-	// Annotate if this week uses a custom override.
-	if _, hasOverride := m.weekGoals[m.weekKey()]; hasOverride {
-		goalLabel = fmt.Sprintf(" / %gh (custom)  ", goalHours)
-	}
-	const barW = 24
-	filledCount := int(pct * barW)
-	bar := statsBlockFilledStyle.Render(strings.Repeat("█", filledCount)) +
-		statsBlockEmptyStyle.Render(strings.Repeat("░", barW-filledCount))
-	totalLine := "  " + dayViewLabelStyle.Render("Week total: ") +
-		dayViewValueStyle.Render(journal.FormatDuration(weekWork)) +
-		dayViewMutedStyle.Render(goalLabel) +
-		bar +
-		dayViewMutedStyle.Render(fmt.Sprintf("  %.0f%%", pct*100))
 	b.WriteString(totalLine + "\n")
 
 	return b.String()
