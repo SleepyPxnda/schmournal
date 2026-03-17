@@ -11,9 +11,19 @@ import (
 	"github.com/sleepypxnda/schmournal/journal"
 )
 
-// maxStreakDays is the upper bound on iterations when calculating the current
-// streak. It prevents an infinite loop when no records exist.
-const maxStreakDays = 500
+// streakIterLimit returns the maximum number of backward iterations needed
+// when scanning for a streak. It is the number of calendar days from the
+// oldest record's date to today (inclusive), so the loop is always bounded
+// by real data rather than an arbitrary constant.
+func streakIterLimit(records []journal.DayRecord, today time.Time) int {
+	oldest := today
+	for _, r := range records {
+		if t, err := r.ParseDate(); err == nil && t.Before(oldest) {
+			oldest = t
+		}
+	}
+	return int(today.Sub(oldest).Hours()/24) + 1
+}
 
 func (m Model) View() string {
 	if !m.ready {
@@ -521,10 +531,10 @@ func (m Model) renderStats() string {
 	// Streak: consecutive working days going back from today.
 	// Non-working days are skipped — they neither add to the count nor break
 	// the streak — so a weekend or public holiday never resets the counter.
-	// A hard cap of 500 iterations prevents an infinite loop if the user has
-	// no records at all.
+	// The iteration limit is derived from the oldest record so the loop is
+	// always bounded by real data and never underestimates long streaks.
 	streak := 0
-	for i := 0; i < maxStreakDays; i++ {
+	for i := 0; i < streakIterLimit(m.records, now); i++ {
 		check := now.AddDate(0, 0, -i)
 		dateStr := check.Format("2006-01-02")
 		if dated[dateStr] {
@@ -1155,7 +1165,7 @@ func (m Model) viewWorkspacePicker() string {
 		}
 		line := cursor + label
 		if i == m.workspaceIdx {
-		line = selectedEntryStyle.Width(innerW).Render(line)
+			line = selectedEntryStyle.Width(innerW).Render(line)
 		} else {
 			line = normalEntryStyle.Render(line)
 		}
@@ -1243,9 +1253,10 @@ func (m Model) renderStatsOverview() string {
 
 	// Current streak: consecutive working days going back from today.
 	// Non-working days are skipped so that a weekend never breaks the count.
-	// A hard cap of 500 iterations prevents an infinite loop when no records exist.
+	// The iteration limit is derived from the oldest record so the loop is
+	// always bounded by real data and never underestimates long streaks.
 	currentStreak := 0
-	for i := 0; i < maxStreakDays; i++ {
+	for i := 0; i < streakIterLimit(m.records, now); i++ {
 		check := now.AddDate(0, 0, -i)
 		dateStr := check.Format("2006-01-02")
 		if dated[dateStr] {
@@ -1267,35 +1278,37 @@ func (m Model) renderStatsOverview() string {
 			}
 		}
 		sort.Slice(days, func(i, j int) bool { return days[i].Before(days[j]) })
-		run := 1
-		for i := 1; i < len(days); i++ {
-			// Fast path: directly adjacent days are always consecutive.
-			// Otherwise check that every day in the gap is a non-working day
-			// (e.g. Fri → Mon across a weekend).
-			gapOK := days[i-1].AddDate(0, 0, 1).Equal(days[i])
-			if !gapOK {
-				gapOK = true
-				for d := days[i-1].AddDate(0, 0, 1); d.Before(days[i]); d = d.AddDate(0, 0, 1) {
-					if m.effectiveIsWorkDay(d) {
-						gapOK = false
-						break
+		if len(days) > 0 {
+			run := 1
+			for i := 1; i < len(days); i++ {
+				// Fast path: directly adjacent days are always consecutive.
+				// Otherwise check that every day in the gap is a non-working day
+				// (e.g. Fri → Mon across a weekend).
+				gapOK := days[i-1].AddDate(0, 0, 1).Equal(days[i])
+				if !gapOK {
+					gapOK = true
+					for d := days[i-1].AddDate(0, 0, 1); d.Before(days[i]); d = d.AddDate(0, 0, 1) {
+						if m.effectiveIsWorkDay(d) {
+							gapOK = false
+							break
+						}
 					}
 				}
-			}
-			if gapOK {
-				run++
-				if run > longestStreak {
-					longestStreak = run
+				if gapOK {
+					run++
+					if run > longestStreak {
+						longestStreak = run
+					}
+				} else {
+					if run > longestStreak {
+						longestStreak = run
+					}
+					run = 1
 				}
-			} else {
-				if run > longestStreak {
-					longestStreak = run
-				}
-				run = 1
 			}
-		}
-		if run > longestStreak {
-			longestStreak = run
+			if run > longestStreak {
+				longestStreak = run
+			}
 		}
 	}
 
