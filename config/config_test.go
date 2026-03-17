@@ -40,8 +40,6 @@ func TestDefaultKeybindsNotEmpty(t *testing.T) {
 	checkNotEmpty("list.open_today", lk.OpenToday)
 	checkNotEmpty("list.open_date", lk.OpenDate)
 	checkNotEmpty("list.delete", lk.Delete)
-	checkNotEmpty("list.add_work", lk.AddWork)
-	checkNotEmpty("list.add_break", lk.AddBreak)
 	checkNotEmpty("list.export", lk.Export)
 	checkNotEmpty("list.week_view", lk.WeekView)
 	checkNotEmpty("list.stats_view", lk.StatsView)

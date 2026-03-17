@@ -35,8 +35,6 @@ class Schmournal < Formula
       open_today = "n"   # Open / create today's entry
       open_date  = "c"   # Open / create an entry for a specific date
       delete     = "d"   # Delete the selected day record
-      add_work   = "w"   # Log a work entry for today
-      add_break  = "b"   # Log a break entry for today
       export     = "x"   # Export the selected day to Markdown
       week_view  = "v"   # Open the weekly overview
 
