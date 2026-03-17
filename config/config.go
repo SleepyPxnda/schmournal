@@ -32,8 +32,6 @@ type ListKeybinds struct {
 	OpenToday       string `toml:"open_today"`
 	OpenDate        string `toml:"open_date"`
 	Delete          string `toml:"delete"`
-	AddWork         string `toml:"add_work"`
-	AddBreak        string `toml:"add_break"`
 	Export          string `toml:"export"`
 	WeekView        string `toml:"week_view"`
 	StatsView       string `toml:"stats_view"`
@@ -106,8 +104,6 @@ func Default() Config {
 				OpenToday:       "n",
 				OpenDate:        "c",
 				Delete:          "d",
-				AddWork:         "w",
-				AddBreak:        "b",
 				Export:          "x",
 				WeekView:        "v",
 				StatsView:       "s",
@@ -323,8 +319,6 @@ quit             = %q   # Quit the application
 open_today       = %q   # Open / create today's entry
 open_date        = %q   # Open / create an entry for a specific date
 delete           = %q   # Delete the selected day record
-add_work         = %q   # Log a work entry for today
-add_break        = %q   # Log a break entry for today
 export           = %q   # Export the selected day to Markdown
 week_view        = %q   # Open the weekly overview
 stats_view       = %q   # Open the stats overview
@@ -357,8 +351,6 @@ set_weekly_hours = %q   # Set a custom hours goal for the displayed week
 		cfg.Keybinds.List.OpenToday,
 		cfg.Keybinds.List.OpenDate,
 		cfg.Keybinds.List.Delete,
-		cfg.Keybinds.List.AddWork,
-		cfg.Keybinds.List.AddBreak,
 		cfg.Keybinds.List.Export,
 		cfg.Keybinds.List.WeekView,
 		cfg.Keybinds.List.StatsView,
@@ -466,8 +458,6 @@ func (cfg *Config) validate() error {
 	fill(&lk.OpenToday, dl.OpenToday)
 	fill(&lk.OpenDate, dl.OpenDate)
 	fill(&lk.Delete, dl.Delete)
-	fill(&lk.AddWork, dl.AddWork)
-	fill(&lk.AddBreak, dl.AddBreak)
 	fill(&lk.Export, dl.Export)
 	fill(&lk.WeekView, dl.WeekView)
 	fill(&lk.StatsView, dl.StatsView)
@@ -494,7 +484,7 @@ func (cfg *Config) validate() error {
 	fill(&wk.NextWeek, dw.NextWeek)
 	fill(&wk.SetWeeklyHours, dw.SetWeeklyHours)
 
-	if err := checkDuplicates("list", lk.Quit, lk.OpenToday, lk.OpenDate, lk.Delete, lk.AddWork, lk.AddBreak, lk.Export, lk.WeekView, lk.StatsView, lk.SwitchWorkspace); err != nil {
+	if err := checkDuplicates("list", lk.Quit, lk.OpenToday, lk.OpenDate, lk.Delete, lk.Export, lk.WeekView, lk.StatsView, lk.SwitchWorkspace); err != nil {
 		return err
 	}
 	if err := checkDuplicates("day", dk.AddWork, dk.AddBreak, dk.Edit, dk.Delete, dk.SetStartNow, dk.SetStartManual, dk.SetEndNow, dk.SetEndManual, dk.Notes, dk.Export, dk.ClockStart, dk.ClockStop); err != nil {

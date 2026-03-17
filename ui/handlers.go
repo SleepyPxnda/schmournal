@@ -34,10 +34,6 @@ func (m Model) handleListKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.state = stateConfirmDelete
 				return m, nil
 			}
-		case kb.AddWork:
-			return m.openWorkFormForToday(false)
-		case kb.AddBreak:
-			return m.openWorkFormForToday(true)
 		case kb.Export:
 			if item, ok := m.list.SelectedItem().(dayListItem); ok {
 				rec := item.rec
