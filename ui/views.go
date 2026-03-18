@@ -70,6 +70,18 @@ func (m Model) renderHeader(title, subtitle string) string {
 	return top + "\n" + sep
 }
 
+// appTitle returns the application title with the version number appended.
+func (m Model) appTitle() string {
+	if m.version != "" && m.version != "dev" {
+		ver := m.version
+		if strings.HasPrefix(ver, "v") {
+			ver = ver[1:]
+		}
+		return "📔  Schmournal  v" + ver
+	}
+	return "📔  Schmournal"
+}
+
 // joinKeyLabels joins two key labels with "/" for footer display.
 // If either label is empty, only the non-empty one is shown; if both are empty "?" is returned.
 func joinKeyLabels(a, b string) string {
@@ -599,7 +611,7 @@ func (m Model) renderStats() string {
 }
 
 func (m Model) viewDateInput() string {
-	header := m.renderHeader("📔  Schmournal", "Open Day")
+	header := m.renderHeader(m.appTitle(), "Open Day")
 	prompt := dayViewLabelStyle.Render("Enter date:") + "  " + m.dateInput.View()
 	box := formBoxStyle.Render(
 		lipgloss.JoinVertical(lipgloss.Left,
@@ -626,7 +638,7 @@ func (m Model) viewList() string {
 	if m.activeWorkspace != "" {
 		subtitle = m.activeWorkspace + "  ·  " + subtitle
 	}
-	header := m.renderHeader("📔  Schmournal", subtitle)
+	header := m.renderHeader(m.appTitle(), subtitle)
 	kb := m.cfg.Keybinds.List
 	var footerKeys [][2]string
 	footerKeys = append(footerKeys,
@@ -657,7 +669,7 @@ func (m Model) viewDayView() string {
 	if t, err := m.dayRecord.ParseDate(); err == nil {
 		subtitle = t.Format("Monday, 02 January 2006")
 	}
-	header := m.renderHeader("📔  Schmournal", subtitle)
+	header := m.renderHeader(m.appTitle(), subtitle)
 	tabBar := m.renderTabBar()
 
 	var footerKeys [][2]string
@@ -706,7 +718,7 @@ func (m Model) viewWorkLogForm() string {
 		badge = workLogBadgeStyle.Render(" Log Work ")
 		taskLabel = "What did you work on?"
 	}
-	header := m.renderHeader("📔  Schmournal", badge+
+	header := m.renderHeader(m.appTitle(), badge+
 		headerSubtitleStyle.Render("  "+dateStr))
 	footer := m.renderFooter([][2]string{
 		{"tab", "next field"},
@@ -768,7 +780,7 @@ func (m Model) viewWorkLogForm() string {
 func (m Model) viewClockForm() string {
 	badge := workLogBadgeStyle.Render(" Start Clock ")
 	dateStr := m.dayRecord.Date
-	header := m.renderHeader("📔  Schmournal", badge+
+	header := m.renderHeader(m.appTitle(), badge+
 		headerSubtitleStyle.Render("  "+dateStr))
 	footer := m.renderFooter([][2]string{
 		{"tab", "next field"},
@@ -817,7 +829,7 @@ func (m Model) viewTimeInput() string {
 		label = "Set Finish Time"
 		badge = breakLogBadgeStyle.Render(" Finish ")
 	}
-	header := m.renderHeader("📔  Schmournal", badge)
+	header := m.renderHeader(m.appTitle(), badge)
 	footer := m.renderFooter([][2]string{
 		{"enter", "confirm"},
 		{"r", "reset"},
@@ -884,7 +896,7 @@ func (m Model) viewNotesEditor() string {
 	if t, err := m.dayRecord.ParseDate(); err == nil {
 		subtitle = t.Format("Monday, 02 January 2006")
 	}
-	header := m.renderHeader("📔  Schmournal", subtitle)
+	header := m.renderHeader(m.appTitle(), subtitle)
 	footer := m.renderFooter([][2]string{
 		{"ctrl+s", "save"},
 		{"esc", "cancel"},
@@ -911,7 +923,7 @@ func (m Model) viewConfirmDelete() string {
 			subject = "this entry"
 		}
 	}
-	header := m.renderHeader("📔  Schmournal", "Delete")
+	header := m.renderHeader(m.appTitle(), "Delete")
 
 	dialog := confirmBoxStyle.Render(
 		confirmTitleStyle.Render(fmt.Sprintf("Delete %s?", subject)) +
@@ -1153,7 +1165,7 @@ func uniqueAppend(slice []string, s string) []string {
 }
 
 func (m Model) viewWorkspacePicker() string {
-	header := m.renderHeader("📔  Schmournal", "Switch Workspace")
+	header := m.renderHeader(m.appTitle(), "Switch Workspace")
 	innerW := 36
 	if m.width-8 > innerW {
 		innerW = m.width / 2

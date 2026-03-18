@@ -47,7 +47,7 @@ func main() {
 	}
 
 	p := tea.NewProgram(
-		ui.New(cfg, activeWorkspace),
+		ui.New(cfg, activeWorkspace, version),
 		tea.WithAltScreen(),
 		tea.WithMouseCellMotion(),
 	)

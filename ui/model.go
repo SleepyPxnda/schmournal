@@ -143,6 +143,8 @@ type Model struct {
 
 	statusMsg string
 	isError   bool
+
+	version string
 }
 
 func (m Model) contentHeight() int {
@@ -183,7 +185,7 @@ func newDelegate() workDayDelegate {
 }
 
 // New constructs the initial model using the provided configuration.
-func New(cfg config.Config, activeWorkspace string) Model {
+func New(cfg config.Config, activeWorkspace string, version string) Model {
 	l := list.New([]list.Item{}, newDelegate(), 0, 0)
 	l.SetShowTitle(false)
 	l.SetShowStatusBar(false)
@@ -261,6 +263,7 @@ func New(cfg config.Config, activeWorkspace string) Model {
 		weekGoals:       journal.WeeklyGoals{},
 		selectedEntry:   -1,
 		editEntryIdx:    -1,
+		version:         version,
 	}
 }
 
