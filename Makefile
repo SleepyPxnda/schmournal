@@ -7,7 +7,8 @@ OUTDIR  := dist
         build-mac-arm build-mac-intel build-mac \
         build-linux-amd64 build-linux-arm64 build-linux \
         build-windows-amd64 build-windows-arm64 build-windows \
-        build
+        build \
+        package-deb-amd64 package-deb-arm64 package-deb
 
 all: build
 
@@ -50,6 +51,15 @@ build-windows: build-windows-amd64 build-windows-arm64
 
 # ── All platforms ─────────────────────────────────────────────────────────────
 build: build-mac build-linux build-windows
+
+# ── Package (Linux .deb) ──────────────────────────────────────────────────────
+package-deb-amd64: build-linux-amd64
+	ARCH=amd64 VERSION=$(VERSION) nfpm package --packager deb --target $(OUTDIR)/
+
+package-deb-arm64: build-linux-arm64
+	ARCH=arm64 VERSION=$(VERSION) nfpm package --packager deb --target $(OUTDIR)/
+
+package-deb: package-deb-amd64 package-deb-arm64
 
 # ── Cleanup ───────────────────────────────────────────────────────────────────
 clean:

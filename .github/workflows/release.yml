@@ -58,6 +58,24 @@ jobs:
           name: ${{ matrix.artifact }}
           path: dist/${{ matrix.artifact }}
 
+      - name: Install nfpm
+        if: matrix.goos == 'linux'
+        run: go install github.com/goreleaser/nfpm/v2/cmd/nfpm@v2.41.4
+
+      - name: Build .deb package
+        if: matrix.goos == 'linux'
+        env:
+          ARCH: ${{ matrix.goarch }}
+          VERSION: ${{ github.ref_name }}
+        run: nfpm package --packager deb --target dist/
+
+      - name: Upload .deb artifact
+        if: matrix.goos == 'linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: schmournal-${{ matrix.goarch }}.deb
+          path: dist/schmournal_*.deb
+
   release:
     name: Create GitHub Release
     needs: build
@@ -109,3 +127,100 @@ jobs:
           git add HomebrewFormula/schmournal.rb
           git diff --cached --quiet || git commit -m "chore: update Homebrew formula for ${{ github.ref_name }}"
           git push
+
+  update-apt-repo:
+    name: Update APT Repository
+    needs: release
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Install apt repository tools
+        run: sudo apt-get install -y dpkg-dev apt-utils
+
+      - name: Download .deb artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: "schmournal-*.deb"
+          path: debs/
+          merge-multiple: true
+
+      - name: Checkout gh-pages branch
+        uses: actions/checkout@v4
+        with:
+          ref: gh-pages
+          path: apt-repo
+          token: ${{ secrets.GITHUB_TOKEN }}
+        continue-on-error: true
+        id: checkout_gh_pages
+
+      - name: Initialize gh-pages branch
+        if: steps.checkout_gh_pages.outcome == 'failure'
+        run: |
+          mkdir -p apt-repo
+          cd apt-repo
+          git init
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git remote add origin \
+            "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}"
+          git checkout --orphan gh-pages
+
+      - name: Setup GPG signing key
+        env:
+          APT_SIGNING_KEY: ${{ secrets.APT_SIGNING_KEY }}
+        run: |
+          if [ -z "$APT_SIGNING_KEY" ]; then
+            echo "APT_SIGNING_KEY secret not set — repository will be unsigned."
+            echo "SIGNING_AVAILABLE=false" >> "$GITHUB_ENV"
+          else
+            echo "$APT_SIGNING_KEY" | gpg --batch --import
+            KEY_ID=$(gpg --list-secret-keys --with-colons | grep '^fpr' | head -1 | cut -d: -f10)
+            echo "SIGNING_AVAILABLE=true" >> "$GITHUB_ENV"
+            echo "GPG_KEY_ID=$KEY_ID" >> "$GITHUB_ENV"
+          fi
+
+      - name: Update APT repository structure
+        run: |
+          mkdir -p apt-repo/pool/main/s/schmournal
+          mkdir -p apt-repo/dists/stable/main/binary-amd64
+          mkdir -p apt-repo/dists/stable/main/binary-arm64
+
+          cp debs/*.deb apt-repo/pool/main/s/schmournal/
+
+          cd apt-repo
+
+          dpkg-scanpackages --arch amd64 pool/ > dists/stable/main/binary-amd64/Packages
+          gzip -k -f dists/stable/main/binary-amd64/Packages
+
+          dpkg-scanpackages --arch arm64 pool/ > dists/stable/main/binary-arm64/Packages
+          gzip -k -f dists/stable/main/binary-arm64/Packages
+
+          apt-ftparchive \
+            -o APT::FTPArchive::Release::Origin="schmournal" \
+            -o APT::FTPArchive::Release::Label="schmournal" \
+            -o APT::FTPArchive::Release::Suite="stable" \
+            -o APT::FTPArchive::Release::Codename="stable" \
+            -o APT::FTPArchive::Release::Components="main" \
+            -o APT::FTPArchive::Release::Architectures="amd64 arm64" \
+            release dists/stable > dists/stable/Release
+
+      - name: Sign Release file
+        if: env.SIGNING_AVAILABLE == 'true'
+        run: |
+          cd apt-repo
+          gpg --batch --yes --armor --local-user "$GPG_KEY_ID" \
+            --detach-sign -o dists/stable/Release.gpg dists/stable/Release
+          gpg --batch --yes --local-user "$GPG_KEY_ID" \
+            --clearsign -o dists/stable/InRelease dists/stable/Release
+          gpg --armor --export "$GPG_KEY_ID" > KEY.gpg
+
+      - name: Commit and push apt repository
+        run: |
+          cd apt-repo
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add .
+          git diff --cached --quiet || \
+            git commit -m "chore: update apt repository for ${{ github.ref_name }}"
+          git push --set-upstream origin gh-pages
+

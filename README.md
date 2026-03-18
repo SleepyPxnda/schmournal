@@ -247,6 +247,34 @@ brew install schmournal
 
 > **Note:** The formula is automatically updated on every release. Run `brew upgrade schmournal` to get the latest version.
 
+### APT (Debian / Ubuntu)
+
+```bash
+# Import the GPG signing key
+curl -fsSL https://sleepypxnda.github.io/schmournal/KEY.gpg \
+  | sudo gpg --dearmor -o /usr/share/keyrings/schmournal.gpg
+
+# Add the repository (replace amd64 with arm64 if applicable)
+echo "deb [arch=amd64 signed-by=/usr/share/keyrings/schmournal.gpg] \
+https://sleepypxnda.github.io/schmournal stable main" \
+  | sudo tee /etc/apt/sources.list.d/schmournal.list
+
+# Install
+sudo apt update
+sudo apt install schmournal
+```
+
+> **Note:** The APT repository is hosted on GitHub Pages and is updated automatically on every release.
+> For arm64 systems replace `arch=amd64` with `arch=arm64` in the sources entry.
+
+Alternatively, you can download a `.deb` file directly from the
+[latest GitHub release](https://github.com/SleepyPxnda/schmournal/releases/latest)
+and install it with:
+
+```bash
+sudo apt install ./schmournal_1.0.0_amd64.deb
+```
+
 ### Build from source
 
 ```bash
@@ -259,6 +287,11 @@ make build          # all platforms
 make build-mac      # macOS arm64 + amd64
 make build-linux    # Linux amd64 + arm64
 make build-windows  # Windows amd64 + arm64
+
+# Build .deb packages (requires nfpm — https://nfpm.goreleaser.com)
+make package-deb    # both amd64 and arm64 .deb packages
+make package-deb-amd64
+make package-deb-arm64
 
 # Clean build artefacts
 make clean
