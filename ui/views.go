@@ -73,7 +73,11 @@ func (m Model) renderHeader(title, subtitle string) string {
 // appTitle returns the application title with the version number appended.
 func (m Model) appTitle() string {
 	if m.version != "" && m.version != "dev" {
-		return "📔  Schmournal  v" + m.version
+		ver := m.version
+		if strings.HasPrefix(ver, "v") {
+			ver = ver[1:]
+		}
+		return "📔  Schmournal  v" + ver
 	}
 	return "📔  Schmournal"
 }
