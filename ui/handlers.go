@@ -10,6 +10,8 @@ import (
 	"github.com/sleepypxnda/schmournal/journal"
 )
 
+const deleteTodoIdx = -2
+
 func (m Model) handleListKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	filtering := m.list.FilterState() == list.Filtering
 	if !filtering {
@@ -194,7 +196,8 @@ func (m Model) handleDayViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case "A":
 		if m.dayViewTab == 0 && m.selectedPane == 1 && m.selectedTodo >= 0 && m.selectedTodo < len(m.dayRecord.Todos) {
-			return m.openTodoForm(m.selectedTodo, len(m.dayRecord.Todos[m.selectedTodo].Subtodos))
+			newSubIdx := len(m.dayRecord.Todos[m.selectedTodo].Subtodos)
+			return m.openTodoForm(m.selectedTodo, newSubIdx)
 		}
 		return m, nil
 	case kb.AddWork:
@@ -203,10 +206,7 @@ func (m Model) handleDayViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.openWorkForm(true, -1)
 	case kb.Edit:
 		if m.dayViewTab == 0 && m.selectedPane == 1 {
-			if m.selectedTodo >= 0 && m.selectedTodo < len(m.dayRecord.Todos) {
-				return m.openTodoForm(m.selectedTodo, m.selectedSub)
-			}
-			return m.openTodoForm(-1, -1)
+			return m.openTodoFormForSelection()
 		}
 		if m.selectedEntry >= 0 && m.selectedEntry < n {
 			return m.openWorkForm(m.dayRecord.Entries[m.selectedEntry].IsBreak, m.selectedEntry)
@@ -216,7 +216,7 @@ func (m Model) handleDayViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if m.dayViewTab == 0 && m.selectedPane == 1 {
 			if m.selectedTodo >= 0 && m.selectedTodo < len(m.dayRecord.Todos) {
 				m.deleteDay = false
-				m.deleteIdx = -2
+				m.deleteIdx = deleteTodoIdx
 				m.prevState = stateDayView
 				m.state = stateConfirmDelete
 			}
@@ -250,10 +250,7 @@ func (m Model) handleDayViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.openNotesEditor()
 	case kb.TodoOverview:
 		if m.dayViewTab == 0 && m.selectedPane == 1 {
-			if m.selectedTodo >= 0 && m.selectedTodo < len(m.dayRecord.Todos) {
-				return m.openTodoForm(m.selectedTodo, m.selectedSub)
-			}
-			return m.openTodoForm(-1, -1)
+			return m.openTodoFormForSelection()
 		}
 		return m.openTodoOverview(stateDayView)
 	case kb.Export:
@@ -293,6 +290,13 @@ func (m Model) handleDayViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 	m.viewport, cmd = m.viewport.Update(msg)
 	return m, cmd
+}
+
+func (m Model) openTodoFormForSelection() (tea.Model, tea.Cmd) {
+	if m.selectedTodo >= 0 && m.selectedTodo < len(m.dayRecord.Todos) {
+		return m.openTodoForm(m.selectedTodo, m.selectedSub)
+	}
+	return m.openTodoForm(-1, -1)
 }
 
 func (m Model) handleTodoFormKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -571,7 +575,7 @@ func (m Model) handleConfirmDeleteKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 		}
 		// Delete a single entry from the current day.
-		if m.deleteIdx == -2 {
+		if m.deleteIdx == deleteTodoIdx {
 			if m.selectedTodo >= 0 && m.selectedTodo < len(m.dayRecord.Todos) {
 				if m.selectedSub >= 0 && m.selectedSub < len(m.dayRecord.Todos[m.selectedTodo].Subtodos) {
 					st := m.dayRecord.Todos[m.selectedTodo].Subtodos

@@ -3,10 +3,25 @@ package ui
 import (
 	"sort"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/sleepypxnda/schmournal/journal"
 )
+
+func truncateRunes(s string, max int) string {
+	if max <= 0 {
+		return ""
+	}
+	if utf8.RuneCountInString(s) <= max {
+		return s
+	}
+	r := []rune(s)
+	if max == 1 {
+		return "…"
+	}
+	return string(r[:max-1]) + "…"
+}
 
 type todoCursor struct {
 	top int
@@ -123,7 +138,7 @@ func (m Model) renderTodosPanel(w int) string {
 	b.WriteString(dayViewSectionStyle.Render("✅  Todos") + "\n")
 	if len(m.dayRecord.Todos) == 0 {
 		b.WriteString(dayViewMutedStyle.Render("  No todos yet") + "\n")
-		b.WriteString(dayViewMutedStyle.Render("  t add todo") + "\n")
+		b.WriteString(dayViewMutedStyle.Render("  a add todo") + "\n")
 		return b.String()
 	}
 	for i, td := range m.dayRecord.Todos {
@@ -139,7 +154,7 @@ func (m Model) renderTodosPanel(w int) string {
 		}
 		line := prefix + mark + " " + box + " " + td.Title
 		if lipgloss.Width(line) > w {
-			line = line[:w-1] + "…"
+			line = truncateRunes(line, w)
 		}
 		if m.selectedPane == 1 && m.selectedTodo == i && m.selectedSub == -1 {
 			line = selectedEntryStyle.Render(line)
@@ -159,7 +174,7 @@ func (m Model) renderTodosPanel(w int) string {
 			}
 			sline := sprefix + smark + " " + sbox + " " + st.Title
 			if lipgloss.Width(sline) > w {
-				sline = sline[:w-1] + "…"
+				sline = truncateRunes(sline, w)
 			}
 			if m.selectedPane == 1 && m.selectedTodo == i && m.selectedSub == j {
 				sline = selectedEntryStyle.Render(sline)

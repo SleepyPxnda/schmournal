@@ -258,7 +258,7 @@ func (m Model) openNotesEditor() (tea.Model, tea.Cmd) {
 	return m, blinkCmd
 }
 
-func (m Model) focusTodoInDay() {
+func (m *Model) focusTodoInDay() {
 	for i, t := range m.dayRecord.Todos {
 		if t.ID != m.focusTodoID {
 			continue

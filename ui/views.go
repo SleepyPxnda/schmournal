@@ -948,7 +948,7 @@ func (m Model) viewTodoForm() string {
 	box := formBoxStyle.Width(formWidth).Render(
 		formLabelStyle.Render("Todo title") + "\n" +
 			formActiveInputStyle.Width(inputWidth).Render(m.todoInput.View()) + "\n\n" +
-			dayViewMutedStyle.Render("Tip: press Shift+t from a parent todo to add a subtodo"),
+			dayViewMutedStyle.Render("Tip: press Shift+a from a parent todo to add a subtodo"),
 	)
 	fh := lipgloss.Height(box)
 	topPad := (m.contentHeight() - fh) / 2
