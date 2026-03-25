@@ -42,6 +42,8 @@ func (m Model) View() string {
 		return m.viewTimeInput()
 	case stateNotesEditor:
 		return m.viewNotesEditor()
+	case stateTodoForm:
+		return m.viewTodoForm()
 	case stateConfirmDelete:
 		return m.viewConfirmDelete()
 	case stateDateInput:
@@ -54,6 +56,8 @@ func (m Model) View() string {
 		return m.viewWorkspacePicker()
 	case stateStats:
 		return m.viewStats()
+	case stateTodoOverview:
+		return m.viewTodoOverview()
 	}
 	return ""
 }
@@ -187,7 +191,6 @@ func (m Model) renderWorkLogContent() string {
 			rightW = clockMinW
 		}
 		leftW := innerW - rightW - 1
-
 		leftBlock := lipgloss.NewStyle().Width(leftW).Render(m.renderEntriesPanel(leftW))
 		rightBlock := clockPanelBorderStyle.Width(rightW).Render(m.renderClockPanel(rightW))
 		b.WriteString(lipgloss.JoinHorizontal(lipgloss.Top, leftBlock, rightBlock))
@@ -202,17 +205,35 @@ func (m Model) renderWorkLogContent() string {
 
 	b.WriteString("\n")
 
-	// ── Notes section (full width) ────────────────────────────────────────────
-	b.WriteString(dayViewSectionStyle.Render("📝  Notes") + "\n")
-	b.WriteString(div + "\n")
-	if m.dayRecord.Notes == "" {
-		b.WriteString(dayViewMutedStyle.Render("  No notes") + "\n")
+	// ── Notes + Todos two-column section ───────────────────────────────────────
+	if innerW >= 60 {
+		leftW := (innerW - 1) / 2
+		rightW := innerW - leftW - 1
+		leftBlock := lipgloss.NewStyle().Width(leftW).Render(m.renderNotesPanel(leftW))
+		rightBlock := clockPanelBorderStyle.Width(rightW).Render(m.renderTodosPanel(rightW))
+		b.WriteString(lipgloss.JoinHorizontal(lipgloss.Top, leftBlock, rightBlock))
+		b.WriteString("\n")
 	} else {
-		for _, line := range strings.Split(m.dayRecord.Notes, "\n") {
-			b.WriteString(dayViewNotesStyle.Render("  "+line) + "\n")
-		}
+		b.WriteString(m.renderNotesPanel(innerW))
+		b.WriteString("\n" + div + "\n")
+		b.WriteString(m.renderTodosPanel(innerW))
+		b.WriteString("\n")
 	}
 
+	return b.String()
+}
+
+func (m Model) renderNotesPanel(w int) string {
+	var b strings.Builder
+	b.WriteString(dayViewSectionStyle.Render("📝  Notes") + "\n")
+	b.WriteString(dayViewDividerStyle.Render(strings.Repeat("─", w)) + "\n")
+	if m.dayRecord.Notes == "" {
+		b.WriteString(dayViewMutedStyle.Render("  No notes") + "\n")
+		return b.String()
+	}
+	for _, line := range strings.Split(m.dayRecord.Notes, "\n") {
+		b.WriteString(dayViewNotesStyle.Render("  "+line) + "\n")
+	}
 	return b.String()
 }
 
@@ -647,6 +668,7 @@ func (m Model) viewList() string {
 		[2]string{"enter", "view"},
 		[2]string{kb.WeekView, "week"},
 		[2]string{kb.StatsView, "stats"},
+		[2]string{kb.TodoOverview, "todos"},
 		[2]string{kb.Delete, "delete"},
 		[2]string{kb.Export, "export"},
 		[2]string{"/", "filter"},
@@ -684,13 +706,16 @@ func (m Model) viewDayView() string {
 		footerKeys = [][2]string{
 			{"←/→", "switch tab"},
 			{"j/k", "select"},
+			{"tab", "pane"},
 			{kb.AddWork, "work"},
 			{kb.AddBreak, "break"},
 			{kb.Edit, "edit"},
 			{kb.Delete, "del"},
+			{"space", "toggle todo"},
 			{joinKeyLabels(kb.SetStartNow, kb.SetStartManual), "start"},
 			{joinKeyLabels(kb.SetEndNow, kb.SetEndManual), "end"},
 			{kb.Notes, "notes"},
+			{kb.TodoOverview, "todos"},
 			{clockKey, clockLabel},
 			{kb.Export, "export"},
 			{"esc", "back"},
@@ -700,6 +725,7 @@ func (m Model) viewDayView() string {
 			{"←/→", "switch tab"},
 			{joinKeyLabels(kb.SetStartNow, kb.SetStartManual), "start"},
 			{joinKeyLabels(kb.SetEndNow, kb.SetEndManual), "end"},
+			{kb.TodoOverview, "todos"},
 			{kb.Export, "export"},
 			{"esc", "back"},
 		}
@@ -907,6 +933,32 @@ func (m Model) viewNotesEditor() string {
 	return lipgloss.JoinVertical(lipgloss.Left, header, editor, footer)
 }
 
+func (m Model) viewTodoForm() string {
+	header := m.renderHeader(m.appTitle(), "Todo")
+	footer := m.renderFooter([][2]string{
+		{"enter", "save"},
+		{"esc", "cancel"},
+	})
+	formWidth := m.width - 8
+	if formWidth < 40 {
+		formWidth = 40
+	}
+	inputWidth := formWidth - 8
+	m.todoInput.Width = inputWidth
+	box := formBoxStyle.Width(formWidth).Render(
+		formLabelStyle.Render("Todo title") + "\n" +
+			formActiveInputStyle.Width(inputWidth).Render(m.todoInput.View()) + "\n\n" +
+			dayViewMutedStyle.Render("Tip: press Shift+t from a parent todo to add a subtodo"),
+	)
+	fh := lipgloss.Height(box)
+	topPad := (m.contentHeight() - fh) / 2
+	if topPad < 0 {
+		topPad = 0
+	}
+	centered := lipgloss.NewStyle().Width(m.width).Align(lipgloss.Center).Render(box)
+	return header + "\n" + strings.Repeat("\n", topPad) + centered + "\n" + footer
+}
+
 func (m Model) viewConfirmDelete() string {
 	var subject string
 	if m.deleteDay {
@@ -970,6 +1022,24 @@ func (m Model) viewWeekView() string {
 		{"j/k", "scroll"},
 		{"←/→", "prev/next week"},
 		{kb.SetWeeklyHours, "set week goal"},
+		{"esc", "back"},
+	})
+	return lipgloss.JoinVertical(lipgloss.Left, header, subHeader, m.viewport.View(), footer)
+}
+
+func (m Model) viewTodoOverview() string {
+	header := m.renderHeader("✅  TODO Overview", "All days")
+	sep := dayViewDividerStyle.Render(strings.Repeat("─", m.width))
+	filter := "all"
+	if m.todoOverviewOnlyU {
+		filter = "uncompleted"
+	}
+	subHeader := dayViewMutedStyle.Render("filter: "+filter) + "\n" + sep
+	footer := m.renderFooter([][2]string{
+		{"j/k", "navigate"},
+		{"space", "toggle"},
+		{"enter", "open day"},
+		{"u/a", "filter"},
 		{"esc", "back"},
 	})
 	return lipgloss.JoinVertical(lipgloss.Left, header, subHeader, m.viewport.View(), footer)

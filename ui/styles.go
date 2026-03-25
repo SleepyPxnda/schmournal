@@ -162,17 +162,17 @@ var (
 				Padding(0, 0, 0, 2)
 
 	listNonWorkDaySelectedTitle = lipgloss.NewStyle().
-				Foreground(lipgloss.Color(cMaroon)).
-				Border(lipgloss.NormalBorder(), false, false, false, true).
-				BorderForeground(lipgloss.Color(cMaroon)).
-				Padding(0, 0, 0, 1).
-				Bold(true)
+					Foreground(lipgloss.Color(cMaroon)).
+					Border(lipgloss.NormalBorder(), false, false, false, true).
+					BorderForeground(lipgloss.Color(cMaroon)).
+					Padding(0, 0, 0, 1).
+					Bold(true)
 
 	listNonWorkDaySelectedDesc = lipgloss.NewStyle().
-				Foreground(lipgloss.Color(cMaroon)).
-				Border(lipgloss.NormalBorder(), false, false, false, true).
-				BorderForeground(lipgloss.Color(cMaroon)).
-				Padding(0, 0, 0, 1)
+					Foreground(lipgloss.Color(cMaroon)).
+					Border(lipgloss.NormalBorder(), false, false, false, true).
+					BorderForeground(lipgloss.Color(cMaroon)).
+					Padding(0, 0, 0, 1)
 )
 
 // ── Day view styles ───────────────────────────────────────────────────────────
@@ -186,6 +186,8 @@ var (
 	dayViewTotalsStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color(cSubtext0))
 	dayViewWarnStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color(cPeach)).Bold(true)
 	dayViewNotesStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color(cText))
+	todoIncompleteStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(cPeach)).Bold(true)
+	todoCompleteStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color(cGreen)).Bold(true)
 	selectedEntryStyle  = lipgloss.NewStyle().Background(lipgloss.Color(cSurface0)).Foreground(lipgloss.Color(cMauve)).Bold(true)
 	normalEntryStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color(cText))
 	breakEntryStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color(cTeal))

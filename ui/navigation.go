@@ -145,9 +145,23 @@ func (m Model) openDayView(rec journal.DayRecord) (tea.Model, tea.Cmd) {
 		m.dayRecord.Path = rec.Path
 	}
 	m.dayViewTab = 0
+	m.selectedPane = 0
 	m.selectedEntry = -1
 	if len(m.dayRecord.Entries) > 0 {
 		m.selectedEntry = 0
+	}
+	if len(m.dayRecord.Todos) == 0 {
+		m.dayRecord.Todos = []journal.Todo{}
+	}
+	m.selectedTodo = 0
+	m.selectedSub = -1
+	if len(m.dayRecord.Todos) == 0 {
+		m.selectedTodo = -1
+	}
+	if m.focusTodoID != "" {
+		m.focusTodoInDay()
+		m.focusTodoID = ""
+		m.focusSubTodoID = ""
 	}
 	m.state = stateDayView
 	m.viewport.GotoTop()
@@ -242,6 +256,53 @@ func (m Model) openNotesEditor() (tea.Model, tea.Cmd) {
 	blinkCmd := m.textarea.Focus()
 	m.state = stateNotesEditor
 	return m, blinkCmd
+}
+
+func (m Model) focusTodoInDay() {
+	for i, t := range m.dayRecord.Todos {
+		if t.ID != m.focusTodoID {
+			continue
+		}
+		m.selectedPane = 1
+		m.selectedTodo = i
+		m.selectedSub = -1
+		if m.focusSubTodoID == "" {
+			return
+		}
+		for j, st := range t.Subtodos {
+			if st.ID == m.focusSubTodoID {
+				m.selectedSub = j
+				return
+			}
+		}
+		return
+	}
+}
+
+func (m Model) openTodoForm(editTop, editSub int) (tea.Model, tea.Cmd) {
+	m.todoEditTop = editTop
+	m.todoEditSub = editSub
+	m.todoInput.SetValue("")
+	m.todoInput.Placeholder = "TODO title…"
+	if editTop >= 0 && editTop < len(m.dayRecord.Todos) {
+		if editSub >= 0 && editSub < len(m.dayRecord.Todos[editTop].Subtodos) {
+			m.todoInput.SetValue(m.dayRecord.Todos[editTop].Subtodos[editSub].Title)
+		} else {
+			m.todoInput.SetValue(m.dayRecord.Todos[editTop].Title)
+		}
+	}
+	m.state = stateTodoForm
+	return m, m.todoInput.Focus()
+}
+
+func (m Model) openTodoOverview(from viewState) (tea.Model, tea.Cmd) {
+	m.todoOverviewFrom = from
+	m.state = stateTodoOverview
+	m.todoOverviewIdx = 0
+	m.viewport.GotoTop()
+	m.todoOverviewItems = m.buildTodoOverviewItems()
+	m.viewport.SetContent(m.renderTodoOverviewContent())
+	return m, nil
 }
 
 func (m Model) openTimeInput(isStart bool) (tea.Model, tea.Cmd) {
