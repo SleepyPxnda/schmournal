@@ -52,11 +52,47 @@ jobs:
             -ldflags "-s -w -X main.version=${{ github.ref_name }}" \
             -o dist/${{ matrix.artifact }} .
 
+      - name: Package .deb
+        if: matrix.goos == 'linux'
+        id: deb
+        run: |
+          VERSION="${{ github.ref_name }}"
+          VERSION="${VERSION#v}"
+          ARCH="${{ matrix.goarch }}"
+          case "$ARCH" in
+            amd64) DEB_ARCH=amd64 ;;
+            arm64) DEB_ARCH=arm64 ;;
+            *) echo "Unsupported architecture: $ARCH"; exit 1 ;;
+          esac
+          PKGROOT="dist/deb/${DEB_ARCH}"
+          mkdir -p "$PKGROOT/DEBIAN" "$PKGROOT/usr/bin"
+          install -m 0755 "dist/${{ matrix.artifact }}" "$PKGROOT/usr/bin/schmournal"
+          cat > "$PKGROOT/DEBIAN/control" <<EOF
+          Package: schmournal
+          Version: $VERSION
+          Section: utils
+          Priority: optional
+          Architecture: $DEB_ARCH
+          Maintainer: SleepyPxnda <noreply@github.com>
+          Description: Terminal-based work journal.
+          EOF
+          DEB_FILE="dist/schmournal_${VERSION}_${DEB_ARCH}.deb"
+          dpkg-deb --build "$PKGROOT" "$DEB_FILE"
+          echo "deb_file=$DEB_FILE" >> "$GITHUB_OUTPUT"
+          echo "deb_name=$(basename "$DEB_FILE")" >> "$GITHUB_OUTPUT"
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact }}
           path: dist/${{ matrix.artifact }}
+
+      - name: Upload .deb artifact
+        if: matrix.goos == 'linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.deb.outputs.deb_name }}
+          path: ${{ steps.deb.outputs.deb_file }}
 
   release:
     name: Create GitHub Release
