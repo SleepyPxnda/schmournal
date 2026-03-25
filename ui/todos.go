@@ -143,16 +143,14 @@ func (m Model) renderTodosPanel(w int) string {
 	}
 	for i, td := range m.dayRecord.Todos {
 		mark := todoIncompleteStyle.Render("—")
-		box := "[ ]"
 		if td.Completed {
 			mark = todoCompleteStyle.Render("✓")
-			box = "[x]"
 		}
 		prefix := "  "
 		if m.selectedPane == 1 && m.selectedTodo == i && m.selectedSub == -1 {
 			prefix = "▶ "
 		}
-		line := prefix + mark + " " + box + " " + td.Title
+		line := prefix + mark + " " + td.Title
 		if lipgloss.Width(line) > w {
 			line = truncateRunes(line, w)
 		}
@@ -163,16 +161,14 @@ func (m Model) renderTodosPanel(w int) string {
 
 		for j, st := range td.Subtodos {
 			smark := todoIncompleteStyle.Render("—")
-			sbox := "[ ]"
 			if st.Completed {
 				smark = todoCompleteStyle.Render("✓")
-				sbox = "[x]"
 			}
 			sprefix := "    "
 			if m.selectedPane == 1 && m.selectedTodo == i && m.selectedSub == j {
 				sprefix = "  ▶ "
 			}
-			sline := sprefix + smark + " " + sbox + " " + st.Title
+			sline := sprefix + smark + " " + st.Title
 			if lipgloss.Width(sline) > w {
 				sline = truncateRunes(sline, w)
 			}
@@ -214,12 +210,10 @@ func (m Model) renderTodoOverviewContent() string {
 			indent = "  "
 		}
 		mark := todoIncompleteStyle.Render("—")
-		box := "[ ]"
 		if it.completed {
 			mark = todoCompleteStyle.Render("✓")
-			box = "[x]"
 		}
-		line := prefix + indent + mark + " " + box + " " + it.title
+		line := prefix + indent + mark + " " + it.title
 		if i == m.todoOverviewIdx {
 			line = selectedEntryStyle.Render(line)
 		}
