@@ -266,6 +266,9 @@ func (m Model) handleDayViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if !m.clockRunning {
 			return m.openClockForm()
 		}
+		if kb.ClockStart == kb.ClockStop {
+			return m.stopClock()
+		}
 		return m, nil
 	case kb.ClockStop:
 		if m.clockRunning {

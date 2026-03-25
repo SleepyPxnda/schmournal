@@ -125,7 +125,7 @@ func Default() Config {
 				TodoOverview:   "t",
 				Export:         "x",
 				ClockStart:     "c",
-				ClockStop:      "T",
+				ClockStop:      "c",
 			},
 			Week: WeekKeybinds{
 				PrevWeek:       "h",
@@ -497,7 +497,16 @@ func (cfg *Config) validate() error {
 	if err := checkDuplicates("list", lk.Quit, lk.OpenToday, lk.OpenDate, lk.Delete, lk.Export, lk.WeekView, lk.StatsView, lk.TodoOverview, lk.SwitchWorkspace); err != nil {
 		return err
 	}
-	if err := checkDuplicates("day", dk.AddWork, dk.AddBreak, dk.Edit, dk.Delete, dk.SetStartNow, dk.SetStartManual, dk.SetEndNow, dk.SetEndManual, dk.Notes, dk.TodoOverview, dk.Export, dk.ClockStart, dk.ClockStop); err != nil {
+	dayKeys := []string{
+		dk.AddWork, dk.AddBreak, dk.Edit, dk.Delete,
+		dk.SetStartNow, dk.SetStartManual, dk.SetEndNow, dk.SetEndManual,
+		dk.Notes, dk.TodoOverview, dk.Export, dk.ClockStart,
+	}
+	// Allow clock start/stop to intentionally share one key (toggle behavior).
+	if dk.ClockStop != dk.ClockStart {
+		dayKeys = append(dayKeys, dk.ClockStop)
+	}
+	if err := checkDuplicates("day", dayKeys...); err != nil {
 		return err
 	}
 	if err := checkDuplicates("week", wk.PrevWeek, wk.NextWeek, wk.SetWeeklyHours); err != nil {
