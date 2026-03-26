@@ -28,12 +28,14 @@ const (
 	stateClockForm
 	stateTimeInput
 	stateNotesEditor
+	stateTodoForm
 	stateConfirmDelete
 	stateDateInput
 	stateWeekView
 	stateWeekHoursInput
 	stateWorkspacePicker
 	stateStats
+	stateTodoOverview
 )
 
 const (
@@ -54,6 +56,17 @@ type weekGoalsLoadedMsg struct{ goals journal.WeeklyGoals }
 type clockTickMsg struct{}
 
 // ── List item ─────────────────────────────────────────────────────────────────
+
+type todoOverviewItem struct {
+	date      string
+	path      string
+	title     string
+	completed bool
+	parentID  string
+	subID     string
+	depth     int
+	line      int
+}
 
 type dayListItem struct {
 	rec       journal.DayRecord
@@ -113,7 +126,8 @@ type Model struct {
 	isBreakEntry  bool
 	editEntryIdx  int // -1 = new, >=0 = editing existing entry
 
-	textarea textarea.Model // notes editor
+	textarea  textarea.Model // notes editor
+	todoInput textinput.Model
 
 	timeInput      textinput.Model
 	timeInputStart bool
@@ -131,6 +145,22 @@ type Model struct {
 	weekHoursInput textinput.Model
 
 	statsTab int // 0=Overview 1=Monthly 2=Yearly 3=All-time
+
+	selectedPane int // 0 = work log entries, 1 = todos
+	selectedTodo int // top-level todo index
+	selectedSub  int // -1 = top-level, >=0 = level-2 todo index
+	selectedSub2 int // -1 = not level-3, >=0 = level-3 todo index under selectedSub
+	todoEditTop  int // -1 = new, >=0 = editing top-level todo index
+	todoEditSub  int // -1 = top-level, >=0 = editing level-2 todo index
+	todoEditSub2 int // -1 = not level-3, >=0 = editing level-3 todo index
+	todoDraft    string
+
+	todoOverviewItems []todoOverviewItem
+	todoOverviewIdx   int
+	todoOverviewOnlyU bool
+	todoOverviewFrom  viewState
+	focusTodoID       string
+	focusSubTodoID    string
 
 	workspaceIdx int // currently highlighted row in the workspace picker
 
@@ -248,12 +278,20 @@ func New(cfg config.Config, activeWorkspace string, version string) Model {
 	weekHoursIn.TextStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(cText))
 	weekHoursIn.PlaceholderStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(cOverlay0))
 
+	todoIn := textinput.New()
+	todoIn.Placeholder = "TODO title…"
+	todoIn.CharLimit = 160
+	todoIn.PromptStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(cMauve))
+	todoIn.TextStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(cText))
+	todoIn.PlaceholderStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(cOverlay0))
+
 	return Model{
 		cfg:             cfg,
 		activeWorkspace: activeWorkspace,
 		state:           stateList,
 		list:            l,
 		textarea:        ta,
+		todoInput:       todoIn,
 		taskInput:       taskIn,
 		projectInput:    projIn,
 		durationInput:   durIn,
@@ -262,6 +300,12 @@ func New(cfg config.Config, activeWorkspace string, version string) Model {
 		weekHoursInput:  weekHoursIn,
 		weekGoals:       journal.WeeklyGoals{},
 		selectedEntry:   -1,
+		selectedTodo:    0,
+		selectedSub:     -1,
+		selectedSub2:    -1,
+		todoEditTop:     -1,
+		todoEditSub:     -1,
+		todoEditSub2:    -1,
 		editEntryIdx:    -1,
 		version:         version,
 	}
@@ -371,6 +415,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.handleTimeInputKey(msg)
 		case stateNotesEditor:
 			return m.handleNotesEditorKey(msg)
+		case stateTodoForm:
+			return m.handleTodoFormKey(msg)
 		case stateConfirmDelete:
 			return m.handleConfirmDeleteKey(msg)
 		case stateDateInput:
@@ -383,6 +429,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.handleWorkspacePickerKey(msg)
 		case stateStats:
 			return m.handleStatsKey(msg)
+		case stateTodoOverview:
+			return m.handleTodoOverviewKey(msg)
 		}
 	}
 
@@ -392,7 +440,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		var cmd tea.Cmd
 		m.list, cmd = m.list.Update(msg)
 		return m, cmd
-	case stateDayView, stateWeekView, stateStats:
+	case stateDayView, stateWeekView, stateStats, stateTodoOverview:
 		var cmd tea.Cmd
 		m.viewport, cmd = m.viewport.Update(msg)
 		return m, cmd
@@ -422,6 +470,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case stateNotesEditor:
 		var cmd tea.Cmd
 		m.textarea, cmd = m.textarea.Update(msg)
+		return m, cmd
+	case stateTodoForm:
+		var cmd tea.Cmd
+		m.todoInput, cmd = m.todoInput.Update(msg)
 		return m, cmd
 	case stateDateInput:
 		var cmd tea.Cmd

@@ -35,6 +35,7 @@ type ListKeybinds struct {
 	Export          string `toml:"export"`
 	WeekView        string `toml:"week_view"`
 	StatsView       string `toml:"stats_view"`
+	TodoOverview    string `toml:"todo_overview"`
 	SwitchWorkspace string `toml:"switch_workspace"`
 }
 
@@ -49,6 +50,7 @@ type DayKeybinds struct {
 	SetEndNow      string `toml:"set_end_now"`
 	SetEndManual   string `toml:"set_end_manual"`
 	Notes          string `toml:"notes"`
+	TodoOverview   string `toml:"todo_overview"`
 	Export         string `toml:"export"`
 	ClockStart     string `toml:"clock_start"`
 	ClockStop      string `toml:"clock_stop"`
@@ -56,9 +58,10 @@ type DayKeybinds struct {
 
 // WeekKeybinds holds configurable keys for the week overview.
 type WeekKeybinds struct {
-	PrevWeek        string `toml:"prev_week"`
-	NextWeek        string `toml:"next_week"`
-	SetWeeklyHours  string `toml:"set_weekly_hours"`
+	PrevWeek       string `toml:"prev_week"`
+	NextWeek       string `toml:"next_week"`
+	SetWeeklyHours string `toml:"set_weekly_hours"`
+	TodoOverview   string `toml:"todo_overview"`
 }
 
 // Keybinds groups all view-specific keybind configurations.
@@ -107,6 +110,7 @@ func Default() Config {
 				Export:          "x",
 				WeekView:        "v",
 				StatsView:       "s",
+				TodoOverview:    "t",
 				SwitchWorkspace: "p",
 			},
 			Day: DayKeybinds{
@@ -119,14 +123,16 @@ func Default() Config {
 				SetEndNow:      "f",
 				SetEndManual:   "F",
 				Notes:          "n",
+				TodoOverview:   "t",
 				Export:         "x",
 				ClockStart:     "c",
-				ClockStop:      "t",
+				ClockStop:      "c",
 			},
 			Week: WeekKeybinds{
 				PrevWeek:       "h",
 				NextWeek:       "l",
 				SetWeeklyHours: "g",
+				TodoOverview:   "t",
 			},
 		},
 	}
@@ -322,6 +328,7 @@ delete           = %q   # Delete the selected day record
 export           = %q   # Export the selected day to Markdown
 week_view        = %q   # Open the weekly overview
 stats_view       = %q   # Open the stats overview
+todo_overview    = %q   # Open the cross-day TODO overview
 switch_workspace = %q   # Open the workspace picker
 
 [keybinds.day]
@@ -334,6 +341,7 @@ set_start_manual = %q  # Set start time manually
 set_end_now     = %q   # Set end time to now
 set_end_manual  = %q   # Set end time manually
 notes           = %q   # Open the notes editor
+todo_overview   = %q   # Open the cross-day TODO overview
 export          = %q   # Export day to Markdown
 clock_start     = %q   # Start the clock timer (Clocking tab)
 clock_stop      = %q   # Stop the clock and log the entry (Clocking tab)
@@ -342,6 +350,7 @@ clock_stop      = %q   # Stop the clock and log the entry (Clocking tab)
 prev_week        = %q   # Go to the previous week (also ←)
 next_week        = %q   # Go to the next week  (also →)
 set_weekly_hours = %q   # Set a custom hours goal for the displayed week
+todo_overview    = %q   # Open the cross-day TODO overview
 `,
 		cfg.StoragePath,
 		cfg.WeeklyHoursGoal,
@@ -354,6 +363,7 @@ set_weekly_hours = %q   # Set a custom hours goal for the displayed week
 		cfg.Keybinds.List.Export,
 		cfg.Keybinds.List.WeekView,
 		cfg.Keybinds.List.StatsView,
+		cfg.Keybinds.List.TodoOverview,
 		cfg.Keybinds.List.SwitchWorkspace,
 		cfg.Keybinds.Day.AddWork,
 		cfg.Keybinds.Day.AddBreak,
@@ -364,12 +374,14 @@ set_weekly_hours = %q   # Set a custom hours goal for the displayed week
 		cfg.Keybinds.Day.SetEndNow,
 		cfg.Keybinds.Day.SetEndManual,
 		cfg.Keybinds.Day.Notes,
+		cfg.Keybinds.Day.TodoOverview,
 		cfg.Keybinds.Day.Export,
 		cfg.Keybinds.Day.ClockStart,
 		cfg.Keybinds.Day.ClockStop,
 		cfg.Keybinds.Week.PrevWeek,
 		cfg.Keybinds.Week.NextWeek,
 		cfg.Keybinds.Week.SetWeeklyHours,
+		cfg.Keybinds.Week.TodoOverview,
 	)
 }
 
@@ -461,6 +473,7 @@ func (cfg *Config) validate() error {
 	fill(&lk.Export, dl.Export)
 	fill(&lk.WeekView, dl.WeekView)
 	fill(&lk.StatsView, dl.StatsView)
+	fill(&lk.TodoOverview, dl.TodoOverview)
 	fill(&lk.SwitchWorkspace, dl.SwitchWorkspace)
 
 	dk := &cfg.Keybinds.Day
@@ -474,6 +487,7 @@ func (cfg *Config) validate() error {
 	fill(&dk.SetEndNow, dd.SetEndNow)
 	fill(&dk.SetEndManual, dd.SetEndManual)
 	fill(&dk.Notes, dd.Notes)
+	fill(&dk.TodoOverview, dd.TodoOverview)
 	fill(&dk.Export, dd.Export)
 	fill(&dk.ClockStart, dd.ClockStart)
 	fill(&dk.ClockStop, dd.ClockStop)
@@ -483,14 +497,24 @@ func (cfg *Config) validate() error {
 	fill(&wk.PrevWeek, dw.PrevWeek)
 	fill(&wk.NextWeek, dw.NextWeek)
 	fill(&wk.SetWeeklyHours, dw.SetWeeklyHours)
+	fill(&wk.TodoOverview, dw.TodoOverview)
 
-	if err := checkDuplicates("list", lk.Quit, lk.OpenToday, lk.OpenDate, lk.Delete, lk.Export, lk.WeekView, lk.StatsView, lk.SwitchWorkspace); err != nil {
+	if err := checkDuplicates("list", lk.Quit, lk.OpenToday, lk.OpenDate, lk.Delete, lk.Export, lk.WeekView, lk.StatsView, lk.TodoOverview, lk.SwitchWorkspace); err != nil {
 		return err
 	}
-	if err := checkDuplicates("day", dk.AddWork, dk.AddBreak, dk.Edit, dk.Delete, dk.SetStartNow, dk.SetStartManual, dk.SetEndNow, dk.SetEndManual, dk.Notes, dk.Export, dk.ClockStart, dk.ClockStop); err != nil {
+	dayKeys := []string{
+		dk.AddWork, dk.AddBreak, dk.Edit, dk.Delete,
+		dk.SetStartNow, dk.SetStartManual, dk.SetEndNow, dk.SetEndManual,
+		dk.Notes, dk.TodoOverview, dk.Export, dk.ClockStart,
+	}
+	// Allow clock start/stop to intentionally share one key (toggle behavior).
+	if dk.ClockStop != dk.ClockStart {
+		dayKeys = append(dayKeys, dk.ClockStop)
+	}
+	if err := checkDuplicates("day", dayKeys...); err != nil {
 		return err
 	}
-	if err := checkDuplicates("week", wk.PrevWeek, wk.NextWeek, wk.SetWeeklyHours); err != nil {
+	if err := checkDuplicates("week", wk.PrevWeek, wk.NextWeek, wk.SetWeeklyHours, wk.TodoOverview); err != nil {
 		return err
 	}
 
@@ -536,4 +560,3 @@ func checkDuplicates(view string, keys ...string) error {
 }
 
 // ── Default config file content ───────────────────────────────────────────────
-

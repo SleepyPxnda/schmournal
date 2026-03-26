@@ -10,6 +10,18 @@ import (
 	"time"
 )
 
+func normalizeTodos(todos []Todo) []Todo {
+	if todos == nil {
+		return []Todo{}
+	}
+	out := make([]Todo, len(todos))
+	for i, t := range todos {
+		t.Subtodos = normalizeTodos(t.Subtodos)
+		out[i] = t
+	}
+	return out
+}
+
 // storagePath overrides the default ~/.journal directory when set via SetStoragePath.
 var storagePath string
 
@@ -80,7 +92,7 @@ func Load(path string) (DayRecord, error) {
 		if len(dateStr) >= 10 {
 			dateStr = dateStr[:10]
 		}
-		return DayRecord{Date: dateStr, Path: path}, nil
+		return DayRecord{Date: dateStr, Path: path, Todos: []Todo{}}, nil
 	}
 	if err != nil {
 		return DayRecord{}, err
@@ -89,6 +101,7 @@ func Load(path string) (DayRecord, error) {
 	if err := json.Unmarshal(data, &rec); err != nil {
 		return DayRecord{}, err
 	}
+	rec.Todos = normalizeTodos(rec.Todos)
 	rec.Path = path
 	return rec, nil
 }
@@ -102,6 +115,7 @@ func Save(rec DayRecord) error {
 		}
 		rec.Path = filepath.Join(dir, rec.Date+".json")
 	}
+	rec.Todos = normalizeTodos(rec.Todos)
 	data, err := json.MarshalIndent(rec, "", "  ")
 	if err != nil {
 		return err

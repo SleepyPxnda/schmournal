@@ -43,6 +43,7 @@ func TestDefaultKeybindsNotEmpty(t *testing.T) {
 	checkNotEmpty("list.export", lk.Export)
 	checkNotEmpty("list.week_view", lk.WeekView)
 	checkNotEmpty("list.stats_view", lk.StatsView)
+	checkNotEmpty("list.todo_overview", lk.TodoOverview)
 
 	dk := cfg.Keybinds.Day
 	checkNotEmpty("day.add_work", dk.AddWork)
@@ -54,12 +55,14 @@ func TestDefaultKeybindsNotEmpty(t *testing.T) {
 	checkNotEmpty("day.set_end_now", dk.SetEndNow)
 	checkNotEmpty("day.set_end_manual", dk.SetEndManual)
 	checkNotEmpty("day.notes", dk.Notes)
+	checkNotEmpty("day.todo_overview", dk.TodoOverview)
 	checkNotEmpty("day.export", dk.Export)
 
 	wk := cfg.Keybinds.Week
 	checkNotEmpty("week.prev_week", wk.PrevWeek)
 	checkNotEmpty("week.next_week", wk.NextWeek)
 	checkNotEmpty("week.set_weekly_hours", wk.SetWeeklyHours)
+	checkNotEmpty("week.todo_overview", wk.TodoOverview)
 }
 
 // ── validate ──────────────────────────────────────────────────────────────────
@@ -79,6 +82,9 @@ func TestValidateFillsEmptyKeybinds(t *testing.T) {
 	}
 	if cfg.Keybinds.Week.PrevWeek != def.Keybinds.Week.PrevWeek {
 		t.Errorf("Week.PrevWeek = %q, want %q", cfg.Keybinds.Week.PrevWeek, def.Keybinds.Week.PrevWeek)
+	}
+	if cfg.Keybinds.Week.TodoOverview != def.Keybinds.Week.TodoOverview {
+		t.Errorf("Week.TodoOverview = %q, want %q", cfg.Keybinds.Week.TodoOverview, def.Keybinds.Week.TodoOverview)
 	}
 }
 
@@ -142,8 +148,11 @@ func TestCollectTOMLPathsIncludesKnownPaths(t *testing.T) {
 		{"storage_path"},
 		{"weekly_hours_goal"},
 		{"keybinds", "list", "quit"},
+		{"keybinds", "list", "todo_overview"},
 		{"keybinds", "day", "add_work"},
+		{"keybinds", "day", "todo_overview"},
 		{"keybinds", "week", "prev_week"},
+		{"keybinds", "week", "todo_overview"},
 	}
 
 	pathSet := make(map[string]bool)
