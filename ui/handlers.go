@@ -149,12 +149,16 @@ func (m Model) handleDayViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		switch msg.Type {
 		case tea.KeyRunes:
 			s := string(msg.Runes)
-			// Keep j/k for navigation in the TODO list; everything else types.
-			if s != navDownKey && s != navUpKey {
+			// Keep j/k for navigation in the TODO list; allow space key to type.
+			if s != navDownKey && s != navUpKey && s != " " {
 				m.appendTodoDraft(s)
 				m.viewport.SetContent(m.renderDayContent())
 				return m, nil
 			}
+		case tea.KeySpace:
+			m.appendTodoDraft(" ")
+			m.viewport.SetContent(m.renderDayContent())
+			return m, nil
 		case tea.KeyBackspace:
 			m.backspaceTodoDraft()
 			m.viewport.SetContent(m.renderDayContent())
@@ -212,7 +216,19 @@ func (m Model) handleDayViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.viewport.SetContent(m.renderDayContent())
 		}
 		return m, nil
+	case "shift+tab":
+		if m.dayViewTab == 0 && m.selectedPane == 1 && m.outdentSelectedTodo() {
+			m.viewport.SetContent(m.renderDayContent())
+			return m, m.saveDayCmd("✓ TODO outdented")
+		}
+		return m, nil
 	case "delete":
+		if m.dayViewTab == 0 && m.selectedPane == 1 && m.deleteSelectedTodoNow() {
+			m.viewport.SetContent(m.renderDayContent())
+			return m, m.saveDayCmd("✓ TODO deleted")
+		}
+		return m, nil
+	case "shift+enter":
 		if m.dayViewTab == 0 && m.selectedPane == 1 && m.deleteSelectedTodoNow() {
 			m.viewport.SetContent(m.renderDayContent())
 			return m, m.saveDayCmd("✓ TODO deleted")

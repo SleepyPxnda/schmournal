@@ -120,6 +120,28 @@ func (m *Model) indentSelectedTodo() bool {
 	return true
 }
 
+func (m *Model) outdentSelectedTodo() bool {
+	if m.selectedTodo < 0 || m.selectedTodo >= len(m.dayRecord.Todos) || m.selectedSub < 0 {
+		return false
+	}
+	parentIdx := m.selectedTodo
+	parent := m.dayRecord.Todos[parentIdx]
+	if m.selectedSub >= len(parent.Subtodos) {
+		return false
+	}
+	td := parent.Subtodos[m.selectedSub]
+	parent.Subtodos = append(parent.Subtodos[:m.selectedSub], parent.Subtodos[m.selectedSub+1:]...)
+	m.dayRecord.Todos[parentIdx].Subtodos = parent.Subtodos
+
+	insertIdx := parentIdx + 1
+	m.dayRecord.Todos = append(m.dayRecord.Todos, journal.Todo{})
+	copy(m.dayRecord.Todos[insertIdx+1:], m.dayRecord.Todos[insertIdx:])
+	m.dayRecord.Todos[insertIdx] = td
+	m.selectedTodo = insertIdx
+	m.selectedSub = -1
+	return true
+}
+
 func (m *Model) deleteSelectedTodoNow() bool {
 	if m.selectedTodo < 0 || m.selectedTodo >= len(m.dayRecord.Todos) {
 		return false
@@ -212,6 +234,7 @@ func (m Model) renderTodosPanel(w int) string {
 		} else {
 			b.WriteString(dayViewValueStyle.Render("  + "+m.todoDraft) + "\n")
 		}
+		b.WriteString(dayViewDividerStyle.Render(strings.Repeat("─", w)) + "\n")
 	}
 	if len(m.dayRecord.Todos) == 0 {
 		b.WriteString(dayViewMutedStyle.Render("  No todos yet") + "\n")
