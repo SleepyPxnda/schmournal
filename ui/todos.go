@@ -29,6 +29,14 @@ type todoCursor struct {
 	sub2 int // -1 not level-3, >=0 level-3 todo index
 }
 
+func todoLinePrefix(depth int, selected bool) string {
+	indent := strings.Repeat("  ", depth)
+	if selected {
+		return indent + "▶ "
+	}
+	return indent + "  "
+}
+
 func (m *Model) todoMove(delta int) {
 	cursors := m.todoCursors()
 	if len(cursors) == 0 {
@@ -120,6 +128,7 @@ func (m *Model) commitTodoDraft() bool {
 	})
 	m.selectedTodo = len(m.dayRecord.Todos) - 1
 	m.selectedSub = -1
+	m.selectedSub2 = -1
 	m.todoDraft = ""
 	return true
 }
@@ -369,7 +378,10 @@ func (m Model) renderTodosPanel(w int) string {
 	b.WriteString(dayViewDividerStyle.Render(strings.Repeat("─", w)) + "\n")
 	if m.selectedPane == 1 {
 		draft := strings.TrimSpace(m.todoDraft)
-		if draft == "" {
+		if !m.todoInputMode {
+			draft = "enter add mode, then type and enter to save"
+			b.WriteString(dayViewMutedStyle.Render("  "+draft) + "\n")
+		} else if draft == "" {
 			draft = "type to add a todo, enter to save"
 			b.WriteString(dayViewMutedStyle.Render("  "+draft) + "\n")
 		} else {
@@ -389,10 +401,7 @@ func (m Model) renderTodosPanel(w int) string {
 		if td.Completed {
 			mark = todoCompleteStyle.Render("✓")
 		}
-		prefix := "  "
-		if m.selectedPane == 1 && m.selectedTodo == i && m.selectedSub == -1 {
-			prefix = "▶ "
-		}
+		prefix := todoLinePrefix(0, m.selectedPane == 1 && m.selectedTodo == i && m.selectedSub == -1)
 		line := prefix + mark + " " + td.Title
 		if lipgloss.Width(line) > w {
 			line = truncateRunes(line, w)
@@ -407,10 +416,7 @@ func (m Model) renderTodosPanel(w int) string {
 			if st.Completed {
 				smark = todoCompleteStyle.Render("✓")
 			}
-			sprefix := "    "
-			if m.selectedPane == 1 && m.selectedTodo == i && m.selectedSub == j && m.selectedSub2 == -1 {
-				sprefix = "  ▶ "
-			}
+			sprefix := todoLinePrefix(1, m.selectedPane == 1 && m.selectedTodo == i && m.selectedSub == j && m.selectedSub2 == -1)
 			sline := sprefix + smark + " " + st.Title
 			if lipgloss.Width(sline) > w {
 				sline = truncateRunes(sline, w)
@@ -420,16 +426,12 @@ func (m Model) renderTodosPanel(w int) string {
 			}
 			b.WriteString(sline + "\n")
 
-			const thirdLevelIndent = "      "
 			for k, thirdLevelTodo := range st.Subtodos {
 				ssmark := todoIncompleteStyle.Render("—")
 				if thirdLevelTodo.Completed {
 					ssmark = todoCompleteStyle.Render("✓")
 				}
-				thirdLevelPrefix := thirdLevelIndent
-				if m.selectedPane == 1 && m.selectedTodo == i && m.selectedSub == j && m.selectedSub2 == k {
-					thirdLevelPrefix = "  ▶   "
-				}
+				thirdLevelPrefix := todoLinePrefix(2, m.selectedPane == 1 && m.selectedTodo == i && m.selectedSub == j && m.selectedSub2 == k)
 				thirdLevelLine := thirdLevelPrefix + ssmark + " " + thirdLevelTodo.Title
 				if lipgloss.Width(thirdLevelLine) > w {
 					thirdLevelLine = truncateRunes(thirdLevelLine, w)

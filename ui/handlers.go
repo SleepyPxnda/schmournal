@@ -138,26 +138,19 @@ func (m Model) handleWeekHoursInputKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) handleDayViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	const (
-		navDownKey = "j"
-		navUpKey   = "k"
-	)
 	n := len(m.dayRecord.Entries)
 	kb := m.cfg.Keybinds.Day
 	inTodoPane := m.dayViewTab == 0 && m.selectedPane == 1
 	if inTodoPane {
 		switch msg.Type {
 		case tea.KeyRunes:
-			s := string(msg.Runes)
-			// Keep j/k for navigation only when no draft is being typed;
-			// once the user has started typing, all runes (including j/k) go into the draft.
-			if m.todoDraft != "" || (s != navDownKey && s != navUpKey) {
-				m.appendTodoDraft(s)
+			if m.todoInputMode {
+				m.appendTodoDraft(string(msg.Runes))
 				m.viewport.SetContent(m.renderDayContent())
 				return m, nil
 			}
 		case tea.KeyBackspace:
-			if m.todoDraft != "" {
+			if m.todoInputMode {
 				m.backspaceTodoDraft()
 				m.viewport.SetContent(m.renderDayContent())
 				return m, nil
@@ -215,6 +208,7 @@ func (m Model) handleDayViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 					m.viewport.SetContent(m.renderDayContent())
 					return m, m.saveDayCmd("✓ TODO indented")
 				}
+				return m, nil
 			}
 			m.selectedPane = (m.selectedPane + 1) % 2
 			m.viewport.SetContent(m.renderDayContent())
@@ -233,15 +227,26 @@ func (m Model) handleDayViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	case "enter":
-		if m.dayViewTab == 0 && m.selectedPane == 1 && m.commitTodoDraft() {
+		if m.dayViewTab == 0 && m.selectedPane == 1 {
+			if m.todoInputMode {
+				saved := m.commitTodoDraft()
+				m.todoInputMode = false
+				m.selectedPane = 0
+				m.viewport.SetContent(m.renderDayContent())
+				if saved {
+					return m, m.saveDayCmd("✓ TODO saved")
+				}
+				return m, nil
+			}
+			m.todoInputMode = true
+			m.todoDraft = ""
 			m.viewport.SetContent(m.renderDayContent())
-			return m, m.saveDayCmd("✓ TODO saved")
 		}
 		return m, nil
 	case " ":
 		// Some terminals report space as a dedicated key type (not KeyRunes).
 		// Preserve typing spaces while drafting a TODO title.
-		if m.dayViewTab == 0 && m.selectedPane == 1 && m.todoDraft != "" {
+		if m.dayViewTab == 0 && m.selectedPane == 1 && m.todoInputMode {
 			m.appendTodoDraft(" ")
 			m.viewport.SetContent(m.renderDayContent())
 			return m, nil
@@ -318,8 +323,12 @@ func (m Model) handleDayViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if m.dayViewTab == 0 {
 			if m.selectedPane != 1 {
 				m.selectedPane = 1
-				m.viewport.SetContent(m.renderDayContent())
+			} else {
+				m.selectedPane = 0
+				m.todoInputMode = false
+				m.todoDraft = ""
 			}
+			m.viewport.SetContent(m.renderDayContent())
 			return m, nil
 		}
 		return m.openTodoOverview(stateDayView)

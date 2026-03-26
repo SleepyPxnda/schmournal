@@ -156,6 +156,8 @@ func (m Model) openDayView(rec journal.DayRecord) (tea.Model, tea.Cmd) {
 	m.selectedTodo = 0
 	m.selectedSub = -1
 	m.selectedSub2 = -1
+	m.todoDraft = ""
+	m.todoInputMode = false
 	if len(m.dayRecord.Todos) == 0 {
 		m.selectedTodo = -1
 	}

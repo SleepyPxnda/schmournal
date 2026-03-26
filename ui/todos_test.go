@@ -3,6 +3,8 @@ package ui
 import (
 	"testing"
 
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/sleepypxnda/schmournal/config"
 	"github.com/sleepypxnda/schmournal/journal"
 )
 
@@ -179,5 +181,89 @@ func TestTodoDraftAcceptsJAndKWhenTyping(t *testing.T) {
 	want := "taskj"
 	if m.todoDraft != want {
 		t.Fatalf("expected todoDraft %q, got %q", want, m.todoDraft)
+	}
+}
+
+func TestTodoKeyTogglesPaneFocus(t *testing.T) {
+	m := Model{
+		cfg:          config.Default(),
+		dayViewTab:   0,
+		selectedPane: 0,
+		todoDraft:    "stale",
+		todoInputMode: false,
+	}
+
+	updated, _ := m.handleDayViewKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("t")})
+	got := updated.(Model)
+	if got.selectedPane != 1 {
+		t.Fatalf("expected todo pane to be focused, got pane=%d", got.selectedPane)
+	}
+	got.todoDraft = "stale"
+	got.todoInputMode = false
+
+	updated, _ = got.handleDayViewKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("t")})
+	got = updated.(Model)
+	if got.selectedPane != 0 {
+		t.Fatalf("expected todo pane to close and return to worklog pane, got pane=%d", got.selectedPane)
+	}
+	if got.todoInputMode {
+		t.Fatalf("expected todo input mode to be disabled when closing todo pane")
+	}
+	if got.todoDraft != "" {
+		t.Fatalf("expected todo draft to be cleared when closing todo pane, got %q", got.todoDraft)
+	}
+}
+
+func TestTodoEnterEnablesInputThenSavesAndReturnsToNavigation(t *testing.T) {
+	m := Model{
+		cfg:          config.Default(),
+		dayViewTab:   0,
+		selectedPane: 1,
+		selectedTodo: -1,
+		selectedSub:  -1,
+		selectedSub2: -1,
+		dayRecord:    journal.DayRecord{Todos: []journal.Todo{}},
+	}
+
+	updated, _ := m.handleDayViewKey(tea.KeyMsg{Type: tea.KeyEnter})
+	got := updated.(Model)
+	if !got.todoInputMode {
+		t.Fatalf("expected enter to enable todo input mode")
+	}
+
+	updated, _ = got.handleDayViewKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("t")})
+	got = updated.(Model)
+	updated, _ = got.handleDayViewKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("a")})
+	got = updated.(Model)
+	updated, _ = got.handleDayViewKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("s")})
+	got = updated.(Model)
+	updated, _ = got.handleDayViewKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("k")})
+	got = updated.(Model)
+
+	updated, _ = got.handleDayViewKey(tea.KeyMsg{Type: tea.KeyEnter})
+	got = updated.(Model)
+
+	if got.todoInputMode {
+		t.Fatalf("expected todo input mode to be disabled after submit")
+	}
+	if got.selectedPane != 0 {
+		t.Fatalf("expected to return to worklog pane after submit, got pane=%d", got.selectedPane)
+	}
+	if len(got.dayRecord.Todos) != 1 || got.dayRecord.Todos[0].Title != "task" {
+		t.Fatalf("expected one saved todo titled task, got %#v", got.dayRecord.Todos)
+	}
+}
+
+func TestTodoTypingRequiresInputMode(t *testing.T) {
+	m := Model{
+		cfg:          config.Default(),
+		dayViewTab:   0,
+		selectedPane: 1,
+	}
+
+	updated, _ := m.handleDayViewKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("x")})
+	got := updated.(Model)
+	if got.todoDraft != "" {
+		t.Fatalf("expected todo draft to stay empty until input mode is enabled, got %q", got.todoDraft)
 	}
 }

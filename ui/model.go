@@ -154,6 +154,7 @@ type Model struct {
 	todoEditSub  int // -1 = top-level, >=0 = editing level-2 todo index
 	todoEditSub2 int // -1 = not level-3, >=0 = editing level-3 todo index
 	todoDraft    string
+	todoInputMode bool
 
 	todoOverviewItems []todoOverviewItem
 	todoOverviewIdx   int
