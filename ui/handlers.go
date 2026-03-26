@@ -7,7 +7,6 @@ import (
 
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/sleepypxnda/schmournal/config"
 	"github.com/sleepypxnda/schmournal/journal"
 )
 
@@ -139,6 +138,10 @@ func (m Model) handleWeekHoursInputKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) handleDayViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	const (
+		navDownKey = "j"
+		navUpKey   = "k"
+	)
 	n := len(m.dayRecord.Entries)
 	kb := m.cfg.Keybinds.Day
 	inTodoPane := m.dayViewTab == 0 && m.selectedPane == 1
@@ -146,7 +149,8 @@ func (m Model) handleDayViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		switch msg.Type {
 		case tea.KeyRunes:
 			s := string(msg.Runes)
-			if m.todoRuneIsDraftInput(s, kb) {
+			// Keep j/k for navigation in the TODO list; everything else types.
+			if s != navDownKey && s != navUpKey {
 				m.appendTodoDraft(s)
 				m.viewport.SetContent(m.renderDayContent())
 				return m, nil
@@ -365,32 +369,6 @@ func (m Model) openTodoFormForSelection() (tea.Model, tea.Cmd) {
 		return m.openTodoForm(m.selectedTodo, m.selectedSub, m.selectedSub2)
 	}
 	return m.openTodoForm(-1, -1, -1)
-}
-
-func (m Model) todoRuneIsDraftInput(s string, kb config.DayKeybinds) bool {
-	// Keep movement/form commands reachable while TODO pane is focused;
-	// only non-command runes should be treated as draft typing.
-	switch s {
-	case "j", "k", " ", "a", "A":
-		return false
-	}
-	switch s {
-	case kb.AddWork,
-		kb.AddBreak,
-		kb.Edit,
-		kb.Delete,
-		kb.SetStartNow,
-		kb.SetStartManual,
-		kb.SetEndNow,
-		kb.SetEndManual,
-		kb.Notes,
-		kb.TodoOverview,
-		kb.Export,
-		kb.ClockStart,
-		kb.ClockStop:
-		return false
-	}
-	return true
 }
 
 func (m Model) handleTodoFormKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
