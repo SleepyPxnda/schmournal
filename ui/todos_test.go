@@ -187,10 +187,10 @@ func TestTodoDraftAcceptsJAndKWhenTyping(t *testing.T) {
 
 func TestTodoKeyTogglesPaneFocus(t *testing.T) {
 	m := Model{
-		cfg:          config.Default(),
-		dayViewTab:   0,
-		selectedPane: 0,
-		todoDraft:    "stale",
+		cfg:           config.Default(),
+		dayViewTab:    0,
+		selectedPane:  0,
+		todoDraft:     "stale",
 		todoInputMode: false,
 	}
 
@@ -291,6 +291,26 @@ func TestTodoAddKeyStartsInlineInputInsteadOfModal(t *testing.T) {
 	}
 }
 
+func TestTodoEditKeyStaysInDayViewWithoutSelection(t *testing.T) {
+	m := Model{
+		cfg:          config.Default(),
+		state:        stateDayView,
+		width:        120,
+		dayViewTab:   0,
+		selectedPane: 1,
+		selectedTodo: -1,
+		selectedSub:  -1,
+		selectedSub2: -1,
+		dayRecord:    journal.DayRecord{Todos: []journal.Todo{}},
+	}
+
+	updated, _ := m.handleDayViewKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(m.cfg.Keybinds.Day.Edit)})
+	got := updated.(Model)
+	if got.state != stateDayView {
+		t.Fatalf("expected to stay in day view when editing without selection, got state=%v", got.state)
+	}
+}
+
 func TestTodoCommandKeyDoesNotStartInlineTyping(t *testing.T) {
 	m := Model{
 		cfg:          config.Default(),
@@ -346,13 +366,13 @@ func TestTodoCustomDayKeybindDoesNotStartInlineTyping(t *testing.T) {
 
 func TestTodoInputModeSwallowsMutationAndNavigationKeys(t *testing.T) {
 	m := Model{
-		cfg:          config.Default(),
-		dayViewTab:   0,
-		selectedPane: 1,
+		cfg:           config.Default(),
+		dayViewTab:    0,
+		selectedPane:  1,
 		todoInputMode: true,
-		selectedTodo: 0,
-		selectedSub:  -1,
-		selectedSub2: -1,
+		selectedTodo:  0,
+		selectedSub:   -1,
+		selectedSub2:  -1,
 		dayRecord: journal.DayRecord{
 			Todos: []journal.Todo{
 				{
@@ -387,7 +407,13 @@ func TestTodoInputModeSwallowsMutationAndNavigationKeys(t *testing.T) {
 }
 
 func TestTodosPanelUsesSingleDraftHintAcrossEnterToggle(t *testing.T) {
+	const (
+		primaryHint = "type to add, enter to save"
+		legacyHint  = "type to add a todo, enter to save"
+	)
+
 	m := Model{
+		state:         stateDayView,
 		selectedPane:  1,
 		dayViewTab:    0,
 		todoInputMode: false,
@@ -396,20 +422,23 @@ func TestTodosPanelUsesSingleDraftHintAcrossEnterToggle(t *testing.T) {
 	}
 
 	panelBefore := m.renderTodosPanel(60)
-	if !strings.Contains(panelBefore, "type to add, enter to save") {
+	if !strings.Contains(panelBefore, primaryHint) {
 		t.Fatalf("expected default draft hint before enter, got:\n%s", panelBefore)
 	}
-	if strings.Contains(panelBefore, "type to add a todo, enter to save") {
+	if strings.Contains(panelBefore, legacyHint) {
 		t.Fatalf("unexpected legacy hint before enter, got:\n%s", panelBefore)
 	}
 
 	updated, _ := m.handleDayViewKey(tea.KeyMsg{Type: tea.KeyEnter})
 	got := updated.(Model)
+	if !got.todoInputMode {
+		t.Fatalf("expected enter to enable todo input mode")
+	}
 	panelAfter := got.renderTodosPanel(60)
-	if !strings.Contains(panelAfter, "type to add, enter to save") {
+	if !strings.Contains(panelAfter, primaryHint) {
 		t.Fatalf("expected same draft hint after enter, got:\n%s", panelAfter)
 	}
-	if strings.Contains(panelAfter, "type to add a todo, enter to save") {
+	if strings.Contains(panelAfter, legacyHint) {
 		t.Fatalf("unexpected alternate hint after enter, got:\n%s", panelAfter)
 	}
 }

@@ -398,7 +398,7 @@ func (m Model) openTodoFormForSelection() (tea.Model, tea.Cmd) {
 	if m.selectedTodo >= 0 && m.selectedTodo < len(m.dayRecord.Todos) {
 		return m.openTodoForm(m.selectedTodo, m.selectedSub, m.selectedSub2)
 	}
-	return m.openTodoForm(-1, -1, -1)
+	return m, nil
 }
 
 func (m Model) shouldStartInlineTodoDraft(msg tea.KeyMsg) bool {
