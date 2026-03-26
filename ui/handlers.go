@@ -149,12 +149,11 @@ func (m Model) handleDayViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		switch msg.Type {
 		case tea.KeyRunes:
 			s := string(msg.Runes)
-			// Keep j/k for navigation in the TODO list; everything else types.
-			if s != navDownKey && s != navUpKey {
-				m.appendTodoDraft(s)
-				m.viewport.SetContent(m.renderDayContent())
-				return m, nil
-			}
+			// In TODO draft mode, typed runes should be added verbatim.
+			// Arrow keys still handle list navigation.
+			m.appendTodoDraft(s)
+			m.viewport.SetContent(m.renderDayContent())
+			return m, nil
 		case tea.KeyBackspace:
 			if m.todoDraft != "" {
 				m.backspaceTodoDraft()

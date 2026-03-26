@@ -3,6 +3,7 @@ package ui
 import (
 	"testing"
 
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/sleepypxnda/schmournal/journal"
 )
 
@@ -153,5 +154,26 @@ func TestIndentTopLevelClampsNestedDepthToThree(t *testing.T) {
 		if len(child.Subtodos) != 0 {
 			t.Fatalf("expected clamped descendants to have no deeper subtodos: %#v", got[0].Subtodos)
 		}
+	}
+}
+
+func TestDayViewTodoPaneTypingKAppendsDraft(t *testing.T) {
+	m := Model{
+		dayViewTab:    0,
+		selectedPane:  1,
+		selectedTodo:  1,
+		selectedSub:   -1,
+		selectedSub2:  -1,
+		dayRecord:     journal.DayRecord{Todos: []journal.Todo{{ID: "t1", Title: "one"}, {ID: "t2", Title: "two"}}},
+	}
+
+	gotModel, _ := m.handleDayViewKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("k")})
+	got := gotModel.(Model)
+
+	if got.todoDraft != "k" {
+		t.Fatalf("expected todo draft to include typed k, got %q", got.todoDraft)
+	}
+	if got.selectedTodo != 1 {
+		t.Fatalf("expected selection to remain on current todo, got %d", got.selectedTodo)
 	}
 }
