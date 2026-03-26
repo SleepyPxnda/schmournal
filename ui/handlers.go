@@ -156,8 +156,15 @@ func (m Model) handleDayViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 		case tea.KeyBackspace:
-			m.backspaceTodoDraft()
-			m.viewport.SetContent(m.renderDayContent())
+			if m.todoDraft != "" {
+				m.backspaceTodoDraft()
+				m.viewport.SetContent(m.renderDayContent())
+				return m, nil
+			}
+			if m.deleteSelectedTodoNow() {
+				m.viewport.SetContent(m.renderDayContent())
+				return m, m.saveDayCmd("✓ TODO deleted")
+			}
 			return m, nil
 		}
 	}
@@ -218,7 +225,7 @@ func (m Model) handleDayViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, m.saveDayCmd("✓ TODO outdented")
 		}
 		return m, nil
-	case "delete", "shift+enter":
+	case "delete":
 		if m.dayViewTab == 0 && m.selectedPane == 1 && m.deleteSelectedTodoNow() {
 			m.viewport.SetContent(m.renderDayContent())
 			return m, m.saveDayCmd("✓ TODO deleted")

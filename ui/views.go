@@ -728,7 +728,7 @@ func (m Model) viewDayView() string {
 			{kb.AddBreak, "break"},
 			{kb.Edit, "edit"},
 			{kb.Delete, "del"},
-			{"S-enter", "del todo"},
+			{"backspace", "del todo"},
 			{"space", "toggle todo"},
 			{joinKeyLabels(kb.SetStartNow, kb.SetStartManual), "start"},
 			{joinKeyLabels(kb.SetEndNow, kb.SetEndManual), "end"},
