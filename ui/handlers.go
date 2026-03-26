@@ -310,6 +310,13 @@ func (m Model) handleDayViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case kb.Notes:
 		return m.openNotesEditor()
 	case kb.TodoOverview:
+		if m.dayViewTab == 0 {
+			if m.selectedPane != 1 {
+				m.selectedPane = 1
+				m.viewport.SetContent(m.renderDayContent())
+			}
+			return m, nil
+		}
 		return m.openTodoOverview(stateDayView)
 	case kb.Export:
 		rec := m.dayRecord
