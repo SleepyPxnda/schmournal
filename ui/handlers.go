@@ -138,6 +138,10 @@ func (m Model) handleWeekHoursInputKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) handleDayViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	const (
+		navDownKey = "j"
+		navUpKey   = "k"
+	)
 	n := len(m.dayRecord.Entries)
 	kb := m.cfg.Keybinds.Day
 	inTodoPane := m.dayViewTab == 0 && m.selectedPane == 1
@@ -146,7 +150,7 @@ func (m Model) handleDayViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		case tea.KeyRunes:
 			s := string(msg.Runes)
 			// Keep j/k for navigation in the TODO list; everything else types.
-			if s != "j" && s != "k" {
+			if s != navDownKey && s != navUpKey {
 				m.appendTodoDraft(s)
 				m.viewport.SetContent(m.renderDayContent())
 				return m, nil

@@ -88,6 +88,10 @@ func (m *Model) backspaceTodoDraft() {
 		return
 	}
 	r := []rune(m.todoDraft)
+	if len(r) == 0 {
+		m.todoDraft = ""
+		return
+	}
 	m.todoDraft = string(r[:len(r)-1])
 }
 
@@ -134,6 +138,11 @@ func (m *Model) deleteSelectedTodoNow() bool {
 		return true
 	}
 	m.dayRecord.Todos = append(m.dayRecord.Todos[:m.selectedTodo], m.dayRecord.Todos[m.selectedTodo+1:]...)
+	if len(m.dayRecord.Todos) == 0 {
+		m.selectedTodo = -1
+		m.selectedSub = -1
+		return true
+	}
 	if m.selectedTodo >= len(m.dayRecord.Todos) {
 		m.selectedTodo = len(m.dayRecord.Todos) - 1
 	}
