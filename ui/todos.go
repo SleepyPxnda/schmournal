@@ -278,6 +278,19 @@ func (m Model) renderTodosPanel(w int) string {
 				sline = selectedEntryStyle.Render(sline)
 			}
 			b.WriteString(sline + "\n")
+
+			const thirdLevelIndent = "      "
+			for _, thirdLevelTodo := range st.Subtodos {
+				ssmark := todoIncompleteStyle.Render("—")
+				if thirdLevelTodo.Completed {
+					ssmark = todoCompleteStyle.Render("✓")
+				}
+				thirdLevelLine := thirdLevelIndent + ssmark + " " + thirdLevelTodo.Title
+				if lipgloss.Width(thirdLevelLine) > w {
+					thirdLevelLine = truncateRunes(thirdLevelLine, w)
+				}
+				b.WriteString(thirdLevelLine + "\n")
+			}
 		}
 	}
 	return b.String()

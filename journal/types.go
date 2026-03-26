@@ -16,7 +16,7 @@ type WorkEntry struct {
 
 func (e WorkEntry) Duration() time.Duration { return time.Duration(e.DurationMin) * time.Minute }
 
-// Todo is a single todo item for a day. Subtodos support one level of nesting in the UI.
+// Todo is a single todo item for a day. Subtodos can be nested.
 type Todo struct {
 	ID        string `json:"id"`
 	Title     string `json:"title"`
