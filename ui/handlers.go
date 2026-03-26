@@ -162,6 +162,12 @@ func (m Model) handleDayViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 	}
+	if inTodoPane && m.todoInputMode {
+		switch msg.String() {
+		case "tab", "shift+tab", "delete", "up", "down", "left", "right":
+			return m, nil
+		}
+	}
 	switch msg.String() {
 	case "left":
 		if m.dayViewTab > 0 {

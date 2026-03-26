@@ -265,3 +265,45 @@ func TestTodoTypingRequiresInputMode(t *testing.T) {
 		t.Fatalf("expected todo draft to stay empty until input mode is enabled, got %q", got.todoDraft)
 	}
 }
+
+func TestTodoInputModeSwallowsMutationAndNavigationKeys(t *testing.T) {
+	m := Model{
+		cfg:          config.Default(),
+		dayViewTab:   0,
+		selectedPane: 1,
+		todoInputMode: true,
+		selectedTodo: 0,
+		selectedSub:  -1,
+		selectedSub2: -1,
+		dayRecord: journal.DayRecord{
+			Todos: []journal.Todo{
+				{
+					ID:    "t1",
+					Title: "Top 1",
+				},
+				{
+					ID:    "t2",
+					Title: "Top 2",
+				},
+			},
+		},
+	}
+
+	for _, key := range []tea.KeyMsg{
+		{Type: tea.KeyDelete},
+		{Type: tea.KeyShiftTab},
+		{Type: tea.KeyTab},
+		{Type: tea.KeyDown},
+		{Type: tea.KeyUp},
+	} {
+		updated, _ := m.handleDayViewKey(key)
+		m = updated.(Model)
+	}
+
+	if len(m.dayRecord.Todos) != 2 {
+		t.Fatalf("expected todo list to stay unchanged in input mode, got len=%d", len(m.dayRecord.Todos))
+	}
+	if m.selectedTodo != 0 || m.selectedSub != -1 || m.selectedSub2 != -1 {
+		t.Fatalf("expected selection to stay unchanged in input mode, got top=%d sub=%d sub2=%d", m.selectedTodo, m.selectedSub, m.selectedSub2)
+	}
+}
