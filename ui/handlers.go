@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
@@ -149,6 +150,14 @@ func (m Model) handleDayViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.viewport.SetContent(m.renderDayContent())
 				return m, nil
 			}
+			// In TODO navigation mode, begin inline drafting immediately for printable
+			// characters that are not bound to other day-view commands.
+			if m.shouldStartInlineTodoDraft(msg) {
+				m.todoInputMode = true
+				m.todoDraft = string(msg.Runes)
+				m.viewport.SetContent(m.renderDayContent())
+				return m, nil
+			}
 		case tea.KeyBackspace:
 			if m.todoInputMode {
 				m.backspaceTodoDraft()
@@ -267,7 +276,10 @@ func (m Model) handleDayViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case "a":
 		if m.dayViewTab == 0 && m.selectedPane == 1 {
-			return m.openTodoForm(-1, -1, -1)
+			m.todoInputMode = true
+			m.todoDraft = ""
+			m.viewport.SetContent(m.renderDayContent())
+			return m, nil
 		}
 		return m, nil
 	case "A":
@@ -387,6 +399,46 @@ func (m Model) openTodoFormForSelection() (tea.Model, tea.Cmd) {
 		return m.openTodoForm(m.selectedTodo, m.selectedSub, m.selectedSub2)
 	}
 	return m.openTodoForm(-1, -1, -1)
+}
+
+func (m Model) shouldStartInlineTodoDraft(msg tea.KeyMsg) bool {
+	if msg.Type != tea.KeyRunes || len(msg.Runes) == 0 {
+		return false
+	}
+	for _, r := range msg.Runes {
+		if !unicode.IsPrint(r) {
+			return false
+		}
+	}
+	key := msg.String()
+	switch key {
+	case "j", "k", "a", "A", " ":
+		return false
+	}
+	if m.isDayCommandKey(key) {
+		return false
+	}
+	return true
+}
+
+func (m Model) isDayCommandKey(key string) bool {
+	if key == "" {
+		return false
+	}
+	kb := m.cfg.Keybinds.Day
+	return key == kb.AddWork ||
+		key == kb.AddBreak ||
+		key == kb.Edit ||
+		key == kb.Delete ||
+		key == kb.SetStartNow ||
+		key == kb.SetStartManual ||
+		key == kb.SetEndNow ||
+		key == kb.SetEndManual ||
+		key == kb.Notes ||
+		key == kb.TodoOverview ||
+		key == kb.Export ||
+		key == kb.ClockStart ||
+		key == kb.ClockStop
 }
 
 func (m Model) handleTodoFormKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {

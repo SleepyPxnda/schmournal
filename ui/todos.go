@@ -384,7 +384,7 @@ func (m Model) renderTodosPanel(w int) string {
 	if m.selectedPane == 1 {
 		draft := strings.TrimSpace(m.todoDraft)
 		if !m.todoInputMode {
-			draft = "enter to add, then type and enter to save"
+			draft = "type to add, enter to save"
 			b.WriteString(dayViewMutedStyle.Render("  "+draft) + "\n")
 		} else if draft == "" {
 			draft = "type to add a todo, enter to save"

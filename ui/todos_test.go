@@ -252,17 +252,94 @@ func TestTodoEnterEnablesInputThenSavesInlineInTodoPane(t *testing.T) {
 	}
 }
 
-func TestTodoTypingRequiresInputMode(t *testing.T) {
+func TestTodoTypingStartsInlineInputMode(t *testing.T) {
 	m := Model{
 		cfg:          config.Default(),
 		dayViewTab:   0,
 		selectedPane: 1,
 	}
 
-	updated, _ := m.handleDayViewKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("x")})
+	updated, _ := m.handleDayViewKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("z")})
 	got := updated.(Model)
+	if !got.todoInputMode {
+		t.Fatalf("expected typing in todo pane to start inline input mode")
+	}
+	if got.todoDraft != "z" {
+		t.Fatalf("expected first typed rune to seed inline todo draft, got %q", got.todoDraft)
+	}
+}
+
+func TestTodoAddKeyStartsInlineInputInsteadOfModal(t *testing.T) {
+	m := Model{
+		cfg:          config.Default(),
+		state:        stateDayView,
+		dayViewTab:   0,
+		selectedPane: 1,
+	}
+
+	updated, _ := m.handleDayViewKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("a")})
+	got := updated.(Model)
+	if got.state != stateDayView {
+		t.Fatalf("expected to remain in day view (no create modal), got state=%v", got.state)
+	}
+	if !got.todoInputMode {
+		t.Fatalf("expected add key to enter inline todo input mode")
+	}
 	if got.todoDraft != "" {
-		t.Fatalf("expected todo draft to stay empty until input mode is enabled, got %q", got.todoDraft)
+		t.Fatalf("expected add key to open empty inline draft, got %q", got.todoDraft)
+	}
+}
+
+func TestTodoCommandKeyDoesNotStartInlineTyping(t *testing.T) {
+	m := Model{
+		cfg:          config.Default(),
+		dayViewTab:   0,
+		selectedPane: 1,
+	}
+
+	updated, _ := m.handleDayViewKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("t")}) // TodoOverview
+	got := updated.(Model)
+	if got.todoInputMode {
+		t.Fatalf("expected command key to not start inline draft mode")
+	}
+	if got.todoDraft != "" {
+		t.Fatalf("expected command key to not seed draft, got %q", got.todoDraft)
+	}
+}
+
+func TestTodoNonPrintableDoesNotStartInlineTyping(t *testing.T) {
+	m := Model{
+		cfg:          config.Default(),
+		dayViewTab:   0,
+		selectedPane: 1,
+	}
+
+	updated, _ := m.handleDayViewKey(tea.KeyMsg{Type: tea.KeyTab})
+	got := updated.(Model)
+	if got.todoInputMode {
+		t.Fatalf("expected non-printable key to not start inline draft mode")
+	}
+	if got.todoDraft != "" {
+		t.Fatalf("expected non-printable key to not seed draft, got %q", got.todoDraft)
+	}
+}
+
+func TestTodoCustomDayKeybindDoesNotStartInlineTyping(t *testing.T) {
+	cfg := config.Default()
+	cfg.Keybinds.Day.TodoOverview = "z"
+	m := Model{
+		cfg:          cfg,
+		dayViewTab:   0,
+		selectedPane: 1,
+	}
+
+	updated, _ := m.handleDayViewKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("z")})
+	got := updated.(Model)
+	if got.todoInputMode {
+		t.Fatalf("expected custom day keybind to be treated as command key")
+	}
+	if got.todoDraft != "" {
+		t.Fatalf("expected custom command key to not seed draft, got %q", got.todoDraft)
 	}
 }
 
