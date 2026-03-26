@@ -155,3 +155,29 @@ func TestIndentTopLevelClampsNestedDepthToThree(t *testing.T) {
 		}
 	}
 }
+
+// TestTodoDraftAcceptsJAndKWhenTyping verifies that "j" and "k" are appended to
+// the todo draft when the user is already typing (todoDraft non-empty), instead
+// of being silently swallowed as navigation keys.
+func TestTodoDraftAcceptsJAndKWhenTyping(t *testing.T) {
+	m := Model{
+		dayRecord:    journal.DayRecord{},
+		selectedPane: 1,
+		dayViewTab:   0,
+		selectedTodo: -1,
+		selectedSub:  -1,
+		selectedSub2: -1,
+	}
+
+	// Seed the draft so that j/k must be treated as text, not navigation.
+	m.todoDraft = "tas"
+
+	for _, ch := range []string{"k", "j"} {
+		m.appendTodoDraft(ch)
+	}
+
+	want := "taskj"
+	if m.todoDraft != want {
+		t.Fatalf("expected todoDraft %q, got %q", want, m.todoDraft)
+	}
+}

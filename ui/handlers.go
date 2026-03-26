@@ -149,8 +149,9 @@ func (m Model) handleDayViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		switch msg.Type {
 		case tea.KeyRunes:
 			s := string(msg.Runes)
-			// Keep j/k for navigation in the TODO list; everything else types.
-			if s != navDownKey && s != navUpKey {
+			// Keep j/k for navigation only when no draft is being typed;
+			// once the user has started typing, all runes (including j/k) go into the draft.
+			if m.todoDraft != "" || (s != navDownKey && s != navUpKey) {
 				m.appendTodoDraft(s)
 				m.viewport.SetContent(m.renderDayContent())
 				return m, nil
