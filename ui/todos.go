@@ -383,11 +383,8 @@ func (m Model) renderTodosPanel(w int) string {
 	b.WriteString(dayViewDividerStyle.Render(strings.Repeat("─", w)) + "\n")
 	if m.selectedPane == 1 {
 		draft := strings.TrimSpace(m.todoDraft)
-		if !m.todoInputMode {
+		if draft == "" {
 			draft = "type to add, enter to save"
-			b.WriteString(dayViewMutedStyle.Render("  "+draft) + "\n")
-		} else if draft == "" {
-			draft = "type to add a todo, enter to save"
 			b.WriteString(dayViewMutedStyle.Render("  "+draft) + "\n")
 		} else {
 			b.WriteString(dayViewValueStyle.Render("  + "+m.todoDraft) + "\n")

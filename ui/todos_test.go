@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"strings"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -382,5 +383,33 @@ func TestTodoInputModeSwallowsMutationAndNavigationKeys(t *testing.T) {
 	}
 	if m.selectedTodo != 0 || m.selectedSub != -1 || m.selectedSub2 != -1 {
 		t.Fatalf("expected selection to stay unchanged in input mode, got top=%d sub=%d sub2=%d", m.selectedTodo, m.selectedSub, m.selectedSub2)
+	}
+}
+
+func TestTodosPanelUsesSingleDraftHintAcrossEnterToggle(t *testing.T) {
+	m := Model{
+		selectedPane:  1,
+		dayViewTab:    0,
+		todoInputMode: false,
+		todoDraft:     "",
+		dayRecord:     journal.DayRecord{Todos: []journal.Todo{}},
+	}
+
+	panelBefore := m.renderTodosPanel(60)
+	if !strings.Contains(panelBefore, "type to add, enter to save") {
+		t.Fatalf("expected default draft hint before enter, got:\n%s", panelBefore)
+	}
+	if strings.Contains(panelBefore, "type to add a todo, enter to save") {
+		t.Fatalf("unexpected legacy hint before enter, got:\n%s", panelBefore)
+	}
+
+	updated, _ := m.handleDayViewKey(tea.KeyMsg{Type: tea.KeyEnter})
+	got := updated.(Model)
+	panelAfter := got.renderTodosPanel(60)
+	if !strings.Contains(panelAfter, "type to add, enter to save") {
+		t.Fatalf("expected same draft hint after enter, got:\n%s", panelAfter)
+	}
+	if strings.Contains(panelAfter, "type to add a todo, enter to save") {
+		t.Fatalf("unexpected alternate hint after enter, got:\n%s", panelAfter)
 	}
 }
