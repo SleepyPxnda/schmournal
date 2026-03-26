@@ -293,7 +293,6 @@ func (m Model) handleDayViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if m.dayViewTab == 0 {
 			m.selectedPane = 1
 			m.viewport.SetContent(m.renderDayContent())
-			return m, nil
 		}
 		return m, nil
 	case kb.Export:

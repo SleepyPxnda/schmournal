@@ -88,10 +88,6 @@ func (m *Model) backspaceTodoDraft() {
 		return
 	}
 	r := []rune(m.todoDraft)
-	if len(r) == 0 {
-		m.todoDraft = ""
-		return
-	}
 	m.todoDraft = string(r[:len(r)-1])
 }
 
