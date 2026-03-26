@@ -1,8 +1,11 @@
 package ui
 
 import (
+	"strings"
 	"testing"
 
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/sleepypxnda/schmournal/config"
 	"github.com/sleepypxnda/schmournal/journal"
 )
 
@@ -179,5 +182,303 @@ func TestTodoDraftAcceptsJAndKWhenTyping(t *testing.T) {
 	want := "taskj"
 	if m.todoDraft != want {
 		t.Fatalf("expected todoDraft %q, got %q", want, m.todoDraft)
+	}
+}
+
+func TestTodoKeyTogglesPaneFocus(t *testing.T) {
+	m := Model{
+		cfg:           config.Default(),
+		dayViewTab:    0,
+		selectedPane:  0,
+		todoDraft:     "stale",
+		todoInputMode: false,
+	}
+
+	updated, _ := m.handleDayViewKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("t")})
+	got := updated.(Model)
+	if got.selectedPane != 1 {
+		t.Fatalf("expected todo pane to be focused, got pane=%d", got.selectedPane)
+	}
+
+	updated, _ = got.handleDayViewKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("t")})
+	got = updated.(Model)
+	if got.selectedPane != 0 {
+		t.Fatalf("expected todo pane to close and return to worklog pane, got pane=%d", got.selectedPane)
+	}
+	if got.todoInputMode {
+		t.Fatalf("expected todo input mode to be disabled when closing todo pane")
+	}
+	if got.todoDraft != "" {
+		t.Fatalf("expected todo draft to be cleared when closing todo pane, got %q", got.todoDraft)
+	}
+}
+
+func TestTodoEnterEnablesInputThenSavesInlineInTodoPane(t *testing.T) {
+	m := Model{
+		cfg:          config.Default(),
+		dayViewTab:   0,
+		selectedPane: 1,
+		selectedTodo: -1,
+		selectedSub:  -1,
+		selectedSub2: -1,
+		dayRecord:    journal.DayRecord{Todos: []journal.Todo{}},
+	}
+
+	updated, _ := m.handleDayViewKey(tea.KeyMsg{Type: tea.KeyEnter})
+	got := updated.(Model)
+	if !got.todoInputMode {
+		t.Fatalf("expected enter to enable todo input mode")
+	}
+
+	updated, _ = got.handleDayViewKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("t")})
+	got = updated.(Model)
+	updated, _ = got.handleDayViewKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("a")})
+	got = updated.(Model)
+	updated, _ = got.handleDayViewKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("s")})
+	got = updated.(Model)
+	updated, _ = got.handleDayViewKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("k")})
+	got = updated.(Model)
+
+	updated, _ = got.handleDayViewKey(tea.KeyMsg{Type: tea.KeyEnter})
+	got = updated.(Model)
+
+	if got.todoInputMode {
+		t.Fatalf("expected todo input mode to be disabled after submit")
+	}
+	if got.selectedPane != 1 {
+		t.Fatalf("expected to stay in todo pane after submit, got pane=%d", got.selectedPane)
+	}
+	if len(got.dayRecord.Todos) != 1 || got.dayRecord.Todos[0].Title != "task" {
+		t.Fatalf("expected one saved todo titled task, got %#v", got.dayRecord.Todos)
+	}
+}
+
+func TestTodoTypingStartsInlineInputMode(t *testing.T) {
+	m := Model{
+		cfg:          config.Default(),
+		dayViewTab:   0,
+		selectedPane: 1,
+	}
+
+	updated, _ := m.handleDayViewKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("z")})
+	got := updated.(Model)
+	if !got.todoInputMode {
+		t.Fatalf("expected typing in todo pane to start inline input mode")
+	}
+	if got.todoDraft != "z" {
+		t.Fatalf("expected first typed rune to seed inline todo draft, got %q", got.todoDraft)
+	}
+}
+
+func TestTodoAddKeyStartsInlineInputInsteadOfModal(t *testing.T) {
+	m := Model{
+		cfg:          config.Default(),
+		state:        stateDayView,
+		dayViewTab:   0,
+		selectedPane: 1,
+	}
+
+	updated, _ := m.handleDayViewKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("a")})
+	got := updated.(Model)
+	if got.state != stateDayView {
+		t.Fatalf("expected to remain in day view (no create modal), got state=%v", got.state)
+	}
+	if !got.todoInputMode {
+		t.Fatalf("expected add key to enter inline todo input mode")
+	}
+	if got.todoDraft != "" {
+		t.Fatalf("expected add key to open empty inline draft, got %q", got.todoDraft)
+	}
+}
+
+func TestTodoEditKeyStaysInDayViewWithoutSelection(t *testing.T) {
+	m := Model{
+		cfg:          config.Default(),
+		state:        stateDayView,
+		width:        120,
+		dayViewTab:   0,
+		selectedPane: 1,
+		selectedTodo: -1,
+		selectedSub:  -1,
+		selectedSub2: -1,
+		dayRecord:    journal.DayRecord{Todos: []journal.Todo{}},
+	}
+
+	updated, _ := m.handleDayViewKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(m.cfg.Keybinds.Day.Edit)})
+	got := updated.(Model)
+	if got.state != stateDayView {
+		t.Fatalf("expected to stay in day view when editing without selection, got state=%v", got.state)
+	}
+}
+
+func TestTodoCommandKeyDoesNotStartInlineTyping(t *testing.T) {
+	m := Model{
+		cfg:          config.Default(),
+		dayViewTab:   0,
+		selectedPane: 1,
+	}
+
+	updated, _ := m.handleDayViewKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("t")}) // TodoOverview
+	got := updated.(Model)
+	if got.todoInputMode {
+		t.Fatalf("expected command key to not start inline draft mode")
+	}
+	if got.todoDraft != "" {
+		t.Fatalf("expected command key to not seed draft, got %q", got.todoDraft)
+	}
+}
+
+func TestTodoNonPrintableDoesNotStartInlineTyping(t *testing.T) {
+	m := Model{
+		cfg:          config.Default(),
+		dayViewTab:   0,
+		selectedPane: 1,
+	}
+
+	updated, _ := m.handleDayViewKey(tea.KeyMsg{Type: tea.KeyTab})
+	got := updated.(Model)
+	if got.todoInputMode {
+		t.Fatalf("expected non-printable key to not start inline draft mode")
+	}
+	if got.todoDraft != "" {
+		t.Fatalf("expected non-printable key to not seed draft, got %q", got.todoDraft)
+	}
+}
+
+func TestTodoCustomDayKeybindDoesNotStartInlineTyping(t *testing.T) {
+	cfg := config.Default()
+	cfg.Keybinds.Day.TodoOverview = "z"
+	m := Model{
+		cfg:          cfg,
+		dayViewTab:   0,
+		selectedPane: 1,
+	}
+
+	updated, _ := m.handleDayViewKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("z")})
+	got := updated.(Model)
+	if got.todoInputMode {
+		t.Fatalf("expected custom day keybind to be treated as command key")
+	}
+	if got.todoDraft != "" {
+		t.Fatalf("expected custom command key to not seed draft, got %q", got.todoDraft)
+	}
+}
+
+func TestTodoInputModeSwallowsMutationAndNavigationKeys(t *testing.T) {
+	m := Model{
+		cfg:           config.Default(),
+		dayViewTab:    0,
+		selectedPane:  1,
+		todoInputMode: true,
+		selectedTodo:  0,
+		selectedSub:   -1,
+		selectedSub2:  -1,
+		dayRecord: journal.DayRecord{
+			Todos: []journal.Todo{
+				{
+					ID:    "t1",
+					Title: "Top 1",
+				},
+				{
+					ID:    "t2",
+					Title: "Top 2",
+				},
+			},
+		},
+	}
+
+	for _, key := range []tea.KeyMsg{
+		{Type: tea.KeyDelete},
+		{Type: tea.KeyShiftTab},
+		{Type: tea.KeyTab},
+		{Type: tea.KeyDown},
+		{Type: tea.KeyUp},
+	} {
+		updated, _ := m.handleDayViewKey(key)
+		m = updated.(Model)
+	}
+
+	if len(m.dayRecord.Todos) != 2 {
+		t.Fatalf("expected todo list to stay unchanged in input mode, got len=%d", len(m.dayRecord.Todos))
+	}
+	if m.selectedTodo != 0 || m.selectedSub != -1 || m.selectedSub2 != -1 {
+		t.Fatalf("expected selection to stay unchanged in input mode, got top=%d sub=%d sub2=%d", m.selectedTodo, m.selectedSub, m.selectedSub2)
+	}
+}
+
+func TestTodosPanelUsesSingleDraftHintAcrossEnterToggle(t *testing.T) {
+	const (
+		primaryHint = "type to add, enter to save"
+		legacyHint  = "type to add a todo, enter to save"
+	)
+
+	m := Model{
+		state:         stateDayView,
+		selectedPane:  1,
+		dayViewTab:    0,
+		todoInputMode: false,
+		todoDraft:     "",
+		dayRecord:     journal.DayRecord{Todos: []journal.Todo{}},
+	}
+
+	panelBefore := m.renderTodosPanel(60)
+	if !strings.Contains(panelBefore, primaryHint) {
+		t.Fatalf("expected default draft hint before enter, got:\n%s", panelBefore)
+	}
+	if strings.Contains(panelBefore, legacyHint) {
+		t.Fatalf("unexpected legacy hint before enter, got:\n%s", panelBefore)
+	}
+
+	updated, _ := m.handleDayViewKey(tea.KeyMsg{Type: tea.KeyEnter})
+	got := updated.(Model)
+	if !got.todoInputMode {
+		t.Fatalf("expected enter to enable todo input mode")
+	}
+	panelAfter := got.renderTodosPanel(60)
+	if !strings.Contains(panelAfter, primaryHint) {
+		t.Fatalf("expected same draft hint after enter, got:\n%s", panelAfter)
+	}
+	if strings.Contains(panelAfter, legacyHint) {
+		t.Fatalf("unexpected alternate hint after enter, got:\n%s", panelAfter)
+	}
+}
+
+func TestTodosPanelShowsInlineDraftInInputMode(t *testing.T) {
+	m := Model{
+		selectedPane:  1,
+		dayViewTab:    0,
+		todoInputMode: true,
+		todoDraft:     "draft task",
+		dayRecord:     journal.DayRecord{Todos: []journal.Todo{}},
+	}
+
+	rendered := m.renderTodosPanel(60)
+	if !strings.Contains(rendered, "+ draft task") {
+		t.Fatalf("expected inline draft line while in input mode, got:\n%s", rendered)
+	}
+}
+
+func TestConfirmDeleteUsesTodoSubjectForTodoDeletion(t *testing.T) {
+	m := Model{
+		width:      120,
+		height:     40,
+		deleteDay:  false,
+		deleteIdx:  deleteTodoIdx,
+		selectedTodo: 0,
+		selectedSub:  -1,
+		selectedSub2: -1,
+		dayRecord: journal.DayRecord{
+			Todos: []journal.Todo{
+				{ID: "t1", Title: "Ship release"},
+			},
+		},
+	}
+
+	view := m.viewConfirmDelete()
+	if !strings.Contains(view, `Delete todo "Ship release"?`) {
+		t.Fatalf("expected todo-specific delete prompt, got:\n%s", view)
+	}
+	if strings.Contains(view, `Delete entry "`) {
+		t.Fatalf("expected no entry wording for todo deletion, got:\n%s", view)
 	}
 }

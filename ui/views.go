@@ -719,6 +719,12 @@ func (m Model) viewDayView() string {
 			clockKey = kb.ClockStop
 			clockLabel = "stop clock"
 		}
+		editLabel := "edit"
+		deleteLabel := "del"
+		if m.selectedPane == 1 {
+			editLabel = "edit todo"
+			deleteLabel = "del todo"
+		}
 		footerKeys = [][2]string{
 			{"←/→", "switch tab"},
 			{"j/k", "select"},
@@ -726,8 +732,8 @@ func (m Model) viewDayView() string {
 			{"S-tab", "outdent"},
 			{kb.AddWork, "work"},
 			{kb.AddBreak, "break"},
-			{kb.Edit, "edit"},
-			{kb.Delete, "del"},
+			{kb.Edit, editLabel},
+			{kb.Delete, deleteLabel},
 			{"backspace", "del todo"},
 			{"space", "toggle todo"},
 			{joinKeyLabels(kb.SetStartNow, kb.SetStartManual), "start"},
@@ -986,6 +992,20 @@ func (m Model) viewConfirmDelete() string {
 			subject = m.records[m.deleteIdx].Date
 		}
 		subject = "the day " + subject
+	} else if m.deleteIdx == deleteTodoIdx {
+		if m.selectedTodo >= 0 && m.selectedTodo < len(m.dayRecord.Todos) {
+			if m.selectedSub >= 0 && m.selectedSub2 >= 0 &&
+				m.selectedSub < len(m.dayRecord.Todos[m.selectedTodo].Subtodos) &&
+				m.selectedSub2 < len(m.dayRecord.Todos[m.selectedTodo].Subtodos[m.selectedSub].Subtodos) {
+				subject = `todo "` + m.dayRecord.Todos[m.selectedTodo].Subtodos[m.selectedSub].Subtodos[m.selectedSub2].Title + `"`
+			} else if m.selectedSub >= 0 && m.selectedSub < len(m.dayRecord.Todos[m.selectedTodo].Subtodos) {
+				subject = `todo "` + m.dayRecord.Todos[m.selectedTodo].Subtodos[m.selectedSub].Title + `"`
+			} else {
+				subject = `todo "` + m.dayRecord.Todos[m.selectedTodo].Title + `"`
+			}
+		} else {
+			subject = "this todo"
+		}
 	} else {
 		if m.deleteIdx >= 0 && m.deleteIdx < len(m.dayRecord.Entries) {
 			subject = `entry "` + m.dayRecord.Entries[m.deleteIdx].Task + `"`
