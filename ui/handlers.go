@@ -241,9 +241,6 @@ func (m Model) handleDayViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			if m.todoInputMode {
 				saved := m.commitTodoDraft()
 				m.exitTodoInputMode()
-				if saved {
-					m.selectedPane = 0
-				}
 				m.viewport.SetContent(m.renderDayContent())
 				if saved {
 					return m, m.saveDayCmd("✓ TODO saved")

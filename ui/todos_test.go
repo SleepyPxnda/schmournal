@@ -212,7 +212,7 @@ func TestTodoKeyTogglesPaneFocus(t *testing.T) {
 	}
 }
 
-func TestTodoEnterEnablesInputThenSavesAndReturnsToNavigation(t *testing.T) {
+func TestTodoEnterEnablesInputThenSavesInlineInTodoPane(t *testing.T) {
 	m := Model{
 		cfg:          config.Default(),
 		dayViewTab:   0,
@@ -244,8 +244,8 @@ func TestTodoEnterEnablesInputThenSavesAndReturnsToNavigation(t *testing.T) {
 	if got.todoInputMode {
 		t.Fatalf("expected todo input mode to be disabled after submit")
 	}
-	if got.selectedPane != 0 {
-		t.Fatalf("expected to return to worklog pane after submit, got pane=%d", got.selectedPane)
+	if got.selectedPane != 1 {
+		t.Fatalf("expected to stay in todo pane after submit, got pane=%d", got.selectedPane)
 	}
 	if len(got.dayRecord.Todos) != 1 || got.dayRecord.Todos[0].Title != "task" {
 		t.Fatalf("expected one saved todo titled task, got %#v", got.dayRecord.Todos)
