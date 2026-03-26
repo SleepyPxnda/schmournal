@@ -442,3 +442,43 @@ func TestTodosPanelUsesSingleDraftHintAcrossEnterToggle(t *testing.T) {
 		t.Fatalf("unexpected alternate hint after enter, got:\n%s", panelAfter)
 	}
 }
+
+func TestTodosPanelShowsInlineDraftInInputMode(t *testing.T) {
+	m := Model{
+		selectedPane:  1,
+		dayViewTab:    0,
+		todoInputMode: true,
+		todoDraft:     "draft task",
+		dayRecord:     journal.DayRecord{Todos: []journal.Todo{}},
+	}
+
+	rendered := m.renderTodosPanel(60)
+	if !strings.Contains(rendered, "+ draft task") {
+		t.Fatalf("expected inline draft line while in input mode, got:\n%s", rendered)
+	}
+}
+
+func TestConfirmDeleteUsesTodoSubjectForTodoDeletion(t *testing.T) {
+	m := Model{
+		width:      120,
+		height:     40,
+		deleteDay:  false,
+		deleteIdx:  deleteTodoIdx,
+		selectedTodo: 0,
+		selectedSub:  -1,
+		selectedSub2: -1,
+		dayRecord: journal.DayRecord{
+			Todos: []journal.Todo{
+				{ID: "t1", Title: "Ship release"},
+			},
+		},
+	}
+
+	view := m.viewConfirmDelete()
+	if !strings.Contains(view, `Delete todo "Ship release"?`) {
+		t.Fatalf("expected todo-specific delete prompt, got:\n%s", view)
+	}
+	if strings.Contains(view, `Delete entry "`) {
+		t.Fatalf("expected no entry wording for todo deletion, got:\n%s", view)
+	}
+}
