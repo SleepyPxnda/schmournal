@@ -61,6 +61,7 @@ type WeekKeybinds struct {
 	PrevWeek       string `toml:"prev_week"`
 	NextWeek       string `toml:"next_week"`
 	SetWeeklyHours string `toml:"set_weekly_hours"`
+	TodoOverview   string `toml:"todo_overview"`
 }
 
 // Keybinds groups all view-specific keybind configurations.
@@ -131,6 +132,7 @@ func Default() Config {
 				PrevWeek:       "h",
 				NextWeek:       "l",
 				SetWeeklyHours: "g",
+				TodoOverview:   "t",
 			},
 		},
 	}
@@ -348,6 +350,7 @@ clock_stop      = %q   # Stop the clock and log the entry (Clocking tab)
 prev_week        = %q   # Go to the previous week (also ←)
 next_week        = %q   # Go to the next week  (also →)
 set_weekly_hours = %q   # Set a custom hours goal for the displayed week
+todo_overview    = %q   # Open the cross-day TODO overview
 `,
 		cfg.StoragePath,
 		cfg.WeeklyHoursGoal,
@@ -378,6 +381,7 @@ set_weekly_hours = %q   # Set a custom hours goal for the displayed week
 		cfg.Keybinds.Week.PrevWeek,
 		cfg.Keybinds.Week.NextWeek,
 		cfg.Keybinds.Week.SetWeeklyHours,
+		cfg.Keybinds.Week.TodoOverview,
 	)
 }
 
@@ -493,6 +497,7 @@ func (cfg *Config) validate() error {
 	fill(&wk.PrevWeek, dw.PrevWeek)
 	fill(&wk.NextWeek, dw.NextWeek)
 	fill(&wk.SetWeeklyHours, dw.SetWeeklyHours)
+	fill(&wk.TodoOverview, dw.TodoOverview)
 
 	if err := checkDuplicates("list", lk.Quit, lk.OpenToday, lk.OpenDate, lk.Delete, lk.Export, lk.WeekView, lk.StatsView, lk.TodoOverview, lk.SwitchWorkspace); err != nil {
 		return err
@@ -509,7 +514,7 @@ func (cfg *Config) validate() error {
 	if err := checkDuplicates("day", dayKeys...); err != nil {
 		return err
 	}
-	if err := checkDuplicates("week", wk.PrevWeek, wk.NextWeek, wk.SetWeeklyHours); err != nil {
+	if err := checkDuplicates("week", wk.PrevWeek, wk.NextWeek, wk.SetWeeklyHours, wk.TodoOverview); err != nil {
 		return err
 	}
 

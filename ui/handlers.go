@@ -82,6 +82,8 @@ func (m Model) handleWeekViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case kb.Week.SetWeeklyHours:
 		return m.openWeekHoursInput()
+	case kb.Week.TodoOverview:
+		return m.openTodoOverview(stateWeekView)
 	}
 	var cmd tea.Cmd
 	m.viewport, cmd = m.viewport.Update(msg)
@@ -179,8 +181,26 @@ func (m Model) handleDayViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case "tab":
 		if m.dayViewTab == 0 {
+			if m.selectedPane == 1 {
+				if m.indentSelectedTodo() {
+					m.viewport.SetContent(m.renderDayContent())
+					return m, m.saveDayCmd("✓ TODO indented")
+				}
+			}
 			m.selectedPane = (m.selectedPane + 1) % 2
 			m.viewport.SetContent(m.renderDayContent())
+		}
+		return m, nil
+	case "delete":
+		if m.dayViewTab == 0 && m.selectedPane == 1 && m.deleteSelectedTodoNow() {
+			m.viewport.SetContent(m.renderDayContent())
+			return m, m.saveDayCmd("✓ TODO deleted")
+		}
+		return m, nil
+	case "enter":
+		if m.dayViewTab == 0 && m.selectedPane == 1 && m.commitTodoDraft() {
+			m.viewport.SetContent(m.renderDayContent())
+			return m, m.saveDayCmd("✓ TODO saved")
 		}
 		return m, nil
 	case " ":
@@ -249,10 +269,12 @@ func (m Model) handleDayViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case kb.Notes:
 		return m.openNotesEditor()
 	case kb.TodoOverview:
-		if m.dayViewTab == 0 && m.selectedPane == 1 {
-			return m.openTodoFormForSelection()
+		if m.dayViewTab == 0 {
+			m.selectedPane = 1
+			m.viewport.SetContent(m.renderDayContent())
+			return m, nil
 		}
-		return m.openTodoOverview(stateDayView)
+		return m, nil
 	case kb.Export:
 		rec := m.dayRecord
 		return m, func() tea.Msg {
@@ -289,6 +311,18 @@ func (m Model) handleDayViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			cmds = append(cmds, clearStatusCmd())
 		}
 		return m, tea.Batch(cmds...)
+	}
+	if m.dayViewTab == 0 && m.selectedPane == 1 {
+		switch msg.Type {
+		case tea.KeyRunes:
+			m.appendTodoDraft(string(msg.Runes))
+			m.viewport.SetContent(m.renderDayContent())
+			return m, nil
+		case tea.KeyBackspace:
+			m.backspaceTodoDraft()
+			m.viewport.SetContent(m.renderDayContent())
+			return m, nil
+		}
 	}
 	var cmd tea.Cmd
 	m.viewport, cmd = m.viewport.Update(msg)

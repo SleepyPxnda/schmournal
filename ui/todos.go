@@ -79,6 +79,68 @@ func (m *Model) toggleSelectedTodo() bool {
 	return true
 }
 
+func (m *Model) appendTodoDraft(s string) {
+	m.todoDraft += s
+}
+
+func (m *Model) backspaceTodoDraft() {
+	if m.todoDraft == "" {
+		return
+	}
+	r := []rune(m.todoDraft)
+	m.todoDraft = string(r[:len(r)-1])
+}
+
+func (m *Model) commitTodoDraft() bool {
+	title := strings.TrimSpace(m.todoDraft)
+	if title == "" {
+		return false
+	}
+	m.dayRecord.Todos = append(m.dayRecord.Todos, journal.Todo{
+		ID:       journal.NewID(),
+		Title:    title,
+		Subtodos: []journal.Todo{},
+	})
+	m.selectedTodo = len(m.dayRecord.Todos) - 1
+	m.selectedSub = -1
+	m.todoDraft = ""
+	return true
+}
+
+func (m *Model) indentSelectedTodo() bool {
+	if m.selectedTodo <= 0 || m.selectedTodo >= len(m.dayRecord.Todos) || m.selectedSub != -1 {
+		return false
+	}
+	parentIdx := m.selectedTodo - 1
+	td := m.dayRecord.Todos[m.selectedTodo]
+	m.dayRecord.Todos[parentIdx].Subtodos = append(m.dayRecord.Todos[parentIdx].Subtodos, td)
+	m.dayRecord.Todos = append(m.dayRecord.Todos[:m.selectedTodo], m.dayRecord.Todos[m.selectedTodo+1:]...)
+	m.selectedTodo = parentIdx
+	m.selectedSub = len(m.dayRecord.Todos[parentIdx].Subtodos) - 1
+	return true
+}
+
+func (m *Model) deleteSelectedTodoNow() bool {
+	if m.selectedTodo < 0 || m.selectedTodo >= len(m.dayRecord.Todos) {
+		return false
+	}
+	if m.selectedSub >= 0 {
+		st := m.dayRecord.Todos[m.selectedTodo].Subtodos
+		if m.selectedSub >= len(st) {
+			return false
+		}
+		m.dayRecord.Todos[m.selectedTodo].Subtodos = append(st[:m.selectedSub], st[m.selectedSub+1:]...)
+		m.selectedSub = -1
+		return true
+	}
+	m.dayRecord.Todos = append(m.dayRecord.Todos[:m.selectedTodo], m.dayRecord.Todos[m.selectedTodo+1:]...)
+	if m.selectedTodo >= len(m.dayRecord.Todos) {
+		m.selectedTodo = len(m.dayRecord.Todos) - 1
+	}
+	m.selectedSub = -1
+	return true
+}
+
 func (m Model) buildTodoOverviewItems() []todoOverviewItem {
 	records := m.records
 	if loaded, err := journal.LoadAll(); err == nil {
@@ -136,9 +198,21 @@ func (m Model) buildTodoOverviewItems() []todoOverviewItem {
 func (m Model) renderTodosPanel(w int) string {
 	var b strings.Builder
 	b.WriteString(dayViewSectionStyle.Render("✅  Todos") + "\n")
+	b.WriteString(dayViewDividerStyle.Render(strings.Repeat("─", w)) + "\n")
+	if m.selectedPane == 1 {
+		draft := strings.TrimSpace(m.todoDraft)
+		if draft == "" {
+			draft = "type to add a todo, enter to save"
+			b.WriteString(dayViewMutedStyle.Render("  "+draft) + "\n")
+		} else {
+			b.WriteString(dayViewValueStyle.Render("  + "+m.todoDraft) + "\n")
+		}
+	}
 	if len(m.dayRecord.Todos) == 0 {
 		b.WriteString(dayViewMutedStyle.Render("  No todos yet") + "\n")
-		b.WriteString(dayViewMutedStyle.Render("  a add todo") + "\n")
+		if m.selectedPane != 1 {
+			b.WriteString(dayViewMutedStyle.Render("  t focus todo pane") + "\n")
+		}
 		return b.String()
 	}
 	for i, td := range m.dayRecord.Todos {

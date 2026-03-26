@@ -206,11 +206,27 @@ func (m Model) renderWorkLogContent() string {
 	b.WriteString("\n")
 
 	// ── Notes + Todos two-column section ───────────────────────────────────────
+	b.WriteString("\n" + div + "\n")
 	if innerW >= 60 {
 		leftW := (innerW - 1) / 2
 		rightW := innerW - leftW - 1
-		leftBlock := lipgloss.NewStyle().Width(leftW).Render(m.renderNotesPanel(leftW))
-		rightBlock := clockPanelBorderStyle.Width(rightW).Render(m.renderTodosPanel(rightW))
+		leftPanel := m.renderNotesPanel(leftW)
+		rightPanel := m.renderTodosPanel(rightW)
+		maxH := lipgloss.Height(leftPanel)
+		if h := lipgloss.Height(rightPanel); h > maxH {
+			maxH = h
+		}
+		padToHeight := func(s string, h int) string {
+			cur := lipgloss.Height(s)
+			if cur >= h {
+				return s
+			}
+			return s + strings.Repeat("\n", h-cur)
+		}
+		leftPanel = padToHeight(leftPanel, maxH)
+		rightPanel = padToHeight(rightPanel, maxH)
+		leftBlock := lipgloss.NewStyle().Width(leftW).Height(maxH).Render(leftPanel)
+		rightBlock := clockPanelBorderStyle.Width(rightW).Height(maxH).Render(rightPanel)
 		b.WriteString(lipgloss.JoinHorizontal(lipgloss.Top, leftBlock, rightBlock))
 		b.WriteString("\n")
 	} else {
@@ -706,7 +722,7 @@ func (m Model) viewDayView() string {
 		footerKeys = [][2]string{
 			{"←/→", "switch tab"},
 			{"j/k", "select"},
-			{"tab", "pane"},
+			{"tab", "pane/indent"},
 			{kb.AddWork, "work"},
 			{kb.AddBreak, "break"},
 			{kb.Edit, "edit"},
@@ -715,7 +731,7 @@ func (m Model) viewDayView() string {
 			{joinKeyLabels(kb.SetStartNow, kb.SetStartManual), "start"},
 			{joinKeyLabels(kb.SetEndNow, kb.SetEndManual), "end"},
 			{kb.Notes, "notes"},
-			{kb.TodoOverview, "todos"},
+			{kb.TodoOverview, "todo pane"},
 			{clockKey, clockLabel},
 			{kb.Export, "export"},
 			{"esc", "back"},
@@ -1022,6 +1038,7 @@ func (m Model) viewWeekView() string {
 		{"j/k", "scroll"},
 		{"←/→", "prev/next week"},
 		{kb.SetWeeklyHours, "set week goal"},
+		{kb.TodoOverview, "todos"},
 		{"esc", "back"},
 	})
 	return lipgloss.JoinVertical(lipgloss.Left, header, subHeader, m.viewport.View(), footer)

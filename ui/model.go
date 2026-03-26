@@ -151,6 +151,7 @@ type Model struct {
 	selectedSub  int // -1 = parent todo, >=0 = subtodo index
 	todoEditTop  int // -1 = new, >=0 = editing top-level todo index
 	todoEditSub  int // -1 = top-level, >=0 = editing subtodo index
+	todoDraft    string
 
 	todoOverviewItems []todoOverviewItem
 	todoOverviewIdx   int
