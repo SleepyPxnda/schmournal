@@ -1035,12 +1035,10 @@ func (m Model) viewWeekView() string {
 	sep := dayViewDividerStyle.Render(strings.Repeat("─", m.width))
 	subHeader := navBar + "\n" + sep
 
-	kb := m.cfg.Keybinds.Week
 	footer := m.renderFooter([][2]string{
 		{"j/k", "scroll"},
 		{"←/→", "prev/next week"},
-		{kb.SetWeeklyHours, "set week goal"},
-		{kb.TodoOverview, "todos"},
+		{m.cfg.Keybinds.Week.SetWeeklyHours, "set week goal"},
 		{"esc", "back"},
 	})
 	return lipgloss.JoinVertical(lipgloss.Left, header, subHeader, m.viewport.View(), footer)
