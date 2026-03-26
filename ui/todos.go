@@ -157,7 +157,7 @@ func (m *Model) indentSelectedTodo() bool {
 		return false
 	}
 	// Indent top-level todo to level-2 under previous top-level sibling.
-	if m.selectedTodo <= 0 || m.selectedSub != -1 {
+	if m.selectedTodo <= 0 {
 		return false
 	}
 	parentIdx := m.selectedTodo - 1
