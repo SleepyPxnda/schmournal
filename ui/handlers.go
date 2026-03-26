@@ -140,6 +140,23 @@ func (m Model) handleWeekHoursInputKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 func (m Model) handleDayViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	n := len(m.dayRecord.Entries)
 	kb := m.cfg.Keybinds.Day
+	inTodoPane := m.dayViewTab == 0 && m.selectedPane == 1
+	if inTodoPane {
+		switch msg.Type {
+		case tea.KeyRunes:
+			s := string(msg.Runes)
+			// Keep j/k for navigation in the TODO list; everything else types.
+			if s != "j" && s != "k" {
+				m.appendTodoDraft(s)
+				m.viewport.SetContent(m.renderDayContent())
+				return m, nil
+			}
+		case tea.KeyBackspace:
+			m.backspaceTodoDraft()
+			m.viewport.SetContent(m.renderDayContent())
+			return m, nil
+		}
+	}
 	switch msg.String() {
 	case "left":
 		if m.dayViewTab > 0 {
@@ -311,18 +328,6 @@ func (m Model) handleDayViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			cmds = append(cmds, clearStatusCmd())
 		}
 		return m, tea.Batch(cmds...)
-	}
-	if m.dayViewTab == 0 && m.selectedPane == 1 {
-		switch msg.Type {
-		case tea.KeyRunes:
-			m.appendTodoDraft(string(msg.Runes))
-			m.viewport.SetContent(m.renderDayContent())
-			return m, nil
-		case tea.KeyBackspace:
-			m.backspaceTodoDraft()
-			m.viewport.SetContent(m.renderDayContent())
-			return m, nil
-		}
 	}
 	var cmd tea.Cmd
 	m.viewport, cmd = m.viewport.Update(msg)
