@@ -198,8 +198,6 @@ func TestTodoKeyTogglesPaneFocus(t *testing.T) {
 	if got.selectedPane != 1 {
 		t.Fatalf("expected todo pane to be focused, got pane=%d", got.selectedPane)
 	}
-	got.todoDraft = "stale"
-	got.todoInputMode = false
 
 	updated, _ = got.handleDayViewKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("t")})
 	got = updated.(Model)

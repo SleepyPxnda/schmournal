@@ -203,11 +203,15 @@ func (m Model) handleDayViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case "tab":
 		if m.dayViewTab == 0 {
-			if m.selectedPane == 1 {
+			if m.selectedPane == 1 && m.todoInputMode {
+				return m, nil
+			}
+			if m.selectedPane == 1 && !m.todoInputMode {
 				if m.indentSelectedTodo() {
 					m.viewport.SetContent(m.renderDayContent())
 					return m, m.saveDayCmd("✓ TODO indented")
 				}
+				// In focused TODO navigation mode, tab is reserved for indenting and does not cycle panes.
 				return m, nil
 			}
 			m.selectedPane = (m.selectedPane + 1) % 2
@@ -230,8 +234,10 @@ func (m Model) handleDayViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if m.dayViewTab == 0 && m.selectedPane == 1 {
 			if m.todoInputMode {
 				saved := m.commitTodoDraft()
-				m.todoInputMode = false
-				m.selectedPane = 0
+				m.exitTodoInputMode()
+				if saved {
+					m.selectedPane = 0
+				}
 				m.viewport.SetContent(m.renderDayContent())
 				if saved {
 					return m, m.saveDayCmd("✓ TODO saved")
@@ -325,8 +331,7 @@ func (m Model) handleDayViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.selectedPane = 1
 			} else {
 				m.selectedPane = 0
-				m.todoInputMode = false
-				m.todoDraft = ""
+				m.exitTodoInputMode()
 			}
 			m.viewport.SetContent(m.renderDayContent())
 			return m, nil

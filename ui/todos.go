@@ -116,6 +116,11 @@ func (m *Model) backspaceTodoDraft() {
 	m.todoDraft = string(r[:len(r)-1])
 }
 
+func (m *Model) exitTodoInputMode() {
+	m.todoInputMode = false
+	m.todoDraft = ""
+}
+
 func (m *Model) commitTodoDraft() bool {
 	title := strings.TrimSpace(m.todoDraft)
 	if title == "" {
@@ -379,7 +384,7 @@ func (m Model) renderTodosPanel(w int) string {
 	if m.selectedPane == 1 {
 		draft := strings.TrimSpace(m.todoDraft)
 		if !m.todoInputMode {
-			draft = "enter add mode, then type and enter to save"
+			draft = "enter to add, then type and enter to save"
 			b.WriteString(dayViewMutedStyle.Render("  "+draft) + "\n")
 		} else if draft == "" {
 			draft = "type to add a todo, enter to save"
