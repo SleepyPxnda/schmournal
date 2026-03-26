@@ -7,6 +7,7 @@ import (
 
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/sleepypxnda/schmournal/config"
 	"github.com/sleepypxnda/schmournal/journal"
 )
 
@@ -138,10 +139,6 @@ func (m Model) handleWeekHoursInputKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) handleDayViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	const (
-		navDownKey = "j"
-		navUpKey   = "k"
-	)
 	n := len(m.dayRecord.Entries)
 	kb := m.cfg.Keybinds.Day
 	inTodoPane := m.dayViewTab == 0 && m.selectedPane == 1
@@ -149,8 +146,7 @@ func (m Model) handleDayViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		switch msg.Type {
 		case tea.KeyRunes:
 			s := string(msg.Runes)
-			// Keep j/k for navigation in the TODO list; everything else types.
-			if s != navDownKey && s != navUpKey {
+			if m.todoRuneIsDraftInput(s, kb) {
 				m.appendTodoDraft(s)
 				m.viewport.SetContent(m.renderDayContent())
 				return m, nil
@@ -314,13 +310,7 @@ func (m Model) handleDayViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case kb.Notes:
 		return m.openNotesEditor()
 	case kb.TodoOverview:
-		if m.dayViewTab == 0 {
-			if m.selectedPane != 1 {
-				m.selectedPane = 1
-				m.viewport.SetContent(m.renderDayContent())
-			}
-		}
-		return m, nil
+		return m.openTodoOverview(stateDayView)
 	case kb.Export:
 		rec := m.dayRecord
 		return m, func() tea.Msg {
@@ -368,6 +358,32 @@ func (m Model) openTodoFormForSelection() (tea.Model, tea.Cmd) {
 		return m.openTodoForm(m.selectedTodo, m.selectedSub, m.selectedSub2)
 	}
 	return m.openTodoForm(-1, -1, -1)
+}
+
+func (m Model) todoRuneIsDraftInput(s string, kb config.DayKeybinds) bool {
+	// Keep movement/form commands reachable while TODO pane is focused;
+	// only non-command runes should be treated as draft typing.
+	switch s {
+	case "j", "k", " ", "a", "A":
+		return false
+	}
+	switch s {
+	case kb.AddWork,
+		kb.AddBreak,
+		kb.Edit,
+		kb.Delete,
+		kb.SetStartNow,
+		kb.SetStartManual,
+		kb.SetEndNow,
+		kb.SetEndManual,
+		kb.Notes,
+		kb.TodoOverview,
+		kb.Export,
+		kb.ClockStart,
+		kb.ClockStop:
+		return false
+	}
+	return true
 }
 
 func (m Model) handleTodoFormKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -712,8 +728,11 @@ func (m Model) handleTodoOverviewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "esc", kb.List.Quit:
 		m.state = m.todoOverviewFrom
-		if m.state == stateDayView {
+		switch m.state {
+		case stateDayView:
 			m.viewport.SetContent(m.renderDayContent())
+		case stateWeekView:
+			m.viewport.SetContent(m.renderWeekContent())
 		}
 		return m, nil
 	case "j", "down":
@@ -766,16 +785,13 @@ func (m Model) handleTodoOverviewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				}
 				if item.subID == "" {
 					rec.Todos[i].Completed = !rec.Todos[i].Completed
+					changed = true
 				} else {
-					for j := range rec.Todos[i].Subtodos {
-						if rec.Todos[i].Subtodos[j].ID == item.subID {
-							rec.Todos[i].Subtodos[j].Completed = !rec.Todos[i].Subtodos[j].Completed
-							break
-						}
-					}
+					changed = toggleSubtodoByID(rec.Todos[i].Subtodos, item.subID)
 				}
-				changed = true
-				break
+				if changed {
+					break
+				}
 			}
 			if changed {
 				if err := journal.Save(rec); err != nil {
@@ -821,6 +837,19 @@ func (m Model) handleTodoOverviewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 	m.viewport, cmd = m.viewport.Update(msg)
 	return m, cmd
+}
+
+func toggleSubtodoByID(items []journal.Todo, id string) bool {
+	for i := range items {
+		if items[i].ID == id {
+			items[i].Completed = !items[i].Completed
+			return true
+		}
+		if toggleSubtodoByID(items[i].Subtodos, id) {
+			return true
+		}
+	}
+	return false
 }
 
 func (m Model) handleDateInputKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {

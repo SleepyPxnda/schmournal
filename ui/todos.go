@@ -138,18 +138,10 @@ func (m *Model) indentSelectedTodo() bool {
 		td := parent.Subtodos[m.selectedSub]
 		parent.Subtodos = append(parent.Subtodos[:m.selectedSub], parent.Subtodos[m.selectedSub+1:]...)
 		parent.Subtodos[targetParentIdx].Subtodos = append(parent.Subtodos[targetParentIdx].Subtodos, td)
-		insertedAt := len(parent.Subtodos[targetParentIdx].Subtodos) - 1
-		// At max depth (3), children must also stay at level 3.
-		if len(parent.Subtodos[targetParentIdx].Subtodos[insertedAt].Subtodos) > 0 {
-			parent.Subtodos[targetParentIdx].Subtodos = append(
-				parent.Subtodos[targetParentIdx].Subtodos,
-				parent.Subtodos[targetParentIdx].Subtodos[insertedAt].Subtodos...,
-			)
-			parent.Subtodos[targetParentIdx].Subtodos[insertedAt].Subtodos = nil
-		}
+		parent.Subtodos[targetParentIdx].Subtodos = clampTodoListAtDepth(parent.Subtodos[targetParentIdx].Subtodos, 2)
 		m.dayRecord.Todos[m.selectedTodo] = parent
 		m.selectedSub = targetParentIdx
-		m.selectedSub2 = insertedAt
+		m.selectedSub2 = findTodoIndexByID(m.dayRecord.Todos[m.selectedTodo].Subtodos[targetParentIdx].Subtodos, td.ID)
 		return true
 	}
 	// Already at max supported depth.
@@ -163,11 +155,55 @@ func (m *Model) indentSelectedTodo() bool {
 	parentIdx := m.selectedTodo - 1
 	td := m.dayRecord.Todos[m.selectedTodo]
 	m.dayRecord.Todos[parentIdx].Subtodos = append(m.dayRecord.Todos[parentIdx].Subtodos, td)
+	m.dayRecord.Todos[parentIdx].Subtodos = clampTodoListAtDepth(m.dayRecord.Todos[parentIdx].Subtodos, 1)
 	m.dayRecord.Todos = append(m.dayRecord.Todos[:m.selectedTodo], m.dayRecord.Todos[m.selectedTodo+1:]...)
 	m.selectedTodo = parentIdx
-	m.selectedSub = len(m.dayRecord.Todos[parentIdx].Subtodos) - 1
+	m.selectedSub = findTodoIndexByID(m.dayRecord.Todos[parentIdx].Subtodos, td.ID)
 	m.selectedSub2 = -1
 	return true
+}
+
+func clampTodoListAtDepth(items []journal.Todo, depth int) []journal.Todo {
+	if depth >= 2 {
+		out := make([]journal.Todo, 0, len(items))
+		for _, item := range items {
+			descendants := flattenTodos(item.Subtodos)
+			item.Subtodos = nil
+			out = append(out, item)
+			out = append(out, descendants...)
+		}
+		return out
+	}
+	for i := range items {
+		items[i].Subtodos = clampTodoListAtDepth(items[i].Subtodos, depth+1)
+	}
+	return items
+}
+
+func flattenTodos(items []journal.Todo) []journal.Todo {
+	out := make([]journal.Todo, 0, len(items))
+	var walk func(todo journal.Todo)
+	walk = func(todo journal.Todo) {
+		children := todo.Subtodos
+		todo.Subtodos = nil
+		out = append(out, todo)
+		for _, child := range children {
+			walk(child)
+		}
+	}
+	for _, item := range items {
+		walk(item)
+	}
+	return out
+}
+
+func findTodoIndexByID(items []journal.Todo, id string) int {
+	for i := range items {
+		if items[i].ID == id {
+			return i
+		}
+	}
+	return -1
 }
 
 func (m *Model) outdentSelectedTodo() bool {
@@ -299,6 +335,20 @@ func (m Model) buildTodoOverviewItems() []todoOverviewItem {
 					subID:     st.ID,
 					depth:     1,
 				})
+				for _, sst := range st.Subtodos {
+					if m.todoOverviewOnlyU && sst.Completed {
+						continue
+					}
+					items = append(items, todoOverviewItem{
+						date:      r.Date,
+						path:      r.Path,
+						title:     sst.Title,
+						completed: sst.Completed,
+						parentID:  td.ID,
+						subID:     sst.ID,
+						depth:     2,
+					})
+				}
 			}
 		}
 		if len(items) > 0 {
@@ -330,7 +380,7 @@ func (m Model) renderTodosPanel(w int) string {
 	if len(m.dayRecord.Todos) == 0 {
 		b.WriteString(dayViewMutedStyle.Render("  No todos yet") + "\n")
 		if m.selectedPane != 1 {
-			b.WriteString(dayViewMutedStyle.Render("  t focus todo pane") + "\n")
+			b.WriteString(dayViewMutedStyle.Render("  t open todo overview") + "\n")
 		}
 		return b.String()
 	}
@@ -418,10 +468,7 @@ func (m Model) renderTodoOverviewContent() string {
 		if i == m.todoOverviewIdx {
 			prefix = "▶ "
 		}
-		indent := ""
-		if it.depth > 0 {
-			indent = "  "
-		}
+		indent := strings.Repeat("  ", it.depth)
 		mark := todoIncompleteStyle.Render("—")
 		if it.completed {
 			mark = todoCompleteStyle.Render("✓")

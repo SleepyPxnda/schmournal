@@ -733,7 +733,7 @@ func (m Model) viewDayView() string {
 			{joinKeyLabels(kb.SetStartNow, kb.SetStartManual), "start"},
 			{joinKeyLabels(kb.SetEndNow, kb.SetEndManual), "end"},
 			{kb.Notes, "notes"},
-			{kb.TodoOverview, "todo pane"},
+			{kb.TodoOverview, "todos"},
 			{clockKey, clockLabel},
 			{kb.Export, "export"},
 			{"esc", "back"},
