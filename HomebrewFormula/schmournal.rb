@@ -1,8 +1,8 @@
 class Schmournal < Formula
   desc "Terminal-based work journal"
   homepage "https://github.com/SleepyPxnda/schmournal"
-  url "https://github.com/SleepyPxnda/schmournal/archive/refs/tags/v1.8.1.tar.gz"
-  sha256 "67532a47cf143b4c8e069630c8e60e677f579b2192665321051c77a1e2a594f1"
+  url "https://github.com/SleepyPxnda/schmournal/archive/refs/tags/v1.9.tar.gz"
+  sha256 "0d1fc41b3de30af175f72492e82c4c60fe4bcd0e7f51c6d427b553d69d28be76"
   license "MIT"
 
   depends_on "go" => :build
