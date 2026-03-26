@@ -24,8 +24,9 @@ func truncateRunes(s string, max int) string {
 }
 
 type todoCursor struct {
-	top int
-	sub int // -1 parent, >=0 subtodo
+	top  int
+	sub  int // -1 top-level, >=0 level-2 todo index
+	sub2 int // -1 not level-3, >=0 level-3 todo index
 }
 
 func (m *Model) todoMove(delta int) {
@@ -33,11 +34,12 @@ func (m *Model) todoMove(delta int) {
 	if len(cursors) == 0 {
 		m.selectedTodo = -1
 		m.selectedSub = -1
+		m.selectedSub2 = -1
 		return
 	}
 	idx := 0
 	for i, c := range cursors {
-		if c.top == m.selectedTodo && c.sub == m.selectedSub {
+		if c.top == m.selectedTodo && c.sub == m.selectedSub && c.sub2 == m.selectedSub2 {
 			idx = i
 			break
 		}
@@ -51,14 +53,18 @@ func (m *Model) todoMove(delta int) {
 	}
 	m.selectedTodo = cursors[idx].top
 	m.selectedSub = cursors[idx].sub
+	m.selectedSub2 = cursors[idx].sub2
 }
 
 func (m Model) todoCursors() []todoCursor {
 	var out []todoCursor
 	for i, t := range m.dayRecord.Todos {
-		out = append(out, todoCursor{top: i, sub: -1})
-		for j := range t.Subtodos {
-			out = append(out, todoCursor{top: i, sub: j})
+		out = append(out, todoCursor{top: i, sub: -1, sub2: -1})
+		for j, st := range t.Subtodos {
+			out = append(out, todoCursor{top: i, sub: j, sub2: -1})
+			for k := range st.Subtodos {
+				out = append(out, todoCursor{top: i, sub: j, sub2: k})
+			}
 		}
 	}
 	return out
@@ -67,6 +73,17 @@ func (m Model) todoCursors() []todoCursor {
 func (m *Model) toggleSelectedTodo() bool {
 	if m.selectedTodo < 0 || m.selectedTodo >= len(m.dayRecord.Todos) {
 		return false
+	}
+	if m.selectedSub >= 0 && m.selectedSub2 >= 0 {
+		if m.selectedSub >= len(m.dayRecord.Todos[m.selectedTodo].Subtodos) {
+			return false
+		}
+		level2 := m.dayRecord.Todos[m.selectedTodo].Subtodos[m.selectedSub]
+		if m.selectedSub2 >= len(level2.Subtodos) {
+			return false
+		}
+		m.dayRecord.Todos[m.selectedTodo].Subtodos[m.selectedSub].Subtodos[m.selectedSub2].Completed = !m.dayRecord.Todos[m.selectedTodo].Subtodos[m.selectedSub].Subtodos[m.selectedSub2].Completed
+		return true
 	}
 	if m.selectedSub >= 0 {
 		if m.selectedSub >= len(m.dayRecord.Todos[m.selectedTodo].Subtodos) {
@@ -108,7 +125,39 @@ func (m *Model) commitTodoDraft() bool {
 }
 
 func (m *Model) indentSelectedTodo() bool {
-	if m.selectedTodo <= 0 || m.selectedTodo >= len(m.dayRecord.Todos) || m.selectedSub != -1 {
+	if m.selectedTodo < 0 || m.selectedTodo >= len(m.dayRecord.Todos) {
+		return false
+	}
+	// Indent level-2 todo to level-3 under previous level-2 sibling.
+	if m.selectedSub >= 0 && m.selectedSub2 == -1 {
+		parent := m.dayRecord.Todos[m.selectedTodo]
+		if m.selectedSub <= 0 || m.selectedSub >= len(parent.Subtodos) {
+			return false
+		}
+		targetParentIdx := m.selectedSub - 1
+		td := parent.Subtodos[m.selectedSub]
+		parent.Subtodos = append(parent.Subtodos[:m.selectedSub], parent.Subtodos[m.selectedSub+1:]...)
+		parent.Subtodos[targetParentIdx].Subtodos = append(parent.Subtodos[targetParentIdx].Subtodos, td)
+		insertedAt := len(parent.Subtodos[targetParentIdx].Subtodos) - 1
+		// At max depth (3), children must also stay at level 3.
+		if len(parent.Subtodos[targetParentIdx].Subtodos[insertedAt].Subtodos) > 0 {
+			parent.Subtodos[targetParentIdx].Subtodos = append(
+				parent.Subtodos[targetParentIdx].Subtodos,
+				parent.Subtodos[targetParentIdx].Subtodos[insertedAt].Subtodos...,
+			)
+			parent.Subtodos[targetParentIdx].Subtodos[insertedAt].Subtodos = nil
+		}
+		m.dayRecord.Todos[m.selectedTodo] = parent
+		m.selectedSub = targetParentIdx
+		m.selectedSub2 = insertedAt
+		return true
+	}
+	// Already at max supported depth.
+	if m.selectedSub >= 0 && m.selectedSub2 >= 0 {
+		return false
+	}
+	// Indent top-level todo to level-2 under previous top-level sibling.
+	if m.selectedTodo <= 0 || m.selectedSub != -1 {
 		return false
 	}
 	parentIdx := m.selectedTodo - 1
@@ -117,12 +166,36 @@ func (m *Model) indentSelectedTodo() bool {
 	m.dayRecord.Todos = append(m.dayRecord.Todos[:m.selectedTodo], m.dayRecord.Todos[m.selectedTodo+1:]...)
 	m.selectedTodo = parentIdx
 	m.selectedSub = len(m.dayRecord.Todos[parentIdx].Subtodos) - 1
+	m.selectedSub2 = -1
 	return true
 }
 
 func (m *Model) outdentSelectedTodo() bool {
 	if m.selectedTodo < 0 || m.selectedTodo >= len(m.dayRecord.Todos) || m.selectedSub < 0 {
 		return false
+	}
+	// Outdent level-3 todo to level-2.
+	if m.selectedSub2 >= 0 {
+		parent := m.dayRecord.Todos[m.selectedTodo]
+		if m.selectedSub >= len(parent.Subtodos) {
+			return false
+		}
+		level2 := parent.Subtodos[m.selectedSub]
+		if m.selectedSub2 >= len(level2.Subtodos) {
+			return false
+		}
+		td := level2.Subtodos[m.selectedSub2]
+		level2.Subtodos = append(level2.Subtodos[:m.selectedSub2], level2.Subtodos[m.selectedSub2+1:]...)
+		parent.Subtodos[m.selectedSub] = level2
+
+		insertIdx := m.selectedSub + 1
+		parent.Subtodos = append(parent.Subtodos, journal.Todo{})
+		copy(parent.Subtodos[insertIdx+1:], parent.Subtodos[insertIdx:])
+		parent.Subtodos[insertIdx] = td
+		m.dayRecord.Todos[m.selectedTodo] = parent
+		m.selectedSub = insertIdx
+		m.selectedSub2 = -1
+		return true
 	}
 	parentIdx := m.selectedTodo
 	parent := m.dayRecord.Todos[parentIdx]
@@ -139,12 +212,27 @@ func (m *Model) outdentSelectedTodo() bool {
 	m.dayRecord.Todos[insertIdx] = td
 	m.selectedTodo = insertIdx
 	m.selectedSub = -1
+	m.selectedSub2 = -1
 	return true
 }
 
 func (m *Model) deleteSelectedTodoNow() bool {
 	if m.selectedTodo < 0 || m.selectedTodo >= len(m.dayRecord.Todos) {
 		return false
+	}
+	if m.selectedSub >= 0 && m.selectedSub2 >= 0 {
+		level2 := m.dayRecord.Todos[m.selectedTodo].Subtodos
+		if m.selectedSub >= len(level2) {
+			return false
+		}
+		level3 := level2[m.selectedSub].Subtodos
+		if m.selectedSub2 >= len(level3) {
+			return false
+		}
+		level2[m.selectedSub].Subtodos = append(level3[:m.selectedSub2], level3[m.selectedSub2+1:]...)
+		m.dayRecord.Todos[m.selectedTodo].Subtodos = level2
+		m.selectedSub2 = -1
+		return true
 	}
 	if m.selectedSub >= 0 {
 		st := m.dayRecord.Todos[m.selectedTodo].Subtodos
@@ -153,18 +241,21 @@ func (m *Model) deleteSelectedTodoNow() bool {
 		}
 		m.dayRecord.Todos[m.selectedTodo].Subtodos = append(st[:m.selectedSub], st[m.selectedSub+1:]...)
 		m.selectedSub = -1
+		m.selectedSub2 = -1
 		return true
 	}
 	m.dayRecord.Todos = append(m.dayRecord.Todos[:m.selectedTodo], m.dayRecord.Todos[m.selectedTodo+1:]...)
 	if len(m.dayRecord.Todos) == 0 {
 		m.selectedTodo = -1
 		m.selectedSub = -1
+		m.selectedSub2 = -1
 		return true
 	}
 	if m.selectedTodo >= len(m.dayRecord.Todos) {
 		m.selectedTodo = len(m.dayRecord.Todos) - 1
 	}
 	m.selectedSub = -1
+	m.selectedSub2 = -1
 	return true
 }
 
@@ -267,27 +358,34 @@ func (m Model) renderTodosPanel(w int) string {
 				smark = todoCompleteStyle.Render("✓")
 			}
 			sprefix := "    "
-			if m.selectedPane == 1 && m.selectedTodo == i && m.selectedSub == j {
+			if m.selectedPane == 1 && m.selectedTodo == i && m.selectedSub == j && m.selectedSub2 == -1 {
 				sprefix = "  ▶ "
 			}
 			sline := sprefix + smark + " " + st.Title
 			if lipgloss.Width(sline) > w {
 				sline = truncateRunes(sline, w)
 			}
-			if m.selectedPane == 1 && m.selectedTodo == i && m.selectedSub == j {
+			if m.selectedPane == 1 && m.selectedTodo == i && m.selectedSub == j && m.selectedSub2 == -1 {
 				sline = selectedEntryStyle.Render(sline)
 			}
 			b.WriteString(sline + "\n")
 
 			const thirdLevelIndent = "      "
-			for _, thirdLevelTodo := range st.Subtodos {
+			for k, thirdLevelTodo := range st.Subtodos {
 				ssmark := todoIncompleteStyle.Render("—")
 				if thirdLevelTodo.Completed {
 					ssmark = todoCompleteStyle.Render("✓")
 				}
-				thirdLevelLine := thirdLevelIndent + ssmark + " " + thirdLevelTodo.Title
+				thirdLevelPrefix := thirdLevelIndent
+				if m.selectedPane == 1 && m.selectedTodo == i && m.selectedSub == j && m.selectedSub2 == k {
+					thirdLevelPrefix = "  ▶   "
+				}
+				thirdLevelLine := thirdLevelPrefix + ssmark + " " + thirdLevelTodo.Title
 				if lipgloss.Width(thirdLevelLine) > w {
 					thirdLevelLine = truncateRunes(thirdLevelLine, w)
+				}
+				if m.selectedPane == 1 && m.selectedTodo == i && m.selectedSub == j && m.selectedSub2 == k {
+					thirdLevelLine = selectedEntryStyle.Render(thirdLevelLine)
 				}
 				b.WriteString(thirdLevelLine + "\n")
 			}

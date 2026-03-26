@@ -155,6 +155,7 @@ func (m Model) openDayView(rec journal.DayRecord) (tea.Model, tea.Cmd) {
 	}
 	m.selectedTodo = 0
 	m.selectedSub = -1
+	m.selectedSub2 = -1
 	if len(m.dayRecord.Todos) == 0 {
 		m.selectedTodo = -1
 	}
@@ -266,6 +267,7 @@ func (m *Model) focusTodoInDay() {
 		m.selectedPane = 1
 		m.selectedTodo = i
 		m.selectedSub = -1
+		m.selectedSub2 = -1
 		if m.focusSubTodoID == "" {
 			return
 		}
@@ -274,19 +276,31 @@ func (m *Model) focusTodoInDay() {
 				m.selectedSub = j
 				return
 			}
+			for k, sst := range st.Subtodos {
+				if sst.ID == m.focusSubTodoID {
+					m.selectedSub = j
+					m.selectedSub2 = k
+					return
+				}
+			}
 		}
 		return
 	}
 }
 
-func (m Model) openTodoForm(editTop, editSub int) (tea.Model, tea.Cmd) {
+func (m Model) openTodoForm(editTop, editSub, editSub2 int) (tea.Model, tea.Cmd) {
 	m.todoEditTop = editTop
 	m.todoEditSub = editSub
+	m.todoEditSub2 = editSub2
 	m.todoInput.SetValue("")
 	m.todoInput.Placeholder = "TODO title…"
 	if editTop >= 0 && editTop < len(m.dayRecord.Todos) {
 		if editSub >= 0 && editSub < len(m.dayRecord.Todos[editTop].Subtodos) {
-			m.todoInput.SetValue(m.dayRecord.Todos[editTop].Subtodos[editSub].Title)
+			if editSub2 >= 0 && editSub2 < len(m.dayRecord.Todos[editTop].Subtodos[editSub].Subtodos) {
+				m.todoInput.SetValue(m.dayRecord.Todos[editTop].Subtodos[editSub].Subtodos[editSub2].Title)
+			} else {
+				m.todoInput.SetValue(m.dayRecord.Todos[editTop].Subtodos[editSub].Title)
+			}
 		} else {
 			m.todoInput.SetValue(m.dayRecord.Todos[editTop].Title)
 		}

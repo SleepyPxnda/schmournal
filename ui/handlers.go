@@ -252,13 +252,17 @@ func (m Model) handleDayViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case "a":
 		if m.dayViewTab == 0 && m.selectedPane == 1 {
-			return m.openTodoForm(-1, -1)
+			return m.openTodoForm(-1, -1, -1)
 		}
 		return m, nil
 	case "A":
 		if m.dayViewTab == 0 && m.selectedPane == 1 && m.selectedTodo >= 0 && m.selectedTodo < len(m.dayRecord.Todos) {
+			if m.selectedSub >= 0 && m.selectedSub < len(m.dayRecord.Todos[m.selectedTodo].Subtodos) {
+				newSubIdx2 := len(m.dayRecord.Todos[m.selectedTodo].Subtodos[m.selectedSub].Subtodos)
+				return m.openTodoForm(m.selectedTodo, m.selectedSub, newSubIdx2)
+			}
 			newSubIdx := len(m.dayRecord.Todos[m.selectedTodo].Subtodos)
-			return m.openTodoForm(m.selectedTodo, newSubIdx)
+			return m.openTodoForm(m.selectedTodo, newSubIdx, -1)
 		}
 		return m, nil
 	case kb.AddWork:
@@ -361,9 +365,9 @@ func (m Model) handleDayViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 func (m Model) openTodoFormForSelection() (tea.Model, tea.Cmd) {
 	if m.selectedTodo >= 0 && m.selectedTodo < len(m.dayRecord.Todos) {
-		return m.openTodoForm(m.selectedTodo, m.selectedSub)
+		return m.openTodoForm(m.selectedTodo, m.selectedSub, m.selectedSub2)
 	}
-	return m.openTodoForm(-1, -1)
+	return m.openTodoForm(-1, -1, -1)
 }
 
 func (m Model) handleTodoFormKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -378,7 +382,18 @@ func (m Model) handleTodoFormKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if m.todoEditTop >= 0 && m.todoEditTop < len(m.dayRecord.Todos) {
 			if m.todoEditSub >= 0 {
 				if m.todoEditSub < len(m.dayRecord.Todos[m.todoEditTop].Subtodos) {
-					m.dayRecord.Todos[m.todoEditTop].Subtodos[m.todoEditSub].Title = title
+					if m.todoEditSub2 >= 0 && m.todoEditSub2 < len(m.dayRecord.Todos[m.todoEditTop].Subtodos[m.todoEditSub].Subtodos) {
+						m.dayRecord.Todos[m.todoEditTop].Subtodos[m.todoEditSub].Subtodos[m.todoEditSub2].Title = title
+					} else if m.todoEditSub2 >= 0 {
+						m.dayRecord.Todos[m.todoEditTop].Subtodos[m.todoEditSub].Subtodos = append(m.dayRecord.Todos[m.todoEditTop].Subtodos[m.todoEditSub].Subtodos, journal.Todo{
+							ID:       journal.NewID(),
+							Title:    title,
+							Subtodos: []journal.Todo{},
+						})
+						m.selectedSub2 = len(m.dayRecord.Todos[m.todoEditTop].Subtodos[m.todoEditSub].Subtodos) - 1
+					} else {
+						m.dayRecord.Todos[m.todoEditTop].Subtodos[m.todoEditSub].Title = title
+					}
 				} else {
 					m.dayRecord.Todos[m.todoEditTop].Subtodos = append(m.dayRecord.Todos[m.todoEditTop].Subtodos, journal.Todo{
 						ID:       journal.NewID(),
@@ -386,12 +401,14 @@ func (m Model) handleTodoFormKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 						Subtodos: []journal.Todo{},
 					})
 					m.selectedSub = len(m.dayRecord.Todos[m.todoEditTop].Subtodos) - 1
+					m.selectedSub2 = -1
 				}
 				m.selectedTodo = m.todoEditTop
 			} else {
 				m.dayRecord.Todos[m.todoEditTop].Title = title
 				m.selectedTodo = m.todoEditTop
 				m.selectedSub = -1
+				m.selectedSub2 = -1
 			}
 		} else {
 			m.dayRecord.Todos = append(m.dayRecord.Todos, journal.Todo{
@@ -401,6 +418,7 @@ func (m Model) handleTodoFormKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			})
 			m.selectedTodo = len(m.dayRecord.Todos) - 1
 			m.selectedSub = -1
+			m.selectedSub2 = -1
 		}
 		m.state = stateDayView
 		m.selectedPane = 1
@@ -644,10 +662,17 @@ func (m Model) handleConfirmDeleteKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// Delete a single entry from the current day.
 		if m.deleteIdx == deleteTodoIdx {
 			if m.selectedTodo >= 0 && m.selectedTodo < len(m.dayRecord.Todos) {
-				if m.selectedSub >= 0 && m.selectedSub < len(m.dayRecord.Todos[m.selectedTodo].Subtodos) {
+				if m.selectedSub >= 0 && m.selectedSub2 >= 0 && m.selectedSub < len(m.dayRecord.Todos[m.selectedTodo].Subtodos) {
+					level2 := m.dayRecord.Todos[m.selectedTodo].Subtodos[m.selectedSub].Subtodos
+					if m.selectedSub2 >= 0 && m.selectedSub2 < len(level2) {
+						m.dayRecord.Todos[m.selectedTodo].Subtodos[m.selectedSub].Subtodos = append(level2[:m.selectedSub2], level2[m.selectedSub2+1:]...)
+					}
+					m.selectedSub2 = -1
+				} else if m.selectedSub >= 0 && m.selectedSub < len(m.dayRecord.Todos[m.selectedTodo].Subtodos) {
 					st := m.dayRecord.Todos[m.selectedTodo].Subtodos
 					m.dayRecord.Todos[m.selectedTodo].Subtodos = append(st[:m.selectedSub], st[m.selectedSub+1:]...)
 					m.selectedSub = -1
+					m.selectedSub2 = -1
 				} else {
 					m.dayRecord.Todos = append(m.dayRecord.Todos[:m.selectedTodo], m.dayRecord.Todos[m.selectedTodo+1:]...)
 					if m.selectedTodo >= len(m.dayRecord.Todos) {
@@ -655,6 +680,7 @@ func (m Model) handleConfirmDeleteKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 					}
 					if m.selectedTodo < 0 {
 						m.selectedSub = -1
+						m.selectedSub2 = -1
 					}
 				}
 			}

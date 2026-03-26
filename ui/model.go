@@ -148,9 +148,11 @@ type Model struct {
 
 	selectedPane int // 0 = work log entries, 1 = todos
 	selectedTodo int // top-level todo index
-	selectedSub  int // -1 = parent todo, >=0 = subtodo index
+	selectedSub  int // -1 = top-level, >=0 = level-2 todo index
+	selectedSub2 int // -1 = not level-3, >=0 = level-3 todo index under selectedSub
 	todoEditTop  int // -1 = new, >=0 = editing top-level todo index
-	todoEditSub  int // -1 = top-level, >=0 = editing subtodo index
+	todoEditSub  int // -1 = top-level, >=0 = editing level-2 todo index
+	todoEditSub2 int // -1 = not level-3, >=0 = editing level-3 todo index
 	todoDraft    string
 
 	todoOverviewItems []todoOverviewItem
@@ -300,8 +302,10 @@ func New(cfg config.Config, activeWorkspace string, version string) Model {
 		selectedEntry:   -1,
 		selectedTodo:    0,
 		selectedSub:     -1,
+		selectedSub2:    -1,
 		todoEditTop:     -1,
 		todoEditSub:     -1,
+		todoEditSub2:    -1,
 		editEntryIdx:    -1,
 		version:         version,
 	}
