@@ -271,6 +271,10 @@ func (m Model) handleDayViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.viewport.SetContent(m.renderDayContent())
 			return m, nil
 		}
+		m.dayViewTab = 0
+		m.selectedPane = 1
+		m.viewport.GotoTop()
+		m.viewport.SetContent(m.renderDayContent())
 		return m, nil
 	case kb.Export:
 		rec := m.dayRecord
