@@ -48,7 +48,6 @@ type DayKeybinds struct {
 	SetEndNow      string `toml:"set_end_now"`
 	SetEndManual   string `toml:"set_end_manual"`
 	Notes          string `toml:"notes"`
-	TodoOverview   string `toml:"todo_overview"`
 	Export         string `toml:"export"`
 	ClockStart     string `toml:"clock_start"`
 	ClockStop      string `toml:"clock_stop"`
@@ -110,7 +109,6 @@ func Default() Config {
 				SetEndNow:      "f",
 				SetEndManual:   "F",
 				Notes:          "n",
-				TodoOverview:   "t",
 				Export:         "x",
 				ClockStart:     "c",
 				ClockStop:      "c",
@@ -319,7 +317,6 @@ set_start_manual = %q  # Set start time manually
 set_end_now     = %q   # Set end time to now
 set_end_manual  = %q   # Set end time manually
 notes           = %q   # Open the notes editor
-todo_overview   = %q   # Open the cross-day TODO overview
 export          = %q   # Export day to Markdown
 clock_start     = %q   # Start the clock timer (Clocking tab)
 clock_stop      = %q   # Stop the clock and log the entry (Clocking tab)
@@ -345,7 +342,6 @@ clock_stop      = %q   # Stop the clock and log the entry (Clocking tab)
 		cfg.Keybinds.Day.SetEndNow,
 		cfg.Keybinds.Day.SetEndManual,
 		cfg.Keybinds.Day.Notes,
-		cfg.Keybinds.Day.TodoOverview,
 		cfg.Keybinds.Day.Export,
 		cfg.Keybinds.Day.ClockStart,
 		cfg.Keybinds.Day.ClockStop,
@@ -452,7 +448,6 @@ func (cfg *Config) validate() error {
 	fill(&dk.SetEndNow, dd.SetEndNow)
 	fill(&dk.SetEndManual, dd.SetEndManual)
 	fill(&dk.Notes, dd.Notes)
-	fill(&dk.TodoOverview, dd.TodoOverview)
 	fill(&dk.Export, dd.Export)
 	fill(&dk.ClockStart, dd.ClockStart)
 	fill(&dk.ClockStop, dd.ClockStop)
@@ -463,7 +458,7 @@ func (cfg *Config) validate() error {
 	dayKeys := []string{
 		dk.AddWork, dk.AddBreak, dk.Edit, dk.Delete,
 		dk.SetStartNow, dk.SetStartManual, dk.SetEndNow, dk.SetEndManual,
-		dk.Notes, dk.TodoOverview, dk.Export, dk.ClockStart,
+		dk.Notes, dk.Export, dk.ClockStart,
 	}
 	// Allow clock start/stop to intentionally share one key (toggle behavior).
 	if dk.ClockStop != dk.ClockStart {

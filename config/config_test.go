@@ -53,7 +53,6 @@ func TestDefaultKeybindsNotEmpty(t *testing.T) {
 	checkNotEmpty("day.set_end_now", dk.SetEndNow)
 	checkNotEmpty("day.set_end_manual", dk.SetEndManual)
 	checkNotEmpty("day.notes", dk.Notes)
-	checkNotEmpty("day.todo_overview", dk.TodoOverview)
 	checkNotEmpty("day.export", dk.Export)
 
 }
@@ -136,7 +135,7 @@ func TestCollectTOMLPathsIncludesKnownPaths(t *testing.T) {
 		{"weekly_hours_goal"},
 		{"keybinds", "list", "quit"},
 		{"keybinds", "day", "add_work"},
-		{"keybinds", "day", "todo_overview"},
+		{"keybinds", "day", "notes"},
 	}
 
 	pathSet := make(map[string]bool)

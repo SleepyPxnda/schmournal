@@ -42,8 +42,6 @@ func (m Model) View() string {
 		return m.viewTimeInput()
 	case stateNotesEditor:
 		return m.viewNotesEditor()
-	case stateTodoForm:
-		return m.viewTodoForm()
 	case stateConfirmDelete:
 		return m.viewConfirmDelete()
 	case stateDateInput:
@@ -199,36 +197,10 @@ func (m Model) renderWorkLogContent() string {
 
 	b.WriteString("\n")
 
-	// ── Notes + Todos two-column section ───────────────────────────────────────
+	// ── Notes section ──────────────────────────────────────────────────────────
 	b.WriteString("\n" + div + "\n")
-	if innerW >= 60 {
-		leftW := (innerW - 1) / 2
-		rightW := innerW - leftW - 1
-		leftPanel := m.renderNotesPanel(leftW)
-		rightPanel := m.renderTodosPanel(rightW)
-		maxH := lipgloss.Height(leftPanel)
-		if h := lipgloss.Height(rightPanel); h > maxH {
-			maxH = h
-		}
-		padToHeight := func(s string, h int) string {
-			cur := lipgloss.Height(s)
-			if cur >= h {
-				return s
-			}
-			return s + strings.Repeat("\n", h-cur)
-		}
-		leftPanel = padToHeight(leftPanel, maxH)
-		rightPanel = padToHeight(rightPanel, maxH)
-		leftBlock := lipgloss.NewStyle().Width(leftW).Height(maxH).Render(leftPanel)
-		rightBlock := clockPanelBorderStyle.Width(rightW).Height(maxH).Render(rightPanel)
-		b.WriteString(lipgloss.JoinHorizontal(lipgloss.Top, leftBlock, rightBlock))
-		b.WriteString("\n")
-	} else {
-		b.WriteString(m.renderNotesPanel(innerW))
-		b.WriteString("\n" + div + "\n")
-		b.WriteString(m.renderTodosPanel(innerW))
-		b.WriteString("\n")
-	}
+	b.WriteString(m.renderNotesPanel(innerW))
+	b.WriteString("\n")
 
 	return b.String()
 }
@@ -709,27 +681,16 @@ func (m Model) viewDayView() string {
 			clockKey = kb.ClockStop
 			clockLabel = "stop clock"
 		}
-		editLabel := "edit"
-		deleteLabel := "del"
-		if m.selectedPane == 1 {
-			editLabel = "edit todo"
-			deleteLabel = "del todo"
-		}
 		footerKeys = [][2]string{
 			{"←/→", "switch tab"},
 			{"j/k", "select"},
-			{"tab", "pane/indent"},
-			{"S-tab", "outdent"},
 			{kb.AddWork, "work"},
 			{kb.AddBreak, "break"},
-			{kb.Edit, editLabel},
-			{kb.Delete, deleteLabel},
-			{"backspace", "del todo"},
-			{"space", "toggle todo"},
+			{kb.Edit, "edit"},
+			{kb.Delete, "del"},
 			{joinKeyLabels(kb.SetStartNow, kb.SetStartManual), "start"},
 			{joinKeyLabels(kb.SetEndNow, kb.SetEndManual), "end"},
 			{kb.Notes, "notes"},
-			{kb.TodoOverview, "todo pane"},
 			{clockKey, clockLabel},
 			{kb.Export, "export"},
 			{"esc", "back"},
@@ -910,32 +871,6 @@ func (m Model) viewNotesEditor() string {
 	return lipgloss.JoinVertical(lipgloss.Left, header, editor, footer)
 }
 
-func (m Model) viewTodoForm() string {
-	header := m.renderHeader(m.appTitle(), "Todo")
-	footer := m.renderFooter([][2]string{
-		{"enter", "save"},
-		{"esc", "cancel"},
-	})
-	formWidth := m.width - 8
-	if formWidth < 40 {
-		formWidth = 40
-	}
-	inputWidth := formWidth - 8
-	m.todoInput.Width = inputWidth
-	box := formBoxStyle.Width(formWidth).Render(
-		formLabelStyle.Render("Todo title") + "\n" +
-			formActiveInputStyle.Width(inputWidth).Render(m.todoInput.View()) + "\n\n" +
-			dayViewMutedStyle.Render("Tip: press Shift+a from a parent todo to add a subtodo"),
-	)
-	fh := lipgloss.Height(box)
-	topPad := (m.contentHeight() - fh) / 2
-	if topPad < 0 {
-		topPad = 0
-	}
-	centered := lipgloss.NewStyle().Width(m.width).Align(lipgloss.Center).Render(box)
-	return header + "\n" + strings.Repeat("\n", topPad) + centered + "\n" + footer
-}
-
 func (m Model) viewConfirmDelete() string {
 	var subject string
 	if m.deleteDay {
@@ -945,20 +880,6 @@ func (m Model) viewConfirmDelete() string {
 			subject = m.records[m.deleteIdx].Date
 		}
 		subject = "the day " + subject
-	} else if m.deleteIdx == deleteTodoIdx {
-		if m.selectedTodo >= 0 && m.selectedTodo < len(m.workspaceTodos) {
-			if m.selectedSub >= 0 && m.selectedSub2 >= 0 &&
-				m.selectedSub < len(m.workspaceTodos[m.selectedTodo].Subtodos) &&
-				m.selectedSub2 < len(m.workspaceTodos[m.selectedTodo].Subtodos[m.selectedSub].Subtodos) {
-				subject = `todo "` + m.workspaceTodos[m.selectedTodo].Subtodos[m.selectedSub].Subtodos[m.selectedSub2].Title + `"`
-			} else if m.selectedSub >= 0 && m.selectedSub < len(m.workspaceTodos[m.selectedTodo].Subtodos) {
-				subject = `todo "` + m.workspaceTodos[m.selectedTodo].Subtodos[m.selectedSub].Title + `"`
-			} else {
-				subject = `todo "` + m.workspaceTodos[m.selectedTodo].Title + `"`
-			}
-		} else {
-			subject = "this todo"
-		}
 	} else {
 		if m.deleteIdx >= 0 && m.deleteIdx < len(m.dayRecord.Entries) {
 			subject = `entry "` + m.dayRecord.Entries[m.deleteIdx].Task + `"`
