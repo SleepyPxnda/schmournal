@@ -37,7 +37,6 @@ class Schmournal < Formula
       delete     = "d"   # Delete the selected day record
       export     = "x"   # Export the selected day to Markdown
       stats_view = "s"   # Open the stats overview
-      todo_overview = "t" # Open workspace TODO overview
 
       [keybinds.day]
       add_work         = "w"   # Add a new work entry

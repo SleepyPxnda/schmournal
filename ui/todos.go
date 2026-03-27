@@ -308,45 +308,6 @@ func (m *Model) deleteSelectedTodoNow() bool {
 	return true
 }
 
-func (m Model) buildTodoOverviewItems() []todoOverviewItem {
-	items := make([]todoOverviewItem, 0, len(m.workspaceTodos))
-	for _, td := range m.workspaceTodos {
-		if !m.todoOverviewOnlyU || !td.Completed {
-			items = append(items, todoOverviewItem{
-				title:     td.Title,
-				completed: td.Completed,
-				parentID:  td.ID,
-				depth:     0,
-			})
-		}
-		for _, st := range td.Subtodos {
-			if m.todoOverviewOnlyU && st.Completed {
-				continue
-			}
-			items = append(items, todoOverviewItem{
-				title:     st.Title,
-				completed: st.Completed,
-				parentID:  td.ID,
-				subID:     st.ID,
-				depth:     1,
-			})
-			for _, sst := range st.Subtodos {
-				if m.todoOverviewOnlyU && sst.Completed {
-					continue
-				}
-				items = append(items, todoOverviewItem{
-					title:     sst.Title,
-					completed: sst.Completed,
-					parentID:  td.ID,
-					subID:     sst.ID,
-					depth:     2,
-				})
-			}
-		}
-	}
-	return items
-}
-
 func (m Model) renderTodosPanel(w int) string {
 	var b strings.Builder
 	b.WriteString(dayViewSectionStyle.Render("✅  Todos") + "\n")
@@ -421,36 +382,6 @@ func (m Model) renderTodosPanel(w int) string {
 				b.WriteString(thirdLevelLine + "\n")
 			}
 		}
-	}
-	return b.String()
-}
-
-func (m Model) renderTodoOverviewContent() string {
-	var b strings.Builder
-	b.WriteString("\n")
-	if len(m.todoOverviewItems) == 0 {
-		if m.todoOverviewOnlyU {
-			b.WriteString(dayViewMutedStyle.Render("  No uncompleted todos") + "\n")
-		} else {
-			b.WriteString(dayViewMutedStyle.Render("  No todos found") + "\n")
-		}
-		return b.String()
-	}
-	for i, it := range m.todoOverviewItems {
-		prefix := "  "
-		if i == m.todoOverviewIdx {
-			prefix = "▶ "
-		}
-		indent := strings.Repeat("  ", it.depth)
-		mark := todoIncompleteStyle.Render("—")
-		if it.completed {
-			mark = todoCompleteStyle.Render("✓")
-		}
-		line := prefix + indent + mark + " " + it.title
-		if i == m.todoOverviewIdx {
-			line = selectedEntryStyle.Render(line)
-		}
-		b.WriteString(line + "\n")
 	}
 	return b.String()
 }

@@ -49,8 +49,6 @@ func (m Model) handleListKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 		case kb.StatsView:
 			return m.openStatsView()
-		case kb.TodoOverview:
-			return m.openTodoOverview(stateList)
 		case kb.SwitchWorkspace:
 			return m.openWorkspacePicker()
 		}
@@ -273,7 +271,7 @@ func (m Model) handleDayViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.viewport.SetContent(m.renderDayContent())
 			return m, nil
 		}
-		return m.openTodoOverview(stateDayView)
+		return m, nil
 	case kb.Export:
 		rec := m.dayRecord
 		return m, func() tea.Msg {
@@ -698,114 +696,6 @@ func (m Model) handleConfirmDeleteKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.state = m.prevState
 	}
 	return m, nil
-}
-
-func (m Model) handleTodoOverviewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	kb := m.cfg.Keybinds
-	switch msg.String() {
-	case "esc", kb.List.Quit:
-		m.state = m.todoOverviewFrom
-		switch m.state {
-		case stateDayView:
-			m.viewport.SetContent(m.renderDayContent())
-		}
-		return m, nil
-	case "j", "down":
-		if m.todoOverviewIdx < len(m.todoOverviewItems)-1 {
-			m.todoOverviewIdx++
-			m.viewport.SetContent(m.renderTodoOverviewContent())
-		}
-		return m, nil
-	case "k", "up":
-		if m.todoOverviewIdx > 0 {
-			m.todoOverviewIdx--
-			m.viewport.SetContent(m.renderTodoOverviewContent())
-		}
-		return m, nil
-	case "u":
-		m.todoOverviewOnlyU = true
-		m.todoOverviewItems = m.buildTodoOverviewItems()
-		if m.todoOverviewIdx >= len(m.todoOverviewItems) {
-			m.todoOverviewIdx = len(m.todoOverviewItems) - 1
-		}
-		if m.todoOverviewIdx < 0 {
-			m.todoOverviewIdx = 0
-		}
-		m.viewport.SetContent(m.renderTodoOverviewContent())
-		return m, nil
-	case "a":
-		m.todoOverviewOnlyU = false
-		m.todoOverviewItems = m.buildTodoOverviewItems()
-		if m.todoOverviewIdx >= len(m.todoOverviewItems) {
-			m.todoOverviewIdx = len(m.todoOverviewItems) - 1
-		}
-		if m.todoOverviewIdx < 0 {
-			m.todoOverviewIdx = 0
-		}
-		m.viewport.SetContent(m.renderTodoOverviewContent())
-		return m, nil
-	case " ":
-		if m.todoOverviewIdx >= 0 && m.todoOverviewIdx < len(m.todoOverviewItems) {
-			item := m.todoOverviewItems[m.todoOverviewIdx]
-			todos, err := journal.LoadWorkspaceTodos()
-			if err != nil {
-				m.statusMsg = "✗ " + err.Error()
-				m.isError = true
-				return m, clearStatusCmd()
-			}
-			changed := false
-			for i := range todos.Todos {
-				if todos.Todos[i].ID != item.parentID {
-					continue
-				}
-				if item.subID == "" {
-					todos.Todos[i].Completed = !todos.Todos[i].Completed
-					changed = true
-				} else {
-					changed = toggleSubtodoByID(todos.Todos[i].Subtodos, item.subID)
-				}
-				if changed {
-					break
-				}
-			}
-			if changed {
-				if err := journal.SaveWorkspaceTodos(todos); err != nil {
-					m.statusMsg = "✗ " + err.Error()
-					m.isError = true
-					return m, clearStatusCmd()
-				}
-				m.workspaceTodos = todos.Todos
-				m.todoOverviewItems = m.buildTodoOverviewItems()
-				if m.todoOverviewIdx >= len(m.todoOverviewItems) {
-					m.todoOverviewIdx = len(m.todoOverviewItems) - 1
-				}
-				if m.todoOverviewIdx < 0 {
-					m.todoOverviewIdx = 0
-				}
-				m.viewport.SetContent(m.renderTodoOverviewContent())
-				m.statusMsg = "✓ TODO updated"
-				m.isError = false
-				return m, clearStatusCmd()
-			}
-		}
-		return m, nil
-	}
-	var cmd tea.Cmd
-	m.viewport, cmd = m.viewport.Update(msg)
-	return m, cmd
-}
-
-func toggleSubtodoByID(items []journal.Todo, id string) bool {
-	for i := range items {
-		if items[i].ID == id {
-			items[i].Completed = !items[i].Completed
-			return true
-		}
-		if toggleSubtodoByID(items[i].Subtodos, id) {
-			return true
-		}
-	}
-	return false
 }
 
 func (m Model) handleDateInputKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {

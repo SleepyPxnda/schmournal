@@ -303,14 +303,14 @@ func TestTodoEditKeyStaysInDayViewWithoutSelection(t *testing.T) {
 	}
 }
 
-func TestTodoCommandKeyDoesNotStartInlineTyping(t *testing.T) {
+func TestTodoPaneToggleKeyDoesNotStartInlineTyping(t *testing.T) {
 	m := Model{
 		cfg:          config.Default(),
 		dayViewTab:   0,
 		selectedPane: 1,
 	}
 
-	updated, _ := m.handleDayViewKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("t")}) // TodoOverview
+	updated, _ := m.handleDayViewKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("t")}) // Toggle todo pane
 	got := updated.(Model)
 	if got.todoInputMode {
 		t.Fatalf("expected command key to not start inline draft mode")

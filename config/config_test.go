@@ -42,7 +42,6 @@ func TestDefaultKeybindsNotEmpty(t *testing.T) {
 	checkNotEmpty("list.delete", lk.Delete)
 	checkNotEmpty("list.export", lk.Export)
 	checkNotEmpty("list.stats_view", lk.StatsView)
-	checkNotEmpty("list.todo_overview", lk.TodoOverview)
 
 	dk := cfg.Keybinds.Day
 	checkNotEmpty("day.add_work", dk.AddWork)
@@ -136,7 +135,6 @@ func TestCollectTOMLPathsIncludesKnownPaths(t *testing.T) {
 		{"storage_path"},
 		{"weekly_hours_goal"},
 		{"keybinds", "list", "quit"},
-		{"keybinds", "list", "todo_overview"},
 		{"keybinds", "day", "add_work"},
 		{"keybinds", "day", "todo_overview"},
 	}

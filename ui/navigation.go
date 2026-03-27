@@ -122,11 +122,6 @@ func (m Model) openDayView(rec journal.DayRecord) (tea.Model, tea.Cmd) {
 	if len(m.workspaceTodos) == 0 {
 		m.selectedTodo = -1
 	}
-	if m.focusTodoID != "" {
-		m.focusTodoInDay()
-		m.focusTodoID = ""
-		m.focusSubTodoID = ""
-	}
 	m.state = stateDayView
 	m.viewport.GotoTop()
 	m.viewport.SetContent(m.renderDayContent())
@@ -214,35 +209,6 @@ func (m Model) openNotesEditor() (tea.Model, tea.Cmd) {
 	return m, blinkCmd
 }
 
-func (m *Model) focusTodoInDay() {
-	for i, t := range m.workspaceTodos {
-		if t.ID != m.focusTodoID {
-			continue
-		}
-		m.selectedPane = 1
-		m.selectedTodo = i
-		m.selectedSub = -1
-		m.selectedSub2 = -1
-		if m.focusSubTodoID == "" {
-			return
-		}
-		for j, st := range t.Subtodos {
-			if st.ID == m.focusSubTodoID {
-				m.selectedSub = j
-				return
-			}
-			for k, sst := range st.Subtodos {
-				if sst.ID == m.focusSubTodoID {
-					m.selectedSub = j
-					m.selectedSub2 = k
-					return
-				}
-			}
-		}
-		return
-	}
-}
-
 func (m Model) openTodoForm(editTop, editSub, editSub2 int) (tea.Model, tea.Cmd) {
 	m.todoEditTop = editTop
 	m.todoEditSub = editSub
@@ -262,16 +228,6 @@ func (m Model) openTodoForm(editTop, editSub, editSub2 int) (tea.Model, tea.Cmd)
 	}
 	m.state = stateTodoForm
 	return m, m.todoInput.Focus()
-}
-
-func (m Model) openTodoOverview(from viewState) (tea.Model, tea.Cmd) {
-	m.todoOverviewFrom = from
-	m.state = stateTodoOverview
-	m.todoOverviewIdx = 0
-	m.viewport.GotoTop()
-	m.todoOverviewItems = m.buildTodoOverviewItems()
-	m.viewport.SetContent(m.renderTodoOverviewContent())
-	return m, nil
 }
 
 func (m Model) openTimeInput(isStart bool) (tea.Model, tea.Cmd) {

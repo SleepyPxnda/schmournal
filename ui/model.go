@@ -32,7 +32,6 @@ const (
 	stateDateInput
 	stateWorkspacePicker
 	stateStats
-	stateTodoOverview
 )
 
 const (
@@ -53,17 +52,6 @@ type workspaceTodosLoadedMsg struct{ todos journal.WorkspaceTodos }
 type clockTickMsg struct{}
 
 // ── List item ─────────────────────────────────────────────────────────────────
-
-type todoOverviewItem struct {
-	date      string
-	path      string
-	title     string
-	completed bool
-	parentID  string
-	subID     string
-	depth     int
-	line      int
-}
 
 type dayListItem struct {
 	rec       journal.DayRecord
@@ -149,13 +137,6 @@ type Model struct {
 	todoEditSub2  int // -1 = not level-3, >=0 = editing level-3 todo index
 	todoDraft     string
 	todoInputMode bool
-
-	todoOverviewItems []todoOverviewItem
-	todoOverviewIdx   int
-	todoOverviewOnlyU bool
-	todoOverviewFrom  viewState
-	focusTodoID       string
-	focusSubTodoID    string
 
 	workspaceIdx int // currently highlighted row in the workspace picker
 
@@ -411,8 +392,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.handleWorkspacePickerKey(msg)
 		case stateStats:
 			return m.handleStatsKey(msg)
-		case stateTodoOverview:
-			return m.handleTodoOverviewKey(msg)
 		}
 	}
 
@@ -422,7 +401,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		var cmd tea.Cmd
 		m.list, cmd = m.list.Update(msg)
 		return m, cmd
-	case stateDayView, stateStats, stateTodoOverview:
+	case stateDayView, stateStats:
 		var cmd tea.Cmd
 		m.viewport, cmd = m.viewport.Update(msg)
 		return m, cmd

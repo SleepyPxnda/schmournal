@@ -34,7 +34,6 @@ type ListKeybinds struct {
 	Delete          string `toml:"delete"`
 	Export          string `toml:"export"`
 	StatsView       string `toml:"stats_view"`
-	TodoOverview    string `toml:"todo_overview"`
 	SwitchWorkspace string `toml:"switch_workspace"`
 }
 
@@ -99,7 +98,6 @@ func Default() Config {
 				Delete:          "d",
 				Export:          "x",
 				StatsView:       "s",
-				TodoOverview:    "t",
 				SwitchWorkspace: "p",
 			},
 			Day: DayKeybinds{
@@ -309,7 +307,6 @@ open_date        = %q   # Open / create an entry for a specific date
 delete           = %q   # Delete the selected day record
 export           = %q   # Export the selected day to Markdown
 stats_view       = %q   # Open the stats overview
-todo_overview    = %q   # Open the cross-day TODO overview
 switch_workspace = %q   # Open the workspace picker
 
 [keybinds.day]
@@ -338,7 +335,6 @@ clock_stop      = %q   # Stop the clock and log the entry (Clocking tab)
 		cfg.Keybinds.List.Delete,
 		cfg.Keybinds.List.Export,
 		cfg.Keybinds.List.StatsView,
-		cfg.Keybinds.List.TodoOverview,
 		cfg.Keybinds.List.SwitchWorkspace,
 		cfg.Keybinds.Day.AddWork,
 		cfg.Keybinds.Day.AddBreak,
@@ -443,7 +439,6 @@ func (cfg *Config) validate() error {
 	fill(&lk.Delete, dl.Delete)
 	fill(&lk.Export, dl.Export)
 	fill(&lk.StatsView, dl.StatsView)
-	fill(&lk.TodoOverview, dl.TodoOverview)
 	fill(&lk.SwitchWorkspace, dl.SwitchWorkspace)
 
 	dk := &cfg.Keybinds.Day
@@ -462,7 +457,7 @@ func (cfg *Config) validate() error {
 	fill(&dk.ClockStart, dd.ClockStart)
 	fill(&dk.ClockStop, dd.ClockStop)
 
-	if err := checkDuplicates("list", lk.Quit, lk.OpenToday, lk.OpenDate, lk.Delete, lk.Export, lk.StatsView, lk.TodoOverview, lk.SwitchWorkspace); err != nil {
+	if err := checkDuplicates("list", lk.Quit, lk.OpenToday, lk.OpenDate, lk.Delete, lk.Export, lk.StatsView, lk.SwitchWorkspace); err != nil {
 		return err
 	}
 	dayKeys := []string{

@@ -72,7 +72,7 @@ Exports are written to `~/.journal/exports/export-YYYY-MM-DD.md`.
 
 ### ✅ TODOs in Work Log view
 
-In the day Work Log tab, TODOs are now workspace-global (not per-day). They are shown in the right-side TODO panel.
+In the day Work Log tab, TODOs are workspace-global (not per-day). The exact same TODO list is shown for every day in the same workspace.
 
 | Key | Action |
 |-----|--------|
@@ -184,7 +184,7 @@ weekly_hours_goal = 40   # hours (default: 40)
 
 ### Workspaces
 
-Workspaces let you maintain separate journal directories, each with its own `storage_path`, optional `weekly_hours_goal`, and a global TODO list stored in `todos.json` at the workspace root. When at least one workspace is defined you can switch between them from the list view with `p`.
+Workspaces let you maintain separate journal directories, each with its own `storage_path`, optional `weekly_hours_goal`, and a global TODO list stored in `todos.json` at the workspace root. TODOs are consistent across all days within that workspace. When at least one workspace is defined you can switch between them from the list view with `p`.
 
 ```toml
 [[workspaces]]

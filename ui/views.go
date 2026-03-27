@@ -52,8 +52,6 @@ func (m Model) View() string {
 		return m.viewWorkspacePicker()
 	case stateStats:
 		return m.viewStats()
-	case stateTodoOverview:
-		return m.viewTodoOverview()
 	}
 	return ""
 }
@@ -677,7 +675,6 @@ func (m Model) viewList() string {
 		[2]string{kb.OpenDate, "open date"},
 		[2]string{"enter", "view"},
 		[2]string{kb.StatsView, "stats"},
-		[2]string{kb.TodoOverview, "todos"},
 		[2]string{kb.Delete, "delete"},
 		[2]string{kb.Export, "export"},
 		[2]string{"/", "filter"},
@@ -742,7 +739,6 @@ func (m Model) viewDayView() string {
 			{"←/→", "switch tab"},
 			{joinKeyLabels(kb.SetStartNow, kb.SetStartManual), "start"},
 			{joinKeyLabels(kb.SetEndNow, kb.SetEndManual), "end"},
-			{kb.TodoOverview, "todos"},
 			{kb.Export, "export"},
 			{"esc", "back"},
 		}
@@ -988,23 +984,6 @@ func (m Model) viewConfirmDelete() string {
 
 	centered := lipgloss.NewStyle().Width(m.width).Align(lipgloss.Center).Render(dialog)
 	return header + "\n" + strings.Repeat("\n", topPad) + centered
-}
-
-func (m Model) viewTodoOverview() string {
-	header := m.renderHeader("✅  TODO Overview", "All days")
-	sep := dayViewDividerStyle.Render(strings.Repeat("─", m.width))
-	filter := "all"
-	if m.todoOverviewOnlyU {
-		filter = "uncompleted"
-	}
-	subHeader := dayViewMutedStyle.Render("filter: "+filter) + "\n" + sep
-	footer := m.renderFooter([][2]string{
-		{"j/k", "navigate"},
-		{"space", "toggle"},
-		{"u/a", "filter"},
-		{"esc", "back"},
-	})
-	return lipgloss.JoinVertical(lipgloss.Left, header, subHeader, m.viewport.View(), footer)
 }
 
 func (m Model) viewWorkspacePicker() string {
