@@ -14,7 +14,7 @@ A minimal, distraction-free terminal journaling app built with Go and the [Charm
 - **Multi-project split** — enter comma-separated projects to split a task across them automatically
 - **Clock / timer** — start a live timer from the Work Log tab; it appears as a side panel next to the entry list and is automatically logged when stopped
 - **Workspaces** — maintain multiple independent journal directories (e.g. personal vs. work) and switch between them with a picker dialog
-- **Weekly summary** — scrollable week overview with per-day totals, navigable across past weeks
+- **Workspace TODOs** — one global todo list per workspace, visible in the Work Log view
 - **Daily export** — generates a Markdown report grouped by project
 - **Open any day** — open or create a journal entry for any arbitrary date
 - **Delete** — with confirmation dialog (single entry or whole day)
@@ -70,17 +70,20 @@ Exports are written to `~/.journal/exports/export-YYYY-MM-DD.md`.
 | `x` | Export this day's work log |
 | `esc` | Back to list |
 
-### 📅 Weekly summary view
+### ✅ TODOs in Work Log view
 
-![Week Summary view](images/week-overview.png)
+In the day Work Log tab, TODOs are workspace-global (not per-day). The exact same TODO list is shown for every day in the same workspace.
 
 | Key | Action |
 |-----|--------|
-| `←` / `h` | Previous week |
-| `→` / `l` | Next week |
-| `g` | Set a custom hours goal for the displayed week |
-| `j` / `k` | Scroll content |
-| `esc` / `q` | Back to list |
+| `t` | Toggle focus between Work Log entries and TODO panel |
+| `j` / `k` | Move TODO selection up/down |
+| `a` | Start inline TODO input |
+| `enter` | Toggle inline input / save current inline draft |
+| `A` | Add subtodo under selected TODO |
+| `tab` / `shift+tab` | Indent / outdent selected TODO |
+| `space` | Toggle TODO completed state |
+| `delete` / `backspace` | Delete selected TODO |
 
 ### ✏️ Notes editor
 
@@ -173,17 +176,15 @@ Schmournal reads its configuration from `~/.config/schmournal.config` (TOML form
 
 ### `weekly_hours_goal`
 
-Sets the default weekly working-hours target used in the stats bar progress meter and the weekly summary view.
+Sets the default weekly working-hours target used in the stats bar progress meter.
 
 ```toml
 weekly_hours_goal = 40   # hours (default: 40)
 ```
 
-You can also override this on a per-week basis from the **weekly summary view** by pressing `g`. The override is stored in `~/.journal/weekly_goals.json` and shown as "(custom)" next to the goal in the week total line. Leave the input empty and press `enter` to reset a week back to the global default.
-
 ### Workspaces
 
-Workspaces let you maintain separate journal directories, each with its own `storage_path` and optional `weekly_hours_goal`. When at least one workspace is defined you can switch between them from the list view with `p`.
+Workspaces let you maintain separate journal directories, each with its own `storage_path`, optional `weekly_hours_goal`, and a global TODO list stored in `todos.json` at the workspace root. TODOs are consistent across all days within that workspace. When at least one workspace is defined you can switch between them from the list view with `p`.
 
 ```toml
 [[workspaces]]
@@ -211,10 +212,6 @@ switch_workspace = "p"   # open the workspace picker
 clock_start = "c"        # start the clock timer
 clock_stop  = "t"        # stop the clock and log the entry
 
-[keybinds.week]
-prev_week        = "h"
-next_week        = "l"
-set_weekly_hours = "g"   # set custom goal for the displayed week
 ```
 
 ---
@@ -275,4 +272,3 @@ schmournal --version
 ## Theme
 
 Uses the **Catppuccin Mocha** palette throughout — Mauve accents, Lavender highlights, and the full Base/Surface/Overlay colour system for a consistent dark-mode look.
-

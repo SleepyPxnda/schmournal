@@ -33,7 +33,7 @@ func TestLoadMissingTodosDefaultsToEmptySlice(t *testing.T) {
 	}
 }
 
-func TestSaveAlwaysWritesTodosField(t *testing.T) {
+func TestSaveDoesNotWriteTodosField(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "2026-03-26.json")
 	rec := DayRecord{
@@ -56,14 +56,43 @@ func TestSaveAlwaysWritesTodosField(t *testing.T) {
 		t.Fatalf("Unmarshal() error: %v", err)
 	}
 	v, ok := decoded["todos"]
-	if !ok {
-		t.Fatal("saved JSON missing \"todos\" field")
+	if ok {
+		t.Fatalf("saved JSON unexpectedly contains legacy \"todos\" field: %#v", v)
 	}
-	arr, ok := v.([]any)
-	if !ok {
-		t.Fatalf("\"todos\" has wrong type %T, want array", v)
+}
+
+func TestWorkspaceTodosRoundTrip(t *testing.T) {
+	dir := t.TempDir()
+	if err := SetStoragePath(dir); err != nil {
+		t.Fatalf("SetStoragePath() error: %v", err)
 	}
-	if len(arr) != 0 {
-		t.Fatalf("\"todos\" len=%d, want 0", len(arr))
+	t.Cleanup(func() {
+		_ = SetStoragePath("")
+	})
+
+	in := WorkspaceTodos{
+		Todos: []Todo{
+			{
+				ID:        "1",
+				Title:     "Top",
+				Completed: false,
+				Subtodos: []Todo{
+					{ID: "2", Title: "Sub", Completed: true},
+				},
+			},
+		},
+	}
+	if err := SaveWorkspaceTodos(in); err != nil {
+		t.Fatalf("SaveWorkspaceTodos() error: %v", err)
+	}
+	out, err := LoadWorkspaceTodos()
+	if err != nil {
+		t.Fatalf("LoadWorkspaceTodos() error: %v", err)
+	}
+	if len(out.Todos) != 1 || out.Todos[0].Title != "Top" {
+		t.Fatalf("unexpected workspace todos: %#v", out.Todos)
+	}
+	if len(out.Todos[0].Subtodos) != 1 || out.Todos[0].Subtodos[0].Title != "Sub" {
+		t.Fatalf("unexpected nested workspace todos: %#v", out.Todos[0].Subtodos)
 	}
 }

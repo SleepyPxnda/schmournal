@@ -1,7 +1,6 @@
 package ui
 
 import (
-	"fmt"
 	"io"
 	"os"
 	"strings"
@@ -31,11 +30,8 @@ const (
 	stateTodoForm
 	stateConfirmDelete
 	stateDateInput
-	stateWeekView
-	stateWeekHoursInput
 	stateWorkspacePicker
 	stateStats
-	stateTodoOverview
 )
 
 const (
@@ -52,21 +48,10 @@ type dayDeletedMsg struct{}
 type exportedMsg struct{ path string }
 type clearStatusMsg struct{}
 type errMsg struct{ err error }
-type weekGoalsLoadedMsg struct{ goals journal.WeeklyGoals }
+type workspaceTodosLoadedMsg struct{ todos journal.WorkspaceTodos }
 type clockTickMsg struct{}
 
 // ── List item ─────────────────────────────────────────────────────────────────
-
-type todoOverviewItem struct {
-	date      string
-	path      string
-	title     string
-	completed bool
-	parentID  string
-	subID     string
-	depth     int
-	line      int
-}
 
 type dayListItem struct {
 	rec       journal.DayRecord
@@ -112,8 +97,10 @@ type Model struct {
 	cfg             config.Config
 	activeWorkspace string // name of the currently active workspace (empty = no workspaces)
 
-	list    list.Model
-	records []journal.DayRecord
+	list           list.Model
+	records        []journal.DayRecord
+	workspaceTodos         []journal.Todo
+	workspaceArchivedTodos []journal.Todo
 
 	dayRecord     journal.DayRecord
 	selectedEntry int // index into dayRecord.Entries; -1 = no selection
@@ -140,28 +127,17 @@ type Model struct {
 
 	viewport viewport.Model
 
-	weekOffset     int // 0 = current week, -1 = last week, etc.
-	weekGoals      journal.WeeklyGoals
-	weekHoursInput textinput.Model
-
 	statsTab int // 0=Overview 1=Monthly 2=Yearly 3=All-time
 
-	selectedPane int // 0 = work log entries, 1 = todos
-	selectedTodo int // top-level todo index
-	selectedSub  int // -1 = top-level, >=0 = level-2 todo index
-	selectedSub2 int // -1 = not level-3, >=0 = level-3 todo index under selectedSub
-	todoEditTop  int // -1 = new, >=0 = editing top-level todo index
-	todoEditSub  int // -1 = top-level, >=0 = editing level-2 todo index
-	todoEditSub2 int // -1 = not level-3, >=0 = editing level-3 todo index
-	todoDraft    string
+	selectedPane  int // 0 = work log entries, 1 = todos
+	selectedTodo  int // top-level todo index
+	selectedSub   int // -1 = top-level, >=0 = level-2 todo index
+	selectedSub2  int // -1 = not level-3, >=0 = level-3 todo index under selectedSub
+	todoEditTop   int // -1 = new, >=0 = editing top-level todo index
+	todoEditSub   int // -1 = top-level, >=0 = editing level-2 todo index
+	todoEditSub2  int // -1 = not level-3, >=0 = editing level-3 todo index
+	todoDraft     string
 	todoInputMode bool
-
-	todoOverviewItems []todoOverviewItem
-	todoOverviewIdx   int
-	todoOverviewOnlyU bool
-	todoOverviewFrom  viewState
-	focusTodoID       string
-	focusSubTodoID    string
 
 	workspaceIdx int // currently highlighted row in the workspace picker
 
@@ -271,14 +247,6 @@ func New(cfg config.Config, activeWorkspace string, version string) Model {
 	dateIn.TextStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(cText))
 	dateIn.PlaceholderStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(cOverlay0))
 
-	weekHoursIn := textinput.New()
-	weekHoursIn.Placeholder = fmt.Sprintf("%.0f", cfg.WeeklyHoursGoal)
-	weekHoursIn.CharLimit = 8
-	weekHoursIn.Width = 10
-	weekHoursIn.PromptStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(cMauve))
-	weekHoursIn.TextStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(cText))
-	weekHoursIn.PlaceholderStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(cOverlay0))
-
 	todoIn := textinput.New()
 	todoIn.Placeholder = "TODO title…"
 	todoIn.CharLimit = 160
@@ -298,8 +266,8 @@ func New(cfg config.Config, activeWorkspace string, version string) Model {
 		durationInput:   durIn,
 		timeInput:       timeIn,
 		dateInput:       dateIn,
-		weekHoursInput:  weekHoursIn,
-		weekGoals:       journal.WeeklyGoals{},
+		workspaceTodos:         []journal.Todo{},
+		workspaceArchivedTodos: []journal.Todo{},
 		selectedEntry:   -1,
 		selectedTodo:    0,
 		selectedSub:     -1,
@@ -313,7 +281,7 @@ func New(cfg config.Config, activeWorkspace string, version string) Model {
 }
 
 func (m Model) Init() tea.Cmd {
-	return tea.Batch(loadRecords, loadWeeklyGoals)
+	return tea.Batch(loadRecords, loadWorkspaceTodos)
 }
 
 // ── Update ────────────────────────────────────────────────────────────────────
@@ -355,8 +323,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.list.SetItems(items)
 		return m, nil
 
-	case weekGoalsLoadedMsg:
-		m.weekGoals = msg.goals
+	case workspaceTodosLoadedMsg:
+		m.workspaceTodos = msg.todos.Todos
+		m.workspaceArchivedTodos = msg.todos.Archived
 		return m, nil
 
 	case daySavedMsg:
@@ -422,16 +391,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.handleConfirmDeleteKey(msg)
 		case stateDateInput:
 			return m.handleDateInputKey(msg)
-		case stateWeekView:
-			return m.handleWeekViewKey(msg)
-		case stateWeekHoursInput:
-			return m.handleWeekHoursInputKey(msg)
 		case stateWorkspacePicker:
 			return m.handleWorkspacePickerKey(msg)
 		case stateStats:
 			return m.handleStatsKey(msg)
-		case stateTodoOverview:
-			return m.handleTodoOverviewKey(msg)
 		}
 	}
 
@@ -441,7 +404,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		var cmd tea.Cmd
 		m.list, cmd = m.list.Update(msg)
 		return m, cmd
-	case stateDayView, stateWeekView, stateStats, stateTodoOverview:
+	case stateDayView, stateStats:
 		var cmd tea.Cmd
 		m.viewport, cmd = m.viewport.Update(msg)
 		return m, cmd

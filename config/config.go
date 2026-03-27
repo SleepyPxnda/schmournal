@@ -33,9 +33,7 @@ type ListKeybinds struct {
 	OpenDate        string `toml:"open_date"`
 	Delete          string `toml:"delete"`
 	Export          string `toml:"export"`
-	WeekView        string `toml:"week_view"`
 	StatsView       string `toml:"stats_view"`
-	TodoOverview    string `toml:"todo_overview"`
 	SwitchWorkspace string `toml:"switch_workspace"`
 }
 
@@ -56,19 +54,10 @@ type DayKeybinds struct {
 	ClockStop      string `toml:"clock_stop"`
 }
 
-// WeekKeybinds holds configurable keys for the week overview.
-type WeekKeybinds struct {
-	PrevWeek       string `toml:"prev_week"`
-	NextWeek       string `toml:"next_week"`
-	SetWeeklyHours string `toml:"set_weekly_hours"`
-	TodoOverview   string `toml:"todo_overview"`
-}
-
 // Keybinds groups all view-specific keybind configurations.
 type Keybinds struct {
 	List ListKeybinds `toml:"list"`
 	Day  DayKeybinds  `toml:"day"`
-	Week WeekKeybinds `toml:"week"`
 }
 
 // ── Config ────────────────────────────────────────────────────────────────────
@@ -108,9 +97,7 @@ func Default() Config {
 				OpenDate:        "c",
 				Delete:          "d",
 				Export:          "x",
-				WeekView:        "v",
 				StatsView:       "s",
-				TodoOverview:    "t",
 				SwitchWorkspace: "p",
 			},
 			Day: DayKeybinds{
@@ -127,12 +114,6 @@ func Default() Config {
 				Export:         "x",
 				ClockStart:     "c",
 				ClockStop:      "c",
-			},
-			Week: WeekKeybinds{
-				PrevWeek:       "h",
-				NextWeek:       "l",
-				SetWeeklyHours: "g",
-				TodoOverview:   "t",
 			},
 		},
 	}
@@ -281,13 +262,12 @@ func generateConfigContent(cfg Config) string {
 # The ~ is expanded to your home directory.
 storage_path = %q
 
-# Default weekly working hours goal used in the stats bar and weekly summary.
-# Can be overridden per-week from the weekly summary view.
+# Default weekly working hours goal used in the stats bar progress meter.
 weekly_hours_goal = %g
 
 # Days of the week that count as working days.
 # Non-working days are skipped when calculating your streak (so a weekend
-# never breaks it) and are highlighted in the week bar and the weekly view.
+# never breaks it) and are highlighted in the week bar.
 # Logging on a non-working day is always allowed.
 # Valid values (case-insensitive): monday, tuesday, wednesday, thursday,
 #   friday, saturday, sunday
@@ -326,9 +306,7 @@ open_today       = %q   # Open / create today's entry
 open_date        = %q   # Open / create an entry for a specific date
 delete           = %q   # Delete the selected day record
 export           = %q   # Export the selected day to Markdown
-week_view        = %q   # Open the weekly overview
 stats_view       = %q   # Open the stats overview
-todo_overview    = %q   # Open the cross-day TODO overview
 switch_workspace = %q   # Open the workspace picker
 
 [keybinds.day]
@@ -346,11 +324,6 @@ export          = %q   # Export day to Markdown
 clock_start     = %q   # Start the clock timer (Clocking tab)
 clock_stop      = %q   # Stop the clock and log the entry (Clocking tab)
 
-[keybinds.week]
-prev_week        = %q   # Go to the previous week (also ←)
-next_week        = %q   # Go to the next week  (also →)
-set_weekly_hours = %q   # Set a custom hours goal for the displayed week
-todo_overview    = %q   # Open the cross-day TODO overview
 `,
 		cfg.StoragePath,
 		cfg.WeeklyHoursGoal,
@@ -361,9 +334,7 @@ todo_overview    = %q   # Open the cross-day TODO overview
 		cfg.Keybinds.List.OpenDate,
 		cfg.Keybinds.List.Delete,
 		cfg.Keybinds.List.Export,
-		cfg.Keybinds.List.WeekView,
 		cfg.Keybinds.List.StatsView,
-		cfg.Keybinds.List.TodoOverview,
 		cfg.Keybinds.List.SwitchWorkspace,
 		cfg.Keybinds.Day.AddWork,
 		cfg.Keybinds.Day.AddBreak,
@@ -378,10 +349,6 @@ todo_overview    = %q   # Open the cross-day TODO overview
 		cfg.Keybinds.Day.Export,
 		cfg.Keybinds.Day.ClockStart,
 		cfg.Keybinds.Day.ClockStop,
-		cfg.Keybinds.Week.PrevWeek,
-		cfg.Keybinds.Week.NextWeek,
-		cfg.Keybinds.Week.SetWeeklyHours,
-		cfg.Keybinds.Week.TodoOverview,
 	)
 }
 
@@ -471,9 +438,7 @@ func (cfg *Config) validate() error {
 	fill(&lk.OpenDate, dl.OpenDate)
 	fill(&lk.Delete, dl.Delete)
 	fill(&lk.Export, dl.Export)
-	fill(&lk.WeekView, dl.WeekView)
 	fill(&lk.StatsView, dl.StatsView)
-	fill(&lk.TodoOverview, dl.TodoOverview)
 	fill(&lk.SwitchWorkspace, dl.SwitchWorkspace)
 
 	dk := &cfg.Keybinds.Day
@@ -492,14 +457,7 @@ func (cfg *Config) validate() error {
 	fill(&dk.ClockStart, dd.ClockStart)
 	fill(&dk.ClockStop, dd.ClockStop)
 
-	wk := &cfg.Keybinds.Week
-	dw := def.Keybinds.Week
-	fill(&wk.PrevWeek, dw.PrevWeek)
-	fill(&wk.NextWeek, dw.NextWeek)
-	fill(&wk.SetWeeklyHours, dw.SetWeeklyHours)
-	fill(&wk.TodoOverview, dw.TodoOverview)
-
-	if err := checkDuplicates("list", lk.Quit, lk.OpenToday, lk.OpenDate, lk.Delete, lk.Export, lk.WeekView, lk.StatsView, lk.TodoOverview, lk.SwitchWorkspace); err != nil {
+	if err := checkDuplicates("list", lk.Quit, lk.OpenToday, lk.OpenDate, lk.Delete, lk.Export, lk.StatsView, lk.SwitchWorkspace); err != nil {
 		return err
 	}
 	dayKeys := []string{
@@ -514,10 +472,6 @@ func (cfg *Config) validate() error {
 	if err := checkDuplicates("day", dayKeys...); err != nil {
 		return err
 	}
-	if err := checkDuplicates("week", wk.PrevWeek, wk.NextWeek, wk.SetWeeklyHours, wk.TodoOverview); err != nil {
-		return err
-	}
-
 	// Validate workspace names: non-empty, no surrounding whitespace, unique.
 	seen := make(map[string]struct{}, len(cfg.Workspaces))
 	for i, ws := range cfg.Workspaces {

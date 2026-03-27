@@ -188,6 +188,7 @@ var (
 	dayViewNotesStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color(cText))
 	todoIncompleteStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(cPeach)).Bold(true)
 	todoCompleteStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color(cGreen)).Bold(true)
+	todoArchivedStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color(cOverlay0))
 	todoInputActiveStyle = lipgloss.NewStyle().
 				Foreground(lipgloss.Color(cText)).
 				Background(lipgloss.Color(cSurface0)).
