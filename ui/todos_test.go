@@ -470,3 +470,179 @@ func TestConfirmDeleteUsesTodoSubjectForTodoDeletion(t *testing.T) {
 		t.Fatalf("expected no entry wording for todo deletion, got:\n%s", view)
 	}
 }
+
+// ─── pruneCompletedTodos ──────────────────────────────────────────────────────
+
+func TestPruneCompletedTodosRemovesFullyDone(t *testing.T) {
+	todos := []journal.Todo{
+		{ID: "a", Title: "Done", Completed: true, Subtodos: []journal.Todo{}},
+		{ID: "b", Title: "Not done", Completed: false, Subtodos: []journal.Todo{}},
+	}
+	result := pruneCompletedTodos(todos)
+	if len(result) != 1 || result[0].ID != "b" {
+		t.Fatalf("expected only 'Not done' to remain, got %+v", result)
+	}
+}
+
+func TestPruneCompletedTodosKeepsParentWithIncompleteChild(t *testing.T) {
+	todos := []journal.Todo{
+		{
+			ID:        "a",
+			Title:     "Parent done",
+			Completed: true,
+			Subtodos: []journal.Todo{
+				{ID: "a1", Title: "Child not done", Completed: false, Subtodos: []journal.Todo{}},
+			},
+		},
+	}
+	result := pruneCompletedTodos(todos)
+	if len(result) != 1 || result[0].ID != "a" {
+		t.Fatalf("expected parent to remain because child is incomplete, got %+v", result)
+	}
+}
+
+func TestPruneCompletedTodosRemovesFullyDoneNested(t *testing.T) {
+	todos := []journal.Todo{
+		{
+			ID:        "a",
+			Title:     "Parent done",
+			Completed: true,
+			Subtodos: []journal.Todo{
+				{ID: "a1", Title: "Child done", Completed: true, Subtodos: []journal.Todo{}},
+			},
+		},
+		{ID: "b", Title: "Keep me", Completed: false, Subtodos: []journal.Todo{}},
+	}
+	result := pruneCompletedTodos(todos)
+	if len(result) != 1 || result[0].ID != "b" {
+		t.Fatalf("expected only 'Keep me' to remain, got %+v", result)
+	}
+}
+
+func TestPruneCompletedTodosPrunesCompletedSubtodoFromIncompleteParent(t *testing.T) {
+	todos := []journal.Todo{
+		{
+			ID:        "a",
+			Title:     "Parent incomplete",
+			Completed: false,
+			Subtodos: []journal.Todo{
+				{ID: "a1", Title: "Done child", Completed: true, Subtodos: []journal.Todo{}},
+				{ID: "a2", Title: "Incomplete child", Completed: false, Subtodos: []journal.Todo{}},
+			},
+		},
+	}
+	result := pruneCompletedTodos(todos)
+	if len(result) != 1 {
+		t.Fatalf("expected parent to remain, got %+v", result)
+	}
+	if len(result[0].Subtodos) != 1 || result[0].Subtodos[0].ID != "a2" {
+		t.Fatalf("expected only incomplete child to remain, got subtodos %+v", result[0].Subtodos)
+	}
+}
+
+// ─── moveSelectedTodoDelta ────────────────────────────────────────────────────
+
+func TestMoveSelectedTodoDeltaTopLevel(t *testing.T) {
+	m := Model{
+		workspaceTodos: []journal.Todo{
+			{ID: "a", Title: "A"},
+			{ID: "b", Title: "B"},
+			{ID: "c", Title: "C"},
+		},
+		selectedTodo: 0,
+		selectedSub:  -1,
+		selectedSub2: -1,
+	}
+
+	ok := m.moveSelectedTodoDelta(1)
+	if !ok {
+		t.Fatal("expected move to succeed")
+	}
+	if m.workspaceTodos[0].ID != "b" || m.workspaceTodos[1].ID != "a" {
+		t.Fatalf("expected A to move down, got %v %v", m.workspaceTodos[0].ID, m.workspaceTodos[1].ID)
+	}
+	if m.selectedTodo != 1 {
+		t.Fatalf("expected selectedTodo=1, got %d", m.selectedTodo)
+	}
+}
+
+func TestMoveSelectedTodoDeltaTopLevelBoundary(t *testing.T) {
+	m := Model{
+		workspaceTodos: []journal.Todo{
+			{ID: "a", Title: "A"},
+		},
+		selectedTodo: 0,
+		selectedSub:  -1,
+		selectedSub2: -1,
+	}
+
+	ok := m.moveSelectedTodoDelta(-1)
+	if ok {
+		t.Fatal("expected move to fail at boundary")
+	}
+}
+
+func TestMoveSelectedTodoDeltaLevelTwo(t *testing.T) {
+	m := Model{
+		workspaceTodos: []journal.Todo{
+			{
+				ID:    "p",
+				Title: "Parent",
+				Subtodos: []journal.Todo{
+					{ID: "c1", Title: "Child 1"},
+					{ID: "c2", Title: "Child 2"},
+				},
+			},
+		},
+		selectedTodo: 0,
+		selectedSub:  0,
+		selectedSub2: -1,
+	}
+
+	ok := m.moveSelectedTodoDelta(1)
+	if !ok {
+		t.Fatal("expected move to succeed")
+	}
+	if m.workspaceTodos[0].Subtodos[0].ID != "c2" || m.workspaceTodos[0].Subtodos[1].ID != "c1" {
+		t.Fatalf("expected c1 to move down, got %v %v", m.workspaceTodos[0].Subtodos[0].ID, m.workspaceTodos[0].Subtodos[1].ID)
+	}
+	if m.selectedSub != 1 {
+		t.Fatalf("expected selectedSub=1, got %d", m.selectedSub)
+	}
+}
+
+func TestMoveSelectedTodoDeltaLevelThree(t *testing.T) {
+	m := Model{
+		workspaceTodos: []journal.Todo{
+			{
+				ID:    "p",
+				Title: "Parent",
+				Subtodos: []journal.Todo{
+					{
+						ID:    "c1",
+						Title: "Child",
+						Subtodos: []journal.Todo{
+							{ID: "g1", Title: "Grand 1"},
+							{ID: "g2", Title: "Grand 2"},
+						},
+					},
+				},
+			},
+		},
+		selectedTodo: 0,
+		selectedSub:  0,
+		selectedSub2: 0,
+	}
+
+	ok := m.moveSelectedTodoDelta(1)
+	if !ok {
+		t.Fatal("expected move to succeed")
+	}
+	subs := m.workspaceTodos[0].Subtodos[0].Subtodos
+	if subs[0].ID != "g2" || subs[1].ID != "g1" {
+		t.Fatalf("expected g1 to move down, got %v %v", subs[0].ID, subs[1].ID)
+	}
+	if m.selectedSub2 != 1 {
+		t.Fatalf("expected selectedSub2=1, got %d", m.selectedSub2)
+	}
+}

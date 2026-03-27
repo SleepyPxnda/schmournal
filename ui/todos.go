@@ -265,6 +265,77 @@ func (m *Model) outdentSelectedTodo() bool {
 	return true
 }
 
+// isFullyCompleted reports whether t and every nested subtodo are all completed.
+func isFullyCompleted(t journal.Todo) bool {
+	if !t.Completed {
+		return false
+	}
+	for _, sub := range t.Subtodos {
+		if !isFullyCompleted(sub) {
+			return false
+		}
+	}
+	return true
+}
+
+// pruneCompletedTodos removes todos (at any depth) where the todo itself and
+// all its descendants are completed. Partial branches (some children
+// incomplete) are kept intact.
+func pruneCompletedTodos(todos []journal.Todo) []journal.Todo {
+	result := make([]journal.Todo, 0, len(todos))
+	for _, t := range todos {
+		if isFullyCompleted(t) {
+			continue
+		}
+		t.Subtodos = pruneCompletedTodos(t.Subtodos)
+		result = append(result, t)
+	}
+	return result
+}
+
+// moveSelectedTodoDelta swaps the currently selected todo with its adjacent
+// sibling in the direction indicated by delta (+1 = down, -1 = up). The
+// selection cursor is updated to follow the moved item. Returns true when a
+// swap was performed.
+func (m *Model) moveSelectedTodoDelta(delta int) bool {
+	if m.selectedTodo < 0 || m.selectedTodo >= len(m.workspaceTodos) {
+		return false
+	}
+	// Level 3
+	if m.selectedSub >= 0 && m.selectedSub2 >= 0 {
+		if m.selectedSub >= len(m.workspaceTodos[m.selectedTodo].Subtodos) {
+			return false
+		}
+		sub := &m.workspaceTodos[m.selectedTodo].Subtodos[m.selectedSub]
+		newIdx := m.selectedSub2 + delta
+		if newIdx < 0 || newIdx >= len(sub.Subtodos) {
+			return false
+		}
+		sub.Subtodos[m.selectedSub2], sub.Subtodos[newIdx] = sub.Subtodos[newIdx], sub.Subtodos[m.selectedSub2]
+		m.selectedSub2 = newIdx
+		return true
+	}
+	// Level 2
+	if m.selectedSub >= 0 {
+		parent := &m.workspaceTodos[m.selectedTodo]
+		newIdx := m.selectedSub + delta
+		if newIdx < 0 || newIdx >= len(parent.Subtodos) {
+			return false
+		}
+		parent.Subtodos[m.selectedSub], parent.Subtodos[newIdx] = parent.Subtodos[newIdx], parent.Subtodos[m.selectedSub]
+		m.selectedSub = newIdx
+		return true
+	}
+	// Level 1 (top-level)
+	newIdx := m.selectedTodo + delta
+	if newIdx < 0 || newIdx >= len(m.workspaceTodos) {
+		return false
+	}
+	m.workspaceTodos[m.selectedTodo], m.workspaceTodos[newIdx] = m.workspaceTodos[newIdx], m.workspaceTodos[m.selectedTodo]
+	m.selectedTodo = newIdx
+	return true
+}
+
 func (m *Model) deleteSelectedTodoNow() bool {
 	if m.selectedTodo < 0 || m.selectedTodo >= len(m.workspaceTodos) {
 		return false

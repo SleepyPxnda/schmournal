@@ -720,6 +720,7 @@ func (m Model) viewDayView() string {
 			{"j/k", "select"},
 			{"tab", "pane/indent"},
 			{"S-tab", "outdent"},
+			{"C-↑/↓", "reorder"},
 			{kb.AddWork, "work"},
 			{kb.AddBreak, "break"},
 			{kb.Edit, editLabel},

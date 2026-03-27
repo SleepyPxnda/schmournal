@@ -93,7 +93,7 @@ func (m Model) handleDayViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 	if inTodoPane && m.todoInputMode {
 		switch msg.String() {
-		case "tab", "shift+tab", "delete", "up", "down", "left", "right":
+		case "tab", "shift+tab", "delete", "up", "down", "left", "right", "ctrl+up", "ctrl+down":
 			return m, nil
 		}
 	}
@@ -157,6 +157,18 @@ func (m Model) handleDayViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if m.dayViewTab == 0 && m.selectedPane == 1 && m.outdentSelectedTodo() {
 			m.viewport.SetContent(m.renderDayContent())
 			return m, m.saveWorkspaceTodosCmd("✓ TODO outdented")
+		}
+		return m, nil
+	case "ctrl+up":
+		if m.dayViewTab == 0 && m.selectedPane == 1 && m.moveSelectedTodoDelta(-1) {
+			m.viewport.SetContent(m.renderDayContent())
+			return m, m.saveWorkspaceTodosCmd("✓ TODO moved up")
+		}
+		return m, nil
+	case "ctrl+down":
+		if m.dayViewTab == 0 && m.selectedPane == 1 && m.moveSelectedTodoDelta(1) {
+			m.viewport.SetContent(m.renderDayContent())
+			return m, m.saveWorkspaceTodosCmd("✓ TODO moved down")
 		}
 		return m, nil
 	case "delete":
@@ -310,6 +322,12 @@ func (m Model) handleDayViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.statusMsg = "⏱ Clock stopped"
 			m.isError = false
 			cmds = append(cmds, clearStatusCmd())
+		}
+		// Purge todos where the item and all its descendants are completed.
+		pruned := pruneCompletedTodos(m.workspaceTodos)
+		if len(pruned) != len(m.workspaceTodos) {
+			m.workspaceTodos = pruned
+			cmds = append(cmds, m.saveWorkspaceTodosCmd(""))
 		}
 		return m, tea.Batch(cmds...)
 	}
