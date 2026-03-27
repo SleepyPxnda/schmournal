@@ -36,7 +36,9 @@ type DayRecord struct {
 	EndTime   string      `json:"end_time"`
 	Entries   []WorkEntry `json:"entries"`
 	Notes     string      `json:"notes"`
-	Todos     []Todo      `json:"-"` // legacy runtime/testing only (todos are workspace-level)
+	// Todos are workspace-level and persisted in todos.json. This field is kept
+	// in-memory only for runtime compatibility and tests.
+	Todos []Todo `json:"-"`
 	Path      string      `json:"-"` // runtime only
 }
 
