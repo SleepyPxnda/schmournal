@@ -1,7 +1,6 @@
 package ui
 
 import (
-	"fmt"
 	"io"
 	"os"
 	"strings"
@@ -110,8 +109,8 @@ type Model struct {
 	cfg             config.Config
 	activeWorkspace string // name of the currently active workspace (empty = no workspaces)
 
-	list    list.Model
-	records []journal.DayRecord
+	list           list.Model
+	records        []journal.DayRecord
 	workspaceTodos []journal.Todo
 
 	dayRecord     journal.DayRecord
@@ -141,14 +140,14 @@ type Model struct {
 
 	statsTab int // 0=Overview 1=Monthly 2=Yearly 3=All-time
 
-	selectedPane int // 0 = work log entries, 1 = todos
-	selectedTodo int // top-level todo index
-	selectedSub  int // -1 = top-level, >=0 = level-2 todo index
-	selectedSub2 int // -1 = not level-3, >=0 = level-3 todo index under selectedSub
-	todoEditTop  int // -1 = new, >=0 = editing top-level todo index
-	todoEditSub  int // -1 = top-level, >=0 = editing level-2 todo index
-	todoEditSub2 int // -1 = not level-3, >=0 = editing level-3 todo index
-	todoDraft    string
+	selectedPane  int // 0 = work log entries, 1 = todos
+	selectedTodo  int // top-level todo index
+	selectedSub   int // -1 = top-level, >=0 = level-2 todo index
+	selectedSub2  int // -1 = not level-3, >=0 = level-3 todo index under selectedSub
+	todoEditTop   int // -1 = new, >=0 = editing top-level todo index
+	todoEditSub   int // -1 = top-level, >=0 = editing level-2 todo index
+	todoEditSub2  int // -1 = not level-3, >=0 = editing level-3 todo index
+	todoDraft     string
 	todoInputMode bool
 
 	todoOverviewItems []todoOverviewItem

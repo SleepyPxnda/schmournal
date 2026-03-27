@@ -1,7 +1,6 @@
 package ui
 
 import (
-	"fmt"
 	"strings"
 	"time"
 	"unicode"
@@ -48,8 +47,6 @@ func (m Model) handleListKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 					return exportedMsg{path: path}
 				}
 			}
-		case kb.WeekView:
-			return m.openWeekView()
 		case kb.StatsView:
 			return m.openStatsView()
 		case kb.TodoOverview:
@@ -60,81 +57,6 @@ func (m Model) handleListKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 	var cmd tea.Cmd
 	m.list, cmd = m.list.Update(msg)
-	return m, cmd
-}
-
-func (m Model) handleWeekViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	kb := m.cfg.Keybinds
-	switch msg.String() {
-	case "esc", kb.List.Quit:
-		m.state = stateList
-		return m, nil
-	case "left", kb.Week.PrevWeek:
-		m.weekOffset--
-		m.viewport.GotoTop()
-		m.viewport.SetContent(m.renderWeekContent())
-		return m, nil
-	case "right", kb.Week.NextWeek:
-		if m.weekOffset < 0 {
-			m.weekOffset++
-			m.viewport.GotoTop()
-			m.viewport.SetContent(m.renderWeekContent())
-		}
-		return m, nil
-	case kb.Week.SetWeeklyHours:
-		return m.openWeekHoursInput()
-	case kb.Week.TodoOverview:
-		return m.openTodoOverview(stateWeekView)
-	}
-	var cmd tea.Cmd
-	m.viewport, cmd = m.viewport.Update(msg)
-	return m, cmd
-}
-
-func (m Model) handleWeekHoursInputKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	switch msg.Type {
-	case tea.KeyEnter:
-		raw := strings.TrimSpace(m.weekHoursInput.Value())
-		m.weekHoursInput.Blur()
-
-		var hours float64
-		if raw == "" {
-			// Empty input resets to the workspace/global default.
-			delete(m.weekGoals, m.weekKey())
-			m.state = stateWeekView
-			m.viewport.SetContent(m.renderWeekContent())
-			goalsCopy := copyWeeklyGoals(m.weekGoals)
-			return m, func() tea.Msg {
-				if err := journal.SaveWeeklyGoals(goalsCopy); err != nil {
-					return errMsg{err: err}
-				}
-				return weekGoalsLoadedMsg{goals: goalsCopy}
-			}
-		}
-		if _, err := fmt.Sscanf(raw, "%f", &hours); err != nil || hours <= 0 {
-			m.statusMsg = "✗ Invalid hours — enter a positive number (e.g. 32 or 37.5)"
-			m.isError = true
-			m.state = stateWeekView
-			m.viewport.SetContent(m.renderWeekContent())
-			return m, clearStatusCmd()
-		}
-		m.weekGoals[m.weekKey()] = hours
-		m.state = stateWeekView
-		m.viewport.SetContent(m.renderWeekContent())
-		goalsCopy := copyWeeklyGoals(m.weekGoals)
-		return m, func() tea.Msg {
-			if err := journal.SaveWeeklyGoals(goalsCopy); err != nil {
-				return errMsg{err: err}
-			}
-			return weekGoalsLoadedMsg{goals: goalsCopy}
-		}
-	case tea.KeyEsc:
-		m.weekHoursInput.Blur()
-		m.state = stateWeekView
-		return m, nil
-	}
-	var cmd tea.Cmd
-	m.weekHoursInput, cmd = m.weekHoursInput.Update(msg)
 	return m, cmd
 }
 
@@ -166,7 +88,7 @@ func (m Model) handleDayViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 			if m.deleteSelectedTodoNow() {
 				m.viewport.SetContent(m.renderDayContent())
-				return m, m.saveDayCmd("✓ TODO deleted")
+				return m, m.saveWorkspaceTodosCmd("✓ TODO deleted")
 			}
 			return m, nil
 		}
@@ -224,7 +146,7 @@ func (m Model) handleDayViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			if m.selectedPane == 1 && !m.todoInputMode {
 				if m.indentSelectedTodo() {
 					m.viewport.SetContent(m.renderDayContent())
-					return m, m.saveDayCmd("✓ TODO indented")
+					return m, m.saveWorkspaceTodosCmd("✓ TODO indented")
 				}
 				// In focused TODO navigation mode, tab is reserved for indenting and does not cycle panes.
 				return m, nil
@@ -236,13 +158,13 @@ func (m Model) handleDayViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "shift+tab":
 		if m.dayViewTab == 0 && m.selectedPane == 1 && m.outdentSelectedTodo() {
 			m.viewport.SetContent(m.renderDayContent())
-			return m, m.saveDayCmd("✓ TODO outdented")
+			return m, m.saveWorkspaceTodosCmd("✓ TODO outdented")
 		}
 		return m, nil
 	case "delete":
 		if m.dayViewTab == 0 && m.selectedPane == 1 && m.deleteSelectedTodoNow() {
 			m.viewport.SetContent(m.renderDayContent())
-			return m, m.saveDayCmd("✓ TODO deleted")
+			return m, m.saveWorkspaceTodosCmd("✓ TODO deleted")
 		}
 		return m, nil
 	case "enter":
@@ -252,7 +174,7 @@ func (m Model) handleDayViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.exitTodoInputMode()
 				m.viewport.SetContent(m.renderDayContent())
 				if saved {
-					return m, m.saveDayCmd("✓ TODO saved")
+					return m, m.saveWorkspaceTodosCmd("✓ TODO saved")
 				}
 				return m, nil
 			}
@@ -271,7 +193,7 @@ func (m Model) handleDayViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		if m.dayViewTab == 0 && m.selectedPane == 1 && m.toggleSelectedTodo() {
 			m.viewport.SetContent(m.renderDayContent())
-			return m, m.saveDayCmd("✓ TODO updated")
+			return m, m.saveWorkspaceTodosCmd("✓ TODO updated")
 		}
 		return m, nil
 	case "a":
@@ -283,12 +205,12 @@ func (m Model) handleDayViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	case "A":
-		if m.dayViewTab == 0 && m.selectedPane == 1 && m.selectedTodo >= 0 && m.selectedTodo < len(m.dayRecord.Todos) {
-			if m.selectedSub >= 0 && m.selectedSub < len(m.dayRecord.Todos[m.selectedTodo].Subtodos) {
-				newSubIdx2 := len(m.dayRecord.Todos[m.selectedTodo].Subtodos[m.selectedSub].Subtodos)
+		if m.dayViewTab == 0 && m.selectedPane == 1 && m.selectedTodo >= 0 && m.selectedTodo < len(m.workspaceTodos) {
+			if m.selectedSub >= 0 && m.selectedSub < len(m.workspaceTodos[m.selectedTodo].Subtodos) {
+				newSubIdx2 := len(m.workspaceTodos[m.selectedTodo].Subtodos[m.selectedSub].Subtodos)
 				return m.openTodoForm(m.selectedTodo, m.selectedSub, newSubIdx2)
 			}
-			newSubIdx := len(m.dayRecord.Todos[m.selectedTodo].Subtodos)
+			newSubIdx := len(m.workspaceTodos[m.selectedTodo].Subtodos)
 			return m.openTodoForm(m.selectedTodo, newSubIdx, -1)
 		}
 		return m, nil
@@ -306,7 +228,7 @@ func (m Model) handleDayViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.openNotesEditor()
 	case kb.Delete:
 		if m.dayViewTab == 0 && m.selectedPane == 1 {
-			if m.selectedTodo >= 0 && m.selectedTodo < len(m.dayRecord.Todos) {
+			if m.selectedTodo >= 0 && m.selectedTodo < len(m.workspaceTodos) {
 				m.deleteDay = false
 				m.deleteIdx = deleteTodoIdx
 				m.prevState = stateDayView
@@ -395,7 +317,7 @@ func (m Model) handleDayViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) openTodoFormForSelection() (tea.Model, tea.Cmd) {
-	if m.selectedTodo >= 0 && m.selectedTodo < len(m.dayRecord.Todos) {
+	if m.selectedTodo >= 0 && m.selectedTodo < len(m.workspaceTodos) {
 		return m.openTodoForm(m.selectedTodo, m.selectedSub, m.selectedSub2)
 	}
 	return m, nil
@@ -450,51 +372,51 @@ func (m Model) handleTodoFormKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.isError = true
 			return m, clearStatusCmd()
 		}
-		if m.todoEditTop >= 0 && m.todoEditTop < len(m.dayRecord.Todos) {
+		if m.todoEditTop >= 0 && m.todoEditTop < len(m.workspaceTodos) {
 			if m.todoEditSub >= 0 {
-				if m.todoEditSub < len(m.dayRecord.Todos[m.todoEditTop].Subtodos) {
-					if m.todoEditSub2 >= 0 && m.todoEditSub2 < len(m.dayRecord.Todos[m.todoEditTop].Subtodos[m.todoEditSub].Subtodos) {
-						m.dayRecord.Todos[m.todoEditTop].Subtodos[m.todoEditSub].Subtodos[m.todoEditSub2].Title = title
+				if m.todoEditSub < len(m.workspaceTodos[m.todoEditTop].Subtodos) {
+					if m.todoEditSub2 >= 0 && m.todoEditSub2 < len(m.workspaceTodos[m.todoEditTop].Subtodos[m.todoEditSub].Subtodos) {
+						m.workspaceTodos[m.todoEditTop].Subtodos[m.todoEditSub].Subtodos[m.todoEditSub2].Title = title
 					} else if m.todoEditSub2 >= 0 {
-						m.dayRecord.Todos[m.todoEditTop].Subtodos[m.todoEditSub].Subtodos = append(m.dayRecord.Todos[m.todoEditTop].Subtodos[m.todoEditSub].Subtodos, journal.Todo{
+						m.workspaceTodos[m.todoEditTop].Subtodos[m.todoEditSub].Subtodos = append(m.workspaceTodos[m.todoEditTop].Subtodos[m.todoEditSub].Subtodos, journal.Todo{
 							ID:       journal.NewID(),
 							Title:    title,
 							Subtodos: []journal.Todo{},
 						})
-						m.selectedSub2 = len(m.dayRecord.Todos[m.todoEditTop].Subtodos[m.todoEditSub].Subtodos) - 1
+						m.selectedSub2 = len(m.workspaceTodos[m.todoEditTop].Subtodos[m.todoEditSub].Subtodos) - 1
 					} else {
-						m.dayRecord.Todos[m.todoEditTop].Subtodos[m.todoEditSub].Title = title
+						m.workspaceTodos[m.todoEditTop].Subtodos[m.todoEditSub].Title = title
 					}
 				} else {
-					m.dayRecord.Todos[m.todoEditTop].Subtodos = append(m.dayRecord.Todos[m.todoEditTop].Subtodos, journal.Todo{
+					m.workspaceTodos[m.todoEditTop].Subtodos = append(m.workspaceTodos[m.todoEditTop].Subtodos, journal.Todo{
 						ID:       journal.NewID(),
 						Title:    title,
 						Subtodos: []journal.Todo{},
 					})
-					m.selectedSub = len(m.dayRecord.Todos[m.todoEditTop].Subtodos) - 1
+					m.selectedSub = len(m.workspaceTodos[m.todoEditTop].Subtodos) - 1
 					m.selectedSub2 = -1
 				}
 				m.selectedTodo = m.todoEditTop
 			} else {
-				m.dayRecord.Todos[m.todoEditTop].Title = title
+				m.workspaceTodos[m.todoEditTop].Title = title
 				m.selectedTodo = m.todoEditTop
 				m.selectedSub = -1
 				m.selectedSub2 = -1
 			}
 		} else {
-			m.dayRecord.Todos = append(m.dayRecord.Todos, journal.Todo{
+			m.workspaceTodos = append(m.workspaceTodos, journal.Todo{
 				ID:       journal.NewID(),
 				Title:    title,
 				Subtodos: []journal.Todo{},
 			})
-			m.selectedTodo = len(m.dayRecord.Todos) - 1
+			m.selectedTodo = len(m.workspaceTodos) - 1
 			m.selectedSub = -1
 			m.selectedSub2 = -1
 		}
 		m.state = stateDayView
 		m.selectedPane = 1
 		m.viewport.SetContent(m.renderDayContent())
-		return m, m.saveDayCmd("✓ TODO saved")
+		return m, m.saveWorkspaceTodosCmd("✓ TODO saved")
 	case tea.KeyEsc:
 		m.state = stateDayView
 		return m, nil
@@ -732,22 +654,22 @@ func (m Model) handleConfirmDeleteKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		// Delete a single entry from the current day.
 		if m.deleteIdx == deleteTodoIdx {
-			if m.selectedTodo >= 0 && m.selectedTodo < len(m.dayRecord.Todos) {
-				if m.selectedSub >= 0 && m.selectedSub2 >= 0 && m.selectedSub < len(m.dayRecord.Todos[m.selectedTodo].Subtodos) {
-					level2 := m.dayRecord.Todos[m.selectedTodo].Subtodos[m.selectedSub].Subtodos
+			if m.selectedTodo >= 0 && m.selectedTodo < len(m.workspaceTodos) {
+				if m.selectedSub >= 0 && m.selectedSub2 >= 0 && m.selectedSub < len(m.workspaceTodos[m.selectedTodo].Subtodos) {
+					level2 := m.workspaceTodos[m.selectedTodo].Subtodos[m.selectedSub].Subtodos
 					if m.selectedSub2 >= 0 && m.selectedSub2 < len(level2) {
-						m.dayRecord.Todos[m.selectedTodo].Subtodos[m.selectedSub].Subtodos = append(level2[:m.selectedSub2], level2[m.selectedSub2+1:]...)
+						m.workspaceTodos[m.selectedTodo].Subtodos[m.selectedSub].Subtodos = append(level2[:m.selectedSub2], level2[m.selectedSub2+1:]...)
 					}
 					m.selectedSub2 = -1
-				} else if m.selectedSub >= 0 && m.selectedSub < len(m.dayRecord.Todos[m.selectedTodo].Subtodos) {
-					st := m.dayRecord.Todos[m.selectedTodo].Subtodos
-					m.dayRecord.Todos[m.selectedTodo].Subtodos = append(st[:m.selectedSub], st[m.selectedSub+1:]...)
+				} else if m.selectedSub >= 0 && m.selectedSub < len(m.workspaceTodos[m.selectedTodo].Subtodos) {
+					st := m.workspaceTodos[m.selectedTodo].Subtodos
+					m.workspaceTodos[m.selectedTodo].Subtodos = append(st[:m.selectedSub], st[m.selectedSub+1:]...)
 					m.selectedSub = -1
 					m.selectedSub2 = -1
 				} else {
-					m.dayRecord.Todos = append(m.dayRecord.Todos[:m.selectedTodo], m.dayRecord.Todos[m.selectedTodo+1:]...)
-					if m.selectedTodo >= len(m.dayRecord.Todos) {
-						m.selectedTodo = len(m.dayRecord.Todos) - 1
+					m.workspaceTodos = append(m.workspaceTodos[:m.selectedTodo], m.workspaceTodos[m.selectedTodo+1:]...)
+					if m.selectedTodo >= len(m.workspaceTodos) {
+						m.selectedTodo = len(m.workspaceTodos) - 1
 					}
 					if m.selectedTodo < 0 {
 						m.selectedSub = -1
@@ -758,7 +680,7 @@ func (m Model) handleConfirmDeleteKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.state = stateDayView
 			m.selectedPane = 1
 			m.viewport.SetContent(m.renderDayContent())
-			return m, m.saveDayCmd("✓ TODO deleted")
+			return m, m.saveWorkspaceTodosCmd("✓ TODO deleted")
 		}
 		if m.deleteIdx >= 0 && m.deleteIdx < len(m.dayRecord.Entries) {
 			m.dayRecord.Entries = append(
@@ -786,8 +708,6 @@ func (m Model) handleTodoOverviewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		switch m.state {
 		case stateDayView:
 			m.viewport.SetContent(m.renderDayContent())
-		case stateWeekView:
-			m.viewport.SetContent(m.renderWeekContent())
 		}
 		return m, nil
 	case "j", "down":
@@ -827,36 +747,34 @@ func (m Model) handleTodoOverviewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case " ":
 		if m.todoOverviewIdx >= 0 && m.todoOverviewIdx < len(m.todoOverviewItems) {
 			item := m.todoOverviewItems[m.todoOverviewIdx]
-			rec, err := journal.Load(item.path)
+			todos, err := journal.LoadWorkspaceTodos()
 			if err != nil {
 				m.statusMsg = "✗ " + err.Error()
 				m.isError = true
 				return m, clearStatusCmd()
 			}
 			changed := false
-			for i := range rec.Todos {
-				if rec.Todos[i].ID != item.parentID {
+			for i := range todos.Todos {
+				if todos.Todos[i].ID != item.parentID {
 					continue
 				}
 				if item.subID == "" {
-					rec.Todos[i].Completed = !rec.Todos[i].Completed
+					todos.Todos[i].Completed = !todos.Todos[i].Completed
 					changed = true
 				} else {
-					changed = toggleSubtodoByID(rec.Todos[i].Subtodos, item.subID)
+					changed = toggleSubtodoByID(todos.Todos[i].Subtodos, item.subID)
 				}
 				if changed {
 					break
 				}
 			}
 			if changed {
-				if err := journal.Save(rec); err != nil {
+				if err := journal.SaveWorkspaceTodos(todos); err != nil {
 					m.statusMsg = "✗ " + err.Error()
 					m.isError = true
 					return m, clearStatusCmd()
 				}
-				if m.dayRecord.Path == item.path {
-					m.dayRecord = rec
-				}
+				m.workspaceTodos = todos.Todos
 				m.todoOverviewItems = m.buildTodoOverviewItems()
 				if m.todoOverviewIdx >= len(m.todoOverviewItems) {
 					m.todoOverviewIdx = len(m.todoOverviewItems) - 1
@@ -871,23 +789,6 @@ func (m Model) handleTodoOverviewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 		}
 		return m, nil
-	case "enter":
-		if m.todoOverviewIdx >= 0 && m.todoOverviewIdx < len(m.todoOverviewItems) {
-			item := m.todoOverviewItems[m.todoOverviewIdx]
-			rec, err := journal.Load(item.path)
-			if err != nil {
-				m.statusMsg = "✗ " + err.Error()
-				m.isError = true
-				return m, clearStatusCmd()
-			}
-			if rec.Date == "" {
-				rec.Date = item.date
-			}
-			rec.Path = item.path
-			m.focusTodoID = item.parentID
-			m.focusSubTodoID = item.subID
-			return m.openDayView(rec)
-		}
 	}
 	var cmd tea.Cmd
 	m.viewport, cmd = m.viewport.Update(msg)

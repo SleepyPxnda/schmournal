@@ -48,10 +48,6 @@ func (m Model) View() string {
 		return m.viewConfirmDelete()
 	case stateDateInput:
 		return m.viewDateInput()
-	case stateWeekView:
-		return m.viewWeekView()
-	case stateWeekHoursInput:
-		return m.viewWeekHoursInput()
 	case stateWorkspacePicker:
 		return m.viewWorkspacePicker()
 	case stateStats:
@@ -619,9 +615,7 @@ func (m Model) renderStats() string {
 			}
 		}
 	}
-	// Use the per-week override (if any) for the current week, else global default.
-	currentWeekKey := monday.Format("2006-01-02")
-	goalHours := m.weeklyGoalFor(currentWeekKey)
+	goalHours := m.effectiveWeeklyHoursGoal()
 	var weekHoursStr string
 	if goalHours == 0 {
 		weekHoursStr = "  " + statsLabelStyle.Render("Week: ") +
@@ -682,7 +676,6 @@ func (m Model) viewList() string {
 		[2]string{kb.OpenToday, "open today"},
 		[2]string{kb.OpenDate, "open date"},
 		[2]string{"enter", "view"},
-		[2]string{kb.WeekView, "week"},
 		[2]string{kb.StatsView, "stats"},
 		[2]string{kb.TodoOverview, "todos"},
 		[2]string{kb.Delete, "delete"},
@@ -905,42 +898,6 @@ func (m Model) viewTimeInput() string {
 	return header + "\n" + strings.Repeat("\n", topPad) + centered + "\n" + footer
 }
 
-func (m Model) viewWeekHoursInput() string {
-	now := time.Now()
-	weekday := int(now.Weekday())
-	if weekday == 0 {
-		weekday = 7
-	}
-	monday := now.AddDate(0, 0, -(weekday-1)+m.weekOffset*7)
-	sunday := monday.AddDate(0, 0, 6)
-	weekRange := monday.Format("02 Jan") + " – " + sunday.Format("02 Jan 2006")
-
-	header := m.renderHeader("📅  This Week", weekRange)
-	footer := m.renderFooter([][2]string{
-		{"enter", "confirm"},
-		{"esc", "cancel"},
-	})
-
-	m.weekHoursInput.Width = 12
-	inputBox := formActiveInputStyle.Width(14).Render(m.weekHoursInput.View())
-
-	hint := fmt.Sprintf("hours  ·  default: %gh  ·  leave empty to reset", m.effectiveWeeklyHoursGoal())
-	dialog := formBoxStyle.Render(
-		formLabelStyle.Render("Set Weekly Hours Goal") + "\n" +
-			formHintStyle.Render(hint) + "\n\n" +
-			inputBox,
-	)
-
-	dh := lipgloss.Height(dialog)
-	topPad := (m.contentHeight() - dh) / 2
-	if topPad < 0 {
-		topPad = 0
-	}
-
-	centered := lipgloss.NewStyle().Width(m.width).Align(lipgloss.Center).Render(dialog)
-	return header + "\n" + strings.Repeat("\n", topPad) + centered + "\n" + footer
-}
-
 func (m Model) viewNotesEditor() string {
 	subtitle := m.dayRecord.Date
 	if t, err := m.dayRecord.ParseDate(); err == nil {
@@ -993,15 +950,15 @@ func (m Model) viewConfirmDelete() string {
 		}
 		subject = "the day " + subject
 	} else if m.deleteIdx == deleteTodoIdx {
-		if m.selectedTodo >= 0 && m.selectedTodo < len(m.dayRecord.Todos) {
+		if m.selectedTodo >= 0 && m.selectedTodo < len(m.workspaceTodos) {
 			if m.selectedSub >= 0 && m.selectedSub2 >= 0 &&
-				m.selectedSub < len(m.dayRecord.Todos[m.selectedTodo].Subtodos) &&
-				m.selectedSub2 < len(m.dayRecord.Todos[m.selectedTodo].Subtodos[m.selectedSub].Subtodos) {
-				subject = `todo "` + m.dayRecord.Todos[m.selectedTodo].Subtodos[m.selectedSub].Subtodos[m.selectedSub2].Title + `"`
-			} else if m.selectedSub >= 0 && m.selectedSub < len(m.dayRecord.Todos[m.selectedTodo].Subtodos) {
-				subject = `todo "` + m.dayRecord.Todos[m.selectedTodo].Subtodos[m.selectedSub].Title + `"`
+				m.selectedSub < len(m.workspaceTodos[m.selectedTodo].Subtodos) &&
+				m.selectedSub2 < len(m.workspaceTodos[m.selectedTodo].Subtodos[m.selectedSub].Subtodos) {
+				subject = `todo "` + m.workspaceTodos[m.selectedTodo].Subtodos[m.selectedSub].Subtodos[m.selectedSub2].Title + `"`
+			} else if m.selectedSub >= 0 && m.selectedSub < len(m.workspaceTodos[m.selectedTodo].Subtodos) {
+				subject = `todo "` + m.workspaceTodos[m.selectedTodo].Subtodos[m.selectedSub].Title + `"`
 			} else {
-				subject = `todo "` + m.dayRecord.Todos[m.selectedTodo].Title + `"`
+				subject = `todo "` + m.workspaceTodos[m.selectedTodo].Title + `"`
 			}
 		} else {
 			subject = "this todo"
@@ -1033,37 +990,6 @@ func (m Model) viewConfirmDelete() string {
 	return header + "\n" + strings.Repeat("\n", topPad) + centered
 }
 
-func (m Model) viewWeekView() string {
-	now := time.Now()
-	weekday := int(now.Weekday())
-	if weekday == 0 {
-		weekday = 7
-	}
-	monday := now.AddDate(0, 0, -(weekday-1)+m.weekOffset*7)
-	sunday := monday.AddDate(0, 0, 6)
-
-	weekRange := monday.Format("02 Jan") + " – " + sunday.Format("02 Jan 2006")
-	header := m.renderHeader("📅  This Week", weekRange)
-
-	// Navigation hint bar (matches day-view tab bar height: 2 lines).
-	var navParts []string
-	navParts = append(navParts, inactiveTabStyle.Render("← prev week"))
-	if m.weekOffset < 0 {
-		navParts = append(navParts, inactiveTabStyle.Render("→ next week"))
-	}
-	navBar := strings.Join(navParts, inactiveTabStyle.Render("  "))
-	sep := dayViewDividerStyle.Render(strings.Repeat("─", m.width))
-	subHeader := navBar + "\n" + sep
-
-	footer := m.renderFooter([][2]string{
-		{"j/k", "scroll"},
-		{"←/→", "prev/next week"},
-		{m.cfg.Keybinds.Week.SetWeeklyHours, "set week goal"},
-		{"esc", "back"},
-	})
-	return lipgloss.JoinVertical(lipgloss.Left, header, subHeader, m.viewport.View(), footer)
-}
-
 func (m Model) viewTodoOverview() string {
 	header := m.renderHeader("✅  TODO Overview", "All days")
 	sep := dayViewDividerStyle.Render(strings.Repeat("─", m.width))
@@ -1075,200 +1001,10 @@ func (m Model) viewTodoOverview() string {
 	footer := m.renderFooter([][2]string{
 		{"j/k", "navigate"},
 		{"space", "toggle"},
-		{"enter", "open day"},
 		{"u/a", "filter"},
 		{"esc", "back"},
 	})
 	return lipgloss.JoinVertical(lipgloss.Left, header, subHeader, m.viewport.View(), footer)
-}
-
-func (m Model) renderWeekContent() string {
-	now := time.Now()
-	weekday := int(now.Weekday())
-	if weekday == 0 {
-		weekday = 7
-	}
-	monday := now.AddDate(0, 0, -(weekday-1)+m.weekOffset*7)
-
-	// Build date→record map for quick lookup.
-	recByDate := make(map[string]journal.DayRecord, len(m.records))
-	for _, r := range m.records {
-		recByDate[r.Date] = r
-	}
-
-	innerW := m.width - 2
-	if innerW < 40 {
-		innerW = 40
-	}
-	div := dayViewDividerStyle.Render(strings.Repeat("─", innerW))
-
-	var b strings.Builder
-	b.WriteString("\n")
-
-	var weekWork time.Duration
-
-	for i := 0; i < 7; i++ {
-		d := monday.AddDate(0, 0, i)
-		dateStr := d.Format("2006-01-02")
-		rec, hasRec := recByDate[dateStr]
-
-		var work, breaks time.Duration
-		if hasRec {
-			work, breaks, _ = rec.WorkTotals()
-		}
-		weekWork += work
-
-		// Day header line.
-		dayLabel := d.Format("Mon  02 Jan 2006")
-		isWorkDay := m.effectiveIsWorkDay(d)
-		dayLabelStyle := dayViewSectionStyle
-		if !isWorkDay {
-			dayLabelStyle = weekNonWorkDayStyle
-		}
-		var headerLine string
-		if hasRec && (work+breaks) > 0 {
-			headerLine = dayLabelStyle.Render(dayLabel) +
-				dayViewMutedStyle.Render("  ·  ") +
-				dayViewValueStyle.Render(journal.FormatDuration(work)+" work")
-			if breaks > 0 {
-				headerLine += dayViewMutedStyle.Render("  ·  " + journal.FormatDuration(breaks) + " breaks")
-			}
-		} else {
-			headerLine = dayLabelStyle.Render(dayLabel) +
-				dayViewMutedStyle.Render("  ·  no entries")
-		}
-		b.WriteString(headerLine + "\n")
-
-		// Start / end time sub-line (only shown when at least one is set).
-		if hasRec && (rec.StartTime != "" || rec.EndTime != "") {
-			start := rec.StartTime
-			end := rec.EndTime
-			startStr := dayViewValueStyle.Render(start)
-			if start == "" {
-				startStr = dayViewMutedStyle.Render("—")
-			}
-			endStr := dayViewValueStyle.Render(end)
-			if end == "" {
-				endStr = dayViewMutedStyle.Render("—")
-			}
-			timeLine := "  " + dayViewLabelStyle.Render("Start:") + " " + startStr +
-				"   " + dayViewLabelStyle.Render("End:") + " " + endStr
-			if dur, ok := rec.DayDuration(); ok {
-				timeLine += "   " + dayViewMutedStyle.Render("("+journal.FormatDuration(dur)+")")
-			}
-			b.WriteString(timeLine + "\n")
-		}
-		if hasRec && len(rec.Entries) > 0 {
-			type projGroup struct {
-				name    string
-				dur     time.Duration
-				tasks   []string
-				isBreak bool
-			}
-			seenProj := make(map[string]int)
-			var groups []projGroup
-
-			for _, e := range rec.Entries {
-				if e.IsBreak {
-					// Collect breaks under a single "Breaks" group.
-					found := false
-					for gi, g := range groups {
-						if g.isBreak {
-							groups[gi].dur += e.Duration()
-							groups[gi].tasks = uniqueAppend(groups[gi].tasks, e.Task)
-							found = true
-							break
-						}
-					}
-					if !found {
-						groups = append(groups, projGroup{
-							name:    "Breaks",
-							dur:     e.Duration(),
-							tasks:   []string{e.Task},
-							isBreak: true,
-						})
-					}
-					continue
-				}
-				proj := e.Project
-				if proj == "" {
-					proj = "Other"
-				}
-				if idx, ok := seenProj[proj]; ok {
-					groups[idx].dur += e.Duration()
-					groups[idx].tasks = uniqueAppend(groups[idx].tasks, e.Task)
-				} else {
-					seenProj[proj] = len(groups)
-					groups = append(groups, projGroup{
-						name:  proj,
-						dur:   e.Duration(),
-						tasks: []string{e.Task},
-					})
-				}
-			}
-
-			for _, g := range groups {
-				durStr := fmt.Sprintf("%-8s", journal.FormatDuration(g.dur))
-				taskStr := `"` + strings.Join(g.tasks, ", ") + `"`
-				if g.isBreak {
-					b.WriteString("  " + dayViewTotalsStyle.Render(durStr) +
-						"  " + breakEntryStyle.Render("☕  "+g.name) +
-						"  " + dayViewMutedStyle.Render(taskStr) + "\n")
-				} else {
-					b.WriteString("  " + dayViewTotalsStyle.Render(durStr) +
-						"  " + dayViewSectionStyle.Render(g.name) +
-						"  " + dayViewMutedStyle.Render(taskStr) + "\n")
-				}
-			}
-		}
-
-		if i < 6 {
-			b.WriteString("\n")
-		}
-	}
-
-	// Week total + progress bar.
-	b.WriteString("\n" + div + "\n")
-	goalHours := m.weeklyGoal()
-	var totalLine string
-	if goalHours == 0 {
-		totalLine = "  " + dayViewLabelStyle.Render("Week total: ") +
-			dayViewValueStyle.Render(journal.FormatDuration(weekWork))
-	} else {
-		weeklyGoal := time.Duration(goalHours * float64(time.Hour))
-		pct := float64(weekWork) / float64(weeklyGoal)
-		if pct > 1 {
-			pct = 1
-		}
-		goalLabel := fmt.Sprintf(" / %gh  ", goalHours)
-		// Annotate if this week uses a custom override (value must be > 0,
-		// matching the condition in weeklyGoalFor).
-		if h, hasOverride := m.weekGoals[m.weekKey()]; hasOverride && h > 0 {
-			goalLabel = fmt.Sprintf(" / %gh (custom)  ", goalHours)
-		}
-		const barW = 24
-		filledCount := int(pct * barW)
-		bar := statsBlockFilledStyle.Render(strings.Repeat("█", filledCount)) +
-			statsBlockEmptyStyle.Render(strings.Repeat("░", barW-filledCount))
-		totalLine = "  " + dayViewLabelStyle.Render("Week total: ") +
-			dayViewValueStyle.Render(journal.FormatDuration(weekWork)) +
-			dayViewMutedStyle.Render(goalLabel) +
-			bar +
-			dayViewMutedStyle.Render(fmt.Sprintf("  %.0f%%", pct*100))
-	}
-	b.WriteString(totalLine + "\n")
-
-	return b.String()
-}
-
-// uniqueAppend appends s to slice only if not already present (case-sensitive).
-func uniqueAppend(slice []string, s string) []string {
-	for _, v := range slice {
-		if v == s {
-			return slice
-		}
-	}
-	return append(slice, s)
 }
 
 func (m Model) viewWorkspacePicker() string {

@@ -11,18 +11,16 @@ import (
 
 func TestTodoCursorsIncludeThirdLevel(t *testing.T) {
 	m := Model{
-		dayRecord: journal.DayRecord{
-			Todos: []journal.Todo{
-				{
-					ID:    "p1",
-					Title: "Parent",
-					Subtodos: []journal.Todo{
-						{
-							ID:    "c1",
-							Title: "Child",
-							Subtodos: []journal.Todo{
-								{ID: "g1", Title: "Grandchild"},
-							},
+		workspaceTodos: []journal.Todo{
+			{
+				ID:    "p1",
+				Title: "Parent",
+				Subtodos: []journal.Todo{
+					{
+						ID:    "c1",
+						Title: "Child",
+						Subtodos: []journal.Todo{
+							{ID: "g1", Title: "Grandchild"},
 						},
 					},
 				},
@@ -42,19 +40,17 @@ func TestTodoCursorsIncludeThirdLevel(t *testing.T) {
 
 func TestIndentLevelTwoTodoToLevelThreeFlattensChildren(t *testing.T) {
 	m := Model{
-		dayRecord: journal.DayRecord{
-			Todos: []journal.Todo{
-				{
-					ID:    "p1",
-					Title: "Parent",
-					Subtodos: []journal.Todo{
-						{ID: "c1", Title: "Child A"},
-						{
-							ID:    "c2",
-							Title: "Child B",
-							Subtodos: []journal.Todo{
-								{ID: "g1", Title: "Grandchild"},
-							},
+		workspaceTodos: []journal.Todo{
+			{
+				ID:    "p1",
+				Title: "Parent",
+				Subtodos: []journal.Todo{
+					{ID: "c1", Title: "Child A"},
+					{
+						ID:    "c2",
+						Title: "Child B",
+						Subtodos: []journal.Todo{
+							{ID: "g1", Title: "Grandchild"},
 						},
 					},
 				},
@@ -69,7 +65,7 @@ func TestIndentLevelTwoTodoToLevelThreeFlattensChildren(t *testing.T) {
 		t.Fatalf("expected indent to level 3 to succeed")
 	}
 
-	parent := m.dayRecord.Todos[0]
+	parent := m.workspaceTodos[0]
 	if len(parent.Subtodos) != 1 {
 		t.Fatalf("expected one level-2 todo after indent, got %d", len(parent.Subtodos))
 	}
@@ -83,14 +79,12 @@ func TestIndentLevelTwoTodoToLevelThreeFlattensChildren(t *testing.T) {
 
 func TestIndentGateRequiresParentAtPreviousLevel(t *testing.T) {
 	m := Model{
-		dayRecord: journal.DayRecord{
-			Todos: []journal.Todo{
-				{
-					ID:    "p1",
-					Title: "Parent",
-					Subtodos: []journal.Todo{
-						{ID: "c1", Title: "Only Child"},
-					},
+		workspaceTodos: []journal.Todo{
+			{
+				ID:    "p1",
+				Title: "Parent",
+				Subtodos: []journal.Todo{
+					{ID: "c1", Title: "Only Child"},
 				},
 			},
 		},
@@ -106,23 +100,21 @@ func TestIndentGateRequiresParentAtPreviousLevel(t *testing.T) {
 
 func TestIndentTopLevelClampsNestedDepthToThree(t *testing.T) {
 	m := Model{
-		dayRecord: journal.DayRecord{
-			Todos: []journal.Todo{
-				{ID: "p1", Title: "Parent"},
-				{
-					ID:    "p2",
-					Title: "Child Parent",
-					Subtodos: []journal.Todo{
-						{
-							ID:    "c1",
-							Title: "Level 2",
-							Subtodos: []journal.Todo{
-								{
-									ID:    "g1",
-									Title: "Level 3",
-									Subtodos: []journal.Todo{
-										{ID: "g2", Title: "Level 4"},
-									},
+		workspaceTodos: []journal.Todo{
+			{ID: "p1", Title: "Parent"},
+			{
+				ID:    "p2",
+				Title: "Child Parent",
+				Subtodos: []journal.Todo{
+					{
+						ID:    "c1",
+						Title: "Level 2",
+						Subtodos: []journal.Todo{
+							{
+								ID:    "g1",
+								Title: "Level 3",
+								Subtodos: []journal.Todo{
+									{ID: "g2", Title: "Level 4"},
 								},
 							},
 						},
@@ -139,7 +131,7 @@ func TestIndentTopLevelClampsNestedDepthToThree(t *testing.T) {
 		t.Fatalf("expected top-level indent to succeed")
 	}
 
-	got := m.dayRecord.Todos[0].Subtodos
+	got := m.workspaceTodos[0].Subtodos
 	if len(got) != 1 {
 		t.Fatalf("expected one level-2 child under new parent, got len=%d", len(got))
 	}
@@ -164,12 +156,12 @@ func TestIndentTopLevelClampsNestedDepthToThree(t *testing.T) {
 // of being silently swallowed as navigation keys.
 func TestTodoDraftAcceptsJAndKWhenTyping(t *testing.T) {
 	m := Model{
-		dayRecord:    journal.DayRecord{},
-		selectedPane: 1,
-		dayViewTab:   0,
-		selectedTodo: -1,
-		selectedSub:  -1,
-		selectedSub2: -1,
+		workspaceTodos: []journal.Todo{},
+		selectedPane:   1,
+		dayViewTab:     0,
+		selectedTodo:   -1,
+		selectedSub:    -1,
+		selectedSub2:   -1,
 	}
 
 	// Seed the draft so that j/k must be treated as text, not navigation.
@@ -215,13 +207,13 @@ func TestTodoKeyTogglesPaneFocus(t *testing.T) {
 
 func TestTodoEnterEnablesInputThenSavesInlineInTodoPane(t *testing.T) {
 	m := Model{
-		cfg:          config.Default(),
-		dayViewTab:   0,
-		selectedPane: 1,
-		selectedTodo: -1,
-		selectedSub:  -1,
-		selectedSub2: -1,
-		dayRecord:    journal.DayRecord{Todos: []journal.Todo{}},
+		cfg:            config.Default(),
+		dayViewTab:     0,
+		selectedPane:   1,
+		selectedTodo:   -1,
+		selectedSub:    -1,
+		selectedSub2:   -1,
+		workspaceTodos: []journal.Todo{},
 	}
 
 	updated, _ := m.handleDayViewKey(tea.KeyMsg{Type: tea.KeyEnter})
@@ -248,8 +240,8 @@ func TestTodoEnterEnablesInputThenSavesInlineInTodoPane(t *testing.T) {
 	if got.selectedPane != 1 {
 		t.Fatalf("expected to stay in todo pane after submit, got pane=%d", got.selectedPane)
 	}
-	if len(got.dayRecord.Todos) != 1 || got.dayRecord.Todos[0].Title != "task" {
-		t.Fatalf("expected one saved todo titled task, got %#v", got.dayRecord.Todos)
+	if len(got.workspaceTodos) != 1 || got.workspaceTodos[0].Title != "task" {
+		t.Fatalf("expected one saved todo titled task, got %#v", got.workspaceTodos)
 	}
 }
 
@@ -293,15 +285,15 @@ func TestTodoAddKeyStartsInlineInputInsteadOfModal(t *testing.T) {
 
 func TestTodoEditKeyStaysInDayViewWithoutSelection(t *testing.T) {
 	m := Model{
-		cfg:          config.Default(),
-		state:        stateDayView,
-		width:        120,
-		dayViewTab:   0,
-		selectedPane: 1,
-		selectedTodo: -1,
-		selectedSub:  -1,
-		selectedSub2: -1,
-		dayRecord:    journal.DayRecord{Todos: []journal.Todo{}},
+		cfg:            config.Default(),
+		state:          stateDayView,
+		width:          120,
+		dayViewTab:     0,
+		selectedPane:   1,
+		selectedTodo:   -1,
+		selectedSub:    -1,
+		selectedSub2:   -1,
+		workspaceTodos: []journal.Todo{},
 	}
 
 	updated, _ := m.handleDayViewKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(m.cfg.Keybinds.Day.Edit)})
@@ -373,16 +365,14 @@ func TestTodoInputModeSwallowsMutationAndNavigationKeys(t *testing.T) {
 		selectedTodo:  0,
 		selectedSub:   -1,
 		selectedSub2:  -1,
-		dayRecord: journal.DayRecord{
-			Todos: []journal.Todo{
-				{
-					ID:    "t1",
-					Title: "Top 1",
-				},
-				{
-					ID:    "t2",
-					Title: "Top 2",
-				},
+		workspaceTodos: []journal.Todo{
+			{
+				ID:    "t1",
+				Title: "Top 1",
+			},
+			{
+				ID:    "t2",
+				Title: "Top 2",
 			},
 		},
 	}
@@ -398,8 +388,8 @@ func TestTodoInputModeSwallowsMutationAndNavigationKeys(t *testing.T) {
 		m = updated.(Model)
 	}
 
-	if len(m.dayRecord.Todos) != 2 {
-		t.Fatalf("expected todo list to stay unchanged in input mode, got len=%d", len(m.dayRecord.Todos))
+	if len(m.workspaceTodos) != 2 {
+		t.Fatalf("expected todo list to stay unchanged in input mode, got len=%d", len(m.workspaceTodos))
 	}
 	if m.selectedTodo != 0 || m.selectedSub != -1 || m.selectedSub2 != -1 {
 		t.Fatalf("expected selection to stay unchanged in input mode, got top=%d sub=%d sub2=%d", m.selectedTodo, m.selectedSub, m.selectedSub2)
@@ -413,12 +403,12 @@ func TestTodosPanelUsesSingleDraftHintAcrossEnterToggle(t *testing.T) {
 	)
 
 	m := Model{
-		state:         stateDayView,
-		selectedPane:  1,
-		dayViewTab:    0,
-		todoInputMode: false,
-		todoDraft:     "",
-		dayRecord:     journal.DayRecord{Todos: []journal.Todo{}},
+		state:          stateDayView,
+		selectedPane:   1,
+		dayViewTab:     0,
+		todoInputMode:  false,
+		todoDraft:      "",
+		workspaceTodos: []journal.Todo{},
 	}
 
 	panelBefore := m.renderTodosPanel(60)
@@ -445,11 +435,11 @@ func TestTodosPanelUsesSingleDraftHintAcrossEnterToggle(t *testing.T) {
 
 func TestTodosPanelShowsInlineDraftInInputMode(t *testing.T) {
 	m := Model{
-		selectedPane:  1,
-		dayViewTab:    0,
-		todoInputMode: true,
-		todoDraft:     "draft task",
-		dayRecord:     journal.DayRecord{Todos: []journal.Todo{}},
+		selectedPane:   1,
+		dayViewTab:     0,
+		todoInputMode:  true,
+		todoDraft:      "draft task",
+		workspaceTodos: []journal.Todo{},
 	}
 
 	rendered := m.renderTodosPanel(60)
@@ -460,17 +450,15 @@ func TestTodosPanelShowsInlineDraftInInputMode(t *testing.T) {
 
 func TestConfirmDeleteUsesTodoSubjectForTodoDeletion(t *testing.T) {
 	m := Model{
-		width:      120,
-		height:     40,
-		deleteDay:  false,
-		deleteIdx:  deleteTodoIdx,
+		width:        120,
+		height:       40,
+		deleteDay:    false,
+		deleteIdx:    deleteTodoIdx,
 		selectedTodo: 0,
 		selectedSub:  -1,
 		selectedSub2: -1,
-		dayRecord: journal.DayRecord{
-			Todos: []journal.Todo{
-				{ID: "t1", Title: "Ship release"},
-			},
+		workspaceTodos: []journal.Todo{
+			{ID: "t1", Title: "Ship release"},
 		},
 	}
 

@@ -36,7 +36,8 @@ class Schmournal < Formula
       open_date  = "c"   # Open / create an entry for a specific date
       delete     = "d"   # Delete the selected day record
       export     = "x"   # Export the selected day to Markdown
-      week_view  = "v"   # Open the weekly overview
+      stats_view = "s"   # Open the stats overview
+      todo_overview = "t" # Open workspace TODO overview
 
       [keybinds.day]
       add_work         = "w"   # Add a new work entry
@@ -48,11 +49,8 @@ class Schmournal < Formula
       set_end_now      = "f"   # Set end time to now
       set_end_manual   = "F"   # Set end time manually
       notes            = "n"   # Open the notes editor
+      todo_overview    = "t"   # Toggle TODO pane in day view
       export           = "x"   # Export day to Markdown
-
-      [keybinds.week]
-      prev_week = "h"   # Go to the previous week (also ←)
-      next_week = "l"   # Go to the next week  (also →)
     TOML
   end
 
