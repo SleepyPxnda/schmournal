@@ -10,18 +10,6 @@ import (
 	"github.com/sleepypxnda/schmournal/journal"
 )
 
-// weekKey returns the key used to store per-week goal overrides.
-// It is the Monday date of the week currently shown (format "YYYY-MM-DD").
-func (m Model) weekKey() string {
-	now := time.Now()
-	weekday := int(now.Weekday())
-	if weekday == 0 {
-		weekday = 7
-	}
-	monday := now.AddDate(0, 0, -(weekday-1)+m.weekOffset*7)
-	return monday.Format("2006-01-02")
-}
-
 // effectiveIsWorkDay reports whether t is a work day for the active workspace.
 // When the active workspace has its own work_days override, that list is used;
 // otherwise the top-level config's work_days is consulted.
@@ -36,15 +24,6 @@ func (m Model) effectiveIsWorkDay(t time.Time) bool {
 		return false
 	}
 	return m.cfg.IsWorkDay(t)
-}
-
-// mondayKey ("YYYY-MM-DD" of the week's Monday): per-week override if set,
-// otherwise the workspace-specific goal (or the global config default).
-func (m Model) weeklyGoalFor(mondayKey string) float64 {
-	if h, ok := m.weekGoals[mondayKey]; ok && h > 0 {
-		return h
-	}
-	return m.effectiveWeeklyHoursGoal()
 }
 
 // activeWorkspaceConfig returns a pointer to the active WorkspaceConfig, or nil
@@ -111,27 +90,13 @@ func (m Model) switchWorkspace(name string) (tea.Model, tea.Cmd) {
 	m.isError = false
 	return m, tea.Batch(
 		loadRecords,
-		loadWeeklyGoals,
+		loadWorkspaceTodos,
 		clearStatusCmd(),
 		func() tea.Msg {
 			_ = config.SaveState(config.AppState{ActiveWorkspace: name})
 			return nil
 		},
 	)
-}
-
-// weeklyGoal returns the effective hours goal for the currently displayed week.
-func (m Model) weeklyGoal() float64 {
-	return m.weeklyGoalFor(m.weekKey())
-}
-
-func (m Model) openWeekHoursInput() (tea.Model, tea.Cmd) {
-	current := m.weeklyGoal()
-	m.weekHoursInput.SetValue(fmt.Sprintf("%g", current))
-	m.weekHoursInput.Placeholder = fmt.Sprintf("%g", m.effectiveWeeklyHoursGoal())
-	cmd := m.weekHoursInput.Focus()
-	m.state = stateWeekHoursInput
-	return m, cmd
 }
 
 func (m Model) openDayView(rec journal.DayRecord) (tea.Model, tea.Cmd) {
@@ -150,14 +115,11 @@ func (m Model) openDayView(rec journal.DayRecord) (tea.Model, tea.Cmd) {
 	if len(m.dayRecord.Entries) > 0 {
 		m.selectedEntry = 0
 	}
-	if len(m.dayRecord.Todos) == 0 {
-		m.dayRecord.Todos = []journal.Todo{}
-	}
 	m.selectedTodo = 0
 	m.selectedSub = -1
 	m.selectedSub2 = -1
 	m.exitTodoInputMode()
-	if len(m.dayRecord.Todos) == 0 {
+	if len(m.workspaceTodos) == 0 {
 		m.selectedTodo = -1
 	}
 	if m.focusTodoID != "" {
@@ -168,14 +130,6 @@ func (m Model) openDayView(rec journal.DayRecord) (tea.Model, tea.Cmd) {
 	m.state = stateDayView
 	m.viewport.GotoTop()
 	m.viewport.SetContent(m.renderDayContent())
-	return m, nil
-}
-
-func (m Model) openWeekView() (tea.Model, tea.Cmd) {
-	m.weekOffset = 0
-	m.state = stateWeekView
-	m.viewport.GotoTop()
-	m.viewport.SetContent(m.renderWeekContent())
 	return m, nil
 }
 
@@ -261,7 +215,7 @@ func (m Model) openNotesEditor() (tea.Model, tea.Cmd) {
 }
 
 func (m *Model) focusTodoInDay() {
-	for i, t := range m.dayRecord.Todos {
+	for i, t := range m.workspaceTodos {
 		if t.ID != m.focusTodoID {
 			continue
 		}
@@ -295,15 +249,15 @@ func (m Model) openTodoForm(editTop, editSub, editSub2 int) (tea.Model, tea.Cmd)
 	m.todoEditSub2 = editSub2
 	m.todoInput.SetValue("")
 	m.todoInput.Placeholder = "TODO title…"
-	if editTop >= 0 && editTop < len(m.dayRecord.Todos) {
-		if editSub >= 0 && editSub < len(m.dayRecord.Todos[editTop].Subtodos) {
-			if editSub2 >= 0 && editSub2 < len(m.dayRecord.Todos[editTop].Subtodos[editSub].Subtodos) {
-				m.todoInput.SetValue(m.dayRecord.Todos[editTop].Subtodos[editSub].Subtodos[editSub2].Title)
+	if editTop >= 0 && editTop < len(m.workspaceTodos) {
+		if editSub >= 0 && editSub < len(m.workspaceTodos[editTop].Subtodos) {
+			if editSub2 >= 0 && editSub2 < len(m.workspaceTodos[editTop].Subtodos[editSub].Subtodos) {
+				m.todoInput.SetValue(m.workspaceTodos[editTop].Subtodos[editSub].Subtodos[editSub2].Title)
 			} else {
-				m.todoInput.SetValue(m.dayRecord.Todos[editTop].Subtodos[editSub].Title)
+				m.todoInput.SetValue(m.workspaceTodos[editTop].Subtodos[editSub].Title)
 			}
 		} else {
-			m.todoInput.SetValue(m.dayRecord.Todos[editTop].Title)
+			m.todoInput.SetValue(m.workspaceTodos[editTop].Title)
 		}
 	}
 	m.state = stateTodoForm
@@ -431,14 +385,4 @@ func (m *Model) scrollToSelected() {
 	} else if targetLine >= m.viewport.YOffset+m.viewport.Height {
 		m.viewport.YOffset = targetLine - m.viewport.Height + 1
 	}
-}
-
-// copyWeeklyGoals returns a shallow copy of goals so that async tea.Cmd
-// closures can safely marshal it without racing against future Update calls.
-func copyWeeklyGoals(goals journal.WeeklyGoals) journal.WeeklyGoals {
-	cp := make(journal.WeeklyGoals, len(goals))
-	for k, v := range goals {
-		cp[k] = v
-	}
-	return cp
 }

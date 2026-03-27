@@ -16,12 +16,17 @@ type WorkEntry struct {
 
 func (e WorkEntry) Duration() time.Duration { return time.Duration(e.DurationMin) * time.Minute }
 
-// Todo is a single todo item for a day. Subtodos can be nested.
+// Todo is a single workspace todo item. Subtodos can be nested.
 type Todo struct {
 	ID        string `json:"id"`
 	Title     string `json:"title"`
 	Completed bool   `json:"completed"`
 	Subtodos  []Todo `json:"subtodos"`
+}
+
+// WorkspaceTodos holds the global todo list for a workspace.
+type WorkspaceTodos struct {
+	Todos []Todo `json:"todos"`
 }
 
 // DayRecord holds all data for a single work day.
@@ -31,7 +36,7 @@ type DayRecord struct {
 	EndTime   string      `json:"end_time"`
 	Entries   []WorkEntry `json:"entries"`
 	Notes     string      `json:"notes"`
-	Todos     []Todo      `json:"todos"`
+	Todos     []Todo      `json:"-"` // legacy runtime/testing only (todos are workspace-level)
 	Path      string      `json:"-"` // runtime only
 }
 

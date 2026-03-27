@@ -31,8 +31,6 @@ const (
 	stateTodoForm
 	stateConfirmDelete
 	stateDateInput
-	stateWeekView
-	stateWeekHoursInput
 	stateWorkspacePicker
 	stateStats
 	stateTodoOverview
@@ -52,7 +50,7 @@ type dayDeletedMsg struct{}
 type exportedMsg struct{ path string }
 type clearStatusMsg struct{}
 type errMsg struct{ err error }
-type weekGoalsLoadedMsg struct{ goals journal.WeeklyGoals }
+type workspaceTodosLoadedMsg struct{ todos journal.WorkspaceTodos }
 type clockTickMsg struct{}
 
 // ── List item ─────────────────────────────────────────────────────────────────
@@ -114,6 +112,7 @@ type Model struct {
 
 	list    list.Model
 	records []journal.DayRecord
+	workspaceTodos []journal.Todo
 
 	dayRecord     journal.DayRecord
 	selectedEntry int // index into dayRecord.Entries; -1 = no selection
@@ -139,10 +138,6 @@ type Model struct {
 	prevState viewState
 
 	viewport viewport.Model
-
-	weekOffset     int // 0 = current week, -1 = last week, etc.
-	weekGoals      journal.WeeklyGoals
-	weekHoursInput textinput.Model
 
 	statsTab int // 0=Overview 1=Monthly 2=Yearly 3=All-time
 
@@ -271,14 +266,6 @@ func New(cfg config.Config, activeWorkspace string, version string) Model {
 	dateIn.TextStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(cText))
 	dateIn.PlaceholderStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(cOverlay0))
 
-	weekHoursIn := textinput.New()
-	weekHoursIn.Placeholder = fmt.Sprintf("%.0f", cfg.WeeklyHoursGoal)
-	weekHoursIn.CharLimit = 8
-	weekHoursIn.Width = 10
-	weekHoursIn.PromptStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(cMauve))
-	weekHoursIn.TextStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(cText))
-	weekHoursIn.PlaceholderStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(cOverlay0))
-
 	todoIn := textinput.New()
 	todoIn.Placeholder = "TODO title…"
 	todoIn.CharLimit = 160
@@ -298,8 +285,7 @@ func New(cfg config.Config, activeWorkspace string, version string) Model {
 		durationInput:   durIn,
 		timeInput:       timeIn,
 		dateInput:       dateIn,
-		weekHoursInput:  weekHoursIn,
-		weekGoals:       journal.WeeklyGoals{},
+		workspaceTodos:  []journal.Todo{},
 		selectedEntry:   -1,
 		selectedTodo:    0,
 		selectedSub:     -1,
@@ -313,7 +299,7 @@ func New(cfg config.Config, activeWorkspace string, version string) Model {
 }
 
 func (m Model) Init() tea.Cmd {
-	return tea.Batch(loadRecords, loadWeeklyGoals)
+	return tea.Batch(loadRecords, loadWorkspaceTodos)
 }
 
 // ── Update ────────────────────────────────────────────────────────────────────
@@ -355,8 +341,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.list.SetItems(items)
 		return m, nil
 
-	case weekGoalsLoadedMsg:
-		m.weekGoals = msg.goals
+	case workspaceTodosLoadedMsg:
+		m.workspaceTodos = msg.todos.Todos
 		return m, nil
 
 	case daySavedMsg:
@@ -422,10 +408,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.handleConfirmDeleteKey(msg)
 		case stateDateInput:
 			return m.handleDateInputKey(msg)
-		case stateWeekView:
-			return m.handleWeekViewKey(msg)
-		case stateWeekHoursInput:
-			return m.handleWeekHoursInputKey(msg)
 		case stateWorkspacePicker:
 			return m.handleWorkspacePickerKey(msg)
 		case stateStats:
@@ -441,7 +423,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		var cmd tea.Cmd
 		m.list, cmd = m.list.Update(msg)
 		return m, cmd
-	case stateDayView, stateWeekView, stateStats, stateTodoOverview:
+	case stateDayView, stateStats, stateTodoOverview:
 		var cmd tea.Cmd
 		m.viewport, cmd = m.viewport.Update(msg)
 		return m, cmd

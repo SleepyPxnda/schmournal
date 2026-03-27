@@ -15,12 +15,12 @@ func loadRecords() tea.Msg {
 	return recordsLoadedMsg{records: records}
 }
 
-func loadWeeklyGoals() tea.Msg {
-	goals, err := journal.LoadWeeklyGoals()
+func loadWorkspaceTodos() tea.Msg {
+	todos, err := journal.LoadWorkspaceTodos()
 	if err != nil {
 		return errMsg{err: err}
 	}
-	return weekGoalsLoadedMsg{goals: goals}
+	return workspaceTodosLoadedMsg{todos: todos}
 }
 
 func clearStatusCmd() tea.Cmd {
@@ -41,6 +41,16 @@ func (m Model) saveDayCmd(label string) tea.Cmd {
 	rec := m.dayRecord
 	return func() tea.Msg {
 		if err := journal.Save(rec); err != nil {
+			return errMsg{err: err}
+		}
+		return daySavedMsg{label: label}
+	}
+}
+
+func (m Model) saveWorkspaceTodosCmd(label string) tea.Cmd {
+	todos := journal.WorkspaceTodos{Todos: m.workspaceTodos}
+	return func() tea.Msg {
+		if err := journal.SaveWorkspaceTodos(todos); err != nil {
 			return errMsg{err: err}
 		}
 		return daySavedMsg{label: label}

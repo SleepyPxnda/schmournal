@@ -10,6 +10,8 @@ import (
 	"time"
 )
 
+const workspaceTodosFile = "todos.json"
+
 func normalizeTodos(todos []Todo) []Todo {
 	if todos == nil {
 		return []Todo{}
@@ -20,6 +22,11 @@ func normalizeTodos(todos []Todo) []Todo {
 		out[i] = t
 	}
 	return out
+}
+
+func normalizeWorkspaceTodos(w WorkspaceTodos) WorkspaceTodos {
+	w.Todos = normalizeTodos(w.Todos)
+	return w
 }
 
 // storagePath overrides the default ~/.journal directory when set via SetStoragePath.
@@ -83,6 +90,49 @@ func PathForDate(date string) (string, error) {
 	return filepath.Join(dir, date+".json"), nil
 }
 
+// WorkspaceTodosPath returns the file path for workspace-level todos.
+func WorkspaceTodosPath() (string, error) {
+	dir, err := Dir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(dir, workspaceTodosFile), nil
+}
+
+// LoadWorkspaceTodos reads workspace-level todos. Missing file returns empty todos.
+func LoadWorkspaceTodos() (WorkspaceTodos, error) {
+	path, err := WorkspaceTodosPath()
+	if err != nil {
+		return WorkspaceTodos{}, err
+	}
+	data, err := os.ReadFile(path)
+	if os.IsNotExist(err) {
+		return WorkspaceTodos{Todos: []Todo{}}, nil
+	}
+	if err != nil {
+		return WorkspaceTodos{}, err
+	}
+	var todos WorkspaceTodos
+	if err := json.Unmarshal(data, &todos); err != nil {
+		return WorkspaceTodos{}, err
+	}
+	return normalizeWorkspaceTodos(todos), nil
+}
+
+// SaveWorkspaceTodos persists workspace-level todos to disk.
+func SaveWorkspaceTodos(todos WorkspaceTodos) error {
+	path, err := WorkspaceTodosPath()
+	if err != nil {
+		return err
+	}
+	todos = normalizeWorkspaceTodos(todos)
+	data, err := json.MarshalIndent(todos, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, data, 0o644)
+}
+
 // Load reads a DayRecord from path. If the file does not exist, it returns an
 // empty DayRecord (not an error).
 func Load(path string) (DayRecord, error) {
@@ -101,7 +151,7 @@ func Load(path string) (DayRecord, error) {
 	if err := json.Unmarshal(data, &rec); err != nil {
 		return DayRecord{}, err
 	}
-	rec.Todos = normalizeTodos(rec.Todos)
+	rec.Todos = []Todo{}
 	rec.Path = path
 	return rec, nil
 }
@@ -115,7 +165,7 @@ func Save(rec DayRecord) error {
 		}
 		rec.Path = filepath.Join(dir, rec.Date+".json")
 	}
-	rec.Todos = normalizeTodos(rec.Todos)
+	rec.Todos = nil
 	data, err := json.MarshalIndent(rec, "", "  ")
 	if err != nil {
 		return err
