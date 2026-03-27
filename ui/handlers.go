@@ -93,7 +93,7 @@ func (m Model) handleDayViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 	if inTodoPane && m.todoInputMode {
 		switch msg.String() {
-		case "tab", "shift+tab", "delete", "up", "down", "left", "right", "ctrl+up", "ctrl+down":
+		case "tab", "shift+tab", "delete", "up", "down", "left", "right", "shift+up", "shift+down":
 			return m, nil
 		}
 	}
@@ -159,13 +159,13 @@ func (m Model) handleDayViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, m.saveWorkspaceTodosCmd("✓ TODO outdented")
 		}
 		return m, nil
-	case "ctrl+up":
+	case "shift+up":
 		if m.dayViewTab == 0 && m.selectedPane == 1 && m.moveSelectedTodoDelta(-1) {
 			m.viewport.SetContent(m.renderDayContent())
 			return m, m.saveWorkspaceTodosCmd("✓ TODO moved up")
 		}
 		return m, nil
-	case "ctrl+down":
+	case "shift+down":
 		if m.dayViewTab == 0 && m.selectedPane == 1 && m.moveSelectedTodoDelta(1) {
 			m.viewport.SetContent(m.renderDayContent())
 			return m, m.saveWorkspaceTodosCmd("✓ TODO moved down")
