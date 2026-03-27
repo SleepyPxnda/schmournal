@@ -26,6 +26,7 @@ func normalizeTodos(todos []Todo) []Todo {
 
 func normalizeWorkspaceTodos(w WorkspaceTodos) WorkspaceTodos {
 	w.Todos = normalizeTodos(w.Todos)
+	w.Archived = normalizeTodos(w.Archived)
 	return w
 }
 

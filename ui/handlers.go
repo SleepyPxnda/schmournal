@@ -224,6 +224,13 @@ func (m Model) handleDayViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m.openTodoForm(m.selectedTodo, newSubIdx, -1)
 		}
 		return m, nil
+	case "X":
+		if m.dayViewTab == 0 && m.selectedPane == 1 && len(m.workspaceArchivedTodos) > 0 {
+			m.workspaceArchivedTodos = []journal.Todo{}
+			m.viewport.SetContent(m.renderDayContent())
+			return m, m.saveWorkspaceTodosCmd("✓ Archive cleared")
+		}
+		return m, nil
 	case kb.AddWork:
 		return m.openWorkForm(false, -1)
 	case kb.AddBreak:
@@ -323,9 +330,11 @@ func (m Model) handleDayViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.isError = false
 			cmds = append(cmds, clearStatusCmd())
 		}
-		// Purge todos where the item and all its descendants are completed.
+		// Move fully-completed todos to the archive, then prune them from active.
+		harvested := collectFullyCompleted(m.workspaceTodos)
 		pruned := pruneCompletedTodos(m.workspaceTodos)
 		if len(pruned) != len(m.workspaceTodos) {
+			m.workspaceArchivedTodos = append(m.workspaceArchivedTodos, harvested...)
 			m.workspaceTodos = pruned
 			cmds = append(cmds, m.saveWorkspaceTodosCmd(""))
 		}
@@ -354,7 +363,7 @@ func (m Model) shouldStartInlineTodoDraft(msg tea.KeyMsg) bool {
 	}
 	key := msg.String()
 	switch key {
-	case "j", "k", "a", "A", " ":
+	case "j", "k", "a", "A", "X", " ":
 		return false
 	}
 	if m.isDayCommandKey(key) {

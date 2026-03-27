@@ -540,6 +540,64 @@ func TestPruneCompletedTodosPrunesCompletedSubtodoFromIncompleteParent(t *testin
 	}
 }
 
+// ─── collectFullyCompleted ────────────────────────────────────────────────────
+
+func TestCollectFullyCompletedReturnsFullyDoneOnly(t *testing.T) {
+	todos := []journal.Todo{
+		{ID: "a", Title: "Done", Completed: true, Subtodos: []journal.Todo{}},
+		{ID: "b", Title: "Not done", Completed: false, Subtodos: []journal.Todo{}},
+	}
+	result := collectFullyCompleted(todos)
+	if len(result) != 1 || result[0].ID != "a" {
+		t.Fatalf("expected only fully-done todo, got %+v", result)
+	}
+}
+
+func TestCollectFullyCompletedSkipsParentWithIncompleteChild(t *testing.T) {
+	todos := []journal.Todo{
+		{
+			ID:        "a",
+			Title:     "Parent done",
+			Completed: true,
+			Subtodos: []journal.Todo{
+				{ID: "a1", Title: "Child not done", Completed: false, Subtodos: []journal.Todo{}},
+			},
+		},
+	}
+	result := collectFullyCompleted(todos)
+	if len(result) != 0 {
+		t.Fatalf("expected no fully-done todo (child incomplete), got %+v", result)
+	}
+}
+
+func TestCollectFullyCompletedIncludesFullyDoneTree(t *testing.T) {
+	todos := []journal.Todo{
+		{
+			ID:        "a",
+			Title:     "Parent done",
+			Completed: true,
+			Subtodos: []journal.Todo{
+				{ID: "a1", Title: "Child done", Completed: true, Subtodos: []journal.Todo{}},
+			},
+		},
+		{ID: "b", Title: "Keep me", Completed: false, Subtodos: []journal.Todo{}},
+	}
+	result := collectFullyCompleted(todos)
+	if len(result) != 1 || result[0].ID != "a" {
+		t.Fatalf("expected fully-done tree to be collected, got %+v", result)
+	}
+	if len(result[0].Subtodos) != 1 || result[0].Subtodos[0].ID != "a1" {
+		t.Fatalf("expected subtree to be preserved, got %+v", result[0].Subtodos)
+	}
+}
+
+func TestCollectFullyCompletedEmptyList(t *testing.T) {
+	result := collectFullyCompleted(nil)
+	if len(result) != 0 {
+		t.Fatalf("expected empty result for nil input, got %+v", result)
+	}
+}
+
 // ─── moveSelectedTodoDelta ────────────────────────────────────────────────────
 
 func TestMoveSelectedTodoDeltaTopLevel(t *testing.T) {

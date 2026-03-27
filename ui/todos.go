@@ -278,6 +278,19 @@ func isFullyCompleted(t journal.Todo) bool {
 	return true
 }
 
+// collectFullyCompleted returns all top-level todos (and their subtree) for
+// which isFullyCompleted is true. These are the items that will be moved to
+// the archive when the user leaves the day view.
+func collectFullyCompleted(todos []journal.Todo) []journal.Todo {
+	var result []journal.Todo
+	for _, t := range todos {
+		if isFullyCompleted(t) {
+			result = append(result, t)
+		}
+	}
+	return result
+}
+
 // pruneCompletedTodos removes todos (at any depth) where the todo itself and
 // all its descendants are completed. Partial branches (some children
 // incomplete) are kept intact.
@@ -405,7 +418,9 @@ func (m Model) renderTodosPanel(w int) string {
 		if m.selectedPane != 1 {
 			b.WriteString(dayViewMutedStyle.Render("  t open todo overview") + "\n")
 		}
-		return b.String()
+		if len(m.workspaceArchivedTodos) == 0 {
+			return b.String()
+		}
 	}
 	for i, td := range m.workspaceTodos {
 		mark := todoIncompleteStyle.Render("—")
@@ -453,6 +468,32 @@ func (m Model) renderTodosPanel(w int) string {
 				b.WriteString(thirdLevelLine + "\n")
 			}
 		}
+	}
+	if len(m.workspaceArchivedTodos) > 0 {
+		b.WriteString(dayViewDividerStyle.Render(strings.Repeat("─", w)) + "\n")
+		b.WriteString(dayViewMutedStyle.Render("  Archived") + "\n")
+		for _, td := range m.workspaceArchivedTodos {
+			b.WriteString(renderArchivedTodoTree(td, 0, w))
+		}
+		if m.selectedPane == 1 {
+			b.WriteString(dayViewMutedStyle.Render("  X clear archive") + "\n")
+		}
+	}
+	return b.String()
+}
+
+// renderArchivedTodoTree renders a single archived todo (and its subtree) at the
+// given indentation depth, capped at the available width w.
+func renderArchivedTodoTree(td journal.Todo, depth int, w int) string {
+	var b strings.Builder
+	indent := strings.Repeat("  ", depth)
+	line := todoArchivedStyle.Render(indent + "  ✓ " + td.Title)
+	if lipgloss.Width(line) > w {
+		line = truncateRunes(line, w)
+	}
+	b.WriteString(line + "\n")
+	for _, sub := range td.Subtodos {
+		b.WriteString(renderArchivedTodoTree(sub, depth+1, w))
 	}
 	return b.String()
 }

@@ -48,7 +48,7 @@ func (m Model) saveDayCmd(label string) tea.Cmd {
 }
 
 func (m Model) saveWorkspaceTodosCmd(label string) tea.Cmd {
-	todos := journal.WorkspaceTodos{Todos: m.workspaceTodos}
+	todos := journal.WorkspaceTodos{Todos: m.workspaceTodos, Archived: m.workspaceArchivedTodos}
 	return func() tea.Msg {
 		if err := journal.SaveWorkspaceTodos(todos); err != nil {
 			return errMsg{err: err}

@@ -26,7 +26,8 @@ type Todo struct {
 
 // WorkspaceTodos holds the global todo list for a workspace.
 type WorkspaceTodos struct {
-	Todos []Todo `json:"todos"`
+	Todos    []Todo `json:"todos"`
+	Archived []Todo `json:"archived"`
 }
 
 // DayRecord holds all data for a single work day.

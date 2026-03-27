@@ -735,6 +735,9 @@ func (m Model) viewDayView() string {
 			{kb.Export, "export"},
 			{"esc", "back"},
 		}
+		if m.selectedPane == 1 && len(m.workspaceArchivedTodos) > 0 {
+			footerKeys = append(footerKeys, [2]string{"X", "clear archive"})
+		}
 	} else {
 		footerKeys = [][2]string{
 			{"←/→", "switch tab"},

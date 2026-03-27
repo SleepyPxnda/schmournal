@@ -99,7 +99,8 @@ type Model struct {
 
 	list           list.Model
 	records        []journal.DayRecord
-	workspaceTodos []journal.Todo
+	workspaceTodos         []journal.Todo
+	workspaceArchivedTodos []journal.Todo
 
 	dayRecord     journal.DayRecord
 	selectedEntry int // index into dayRecord.Entries; -1 = no selection
@@ -265,7 +266,8 @@ func New(cfg config.Config, activeWorkspace string, version string) Model {
 		durationInput:   durIn,
 		timeInput:       timeIn,
 		dateInput:       dateIn,
-		workspaceTodos:  []journal.Todo{},
+		workspaceTodos:         []journal.Todo{},
+		workspaceArchivedTodos: []journal.Todo{},
 		selectedEntry:   -1,
 		selectedTodo:    0,
 		selectedSub:     -1,
@@ -323,6 +325,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case workspaceTodosLoadedMsg:
 		m.workspaceTodos = msg.todos.Todos
+		m.workspaceArchivedTodos = msg.todos.Archived
 		return m, nil
 
 	case daySavedMsg:
