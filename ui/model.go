@@ -27,6 +27,7 @@ const (
 	stateClockForm
 	stateTimeInput
 	stateNotesEditor
+	stateTodoForm
 	stateConfirmDelete
 	stateDateInput
 	stateWorkspacePicker
@@ -47,6 +48,7 @@ type dayDeletedMsg struct{}
 type exportedMsg struct{ path string }
 type clearStatusMsg struct{}
 type errMsg struct{ err error }
+type workspaceTodosLoadedMsg struct{ todos journal.WorkspaceTodos }
 type clockTickMsg struct{}
 
 // ── List item ─────────────────────────────────────────────────────────────────
@@ -95,8 +97,9 @@ type Model struct {
 	cfg             config.Config
 	activeWorkspace string // name of the currently active workspace (empty = no workspaces)
 
-	list    list.Model
-	records []journal.DayRecord
+	list           list.Model
+	records        []journal.DayRecord
+	workspaceTodos []journal.Todo
 
 	dayRecord     journal.DayRecord
 	selectedEntry int // index into dayRecord.Entries; -1 = no selection
@@ -110,6 +113,7 @@ type Model struct {
 	editEntryIdx  int // -1 = new, >=0 = editing existing entry
 
 	textarea  textarea.Model // notes editor
+	todoInput textinput.Model
 
 	timeInput      textinput.Model
 	timeInputStart bool
@@ -123,6 +127,16 @@ type Model struct {
 	viewport viewport.Model
 
 	statsTab int // 0=Overview 1=Monthly 2=Yearly 3=All-time
+
+	selectedPane  int // 0 = work log entries, 1 = todos
+	selectedTodo  int // top-level todo index
+	selectedSub   int // -1 = top-level, >=0 = level-2 todo index
+	selectedSub2  int // -1 = not level-3, >=0 = level-3 todo index under selectedSub
+	todoEditTop   int // -1 = new, >=0 = editing top-level todo index
+	todoEditSub   int // -1 = top-level, >=0 = editing level-2 todo index
+	todoEditSub2  int // -1 = not level-3, >=0 = editing level-3 todo index
+	todoDraft     string
+	todoInputMode bool
 
 	workspaceIdx int // currently highlighted row in the workspace picker
 
@@ -232,25 +246,40 @@ func New(cfg config.Config, activeWorkspace string, version string) Model {
 	dateIn.TextStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(cText))
 	dateIn.PlaceholderStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(cOverlay0))
 
+	todoIn := textinput.New()
+	todoIn.Placeholder = "TODO title…"
+	todoIn.CharLimit = 160
+	todoIn.PromptStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(cMauve))
+	todoIn.TextStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(cText))
+	todoIn.PlaceholderStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(cOverlay0))
+
 	return Model{
 		cfg:             cfg,
 		activeWorkspace: activeWorkspace,
 		state:           stateList,
 		list:            l,
 		textarea:        ta,
+		todoInput:       todoIn,
 		taskInput:       taskIn,
 		projectInput:    projIn,
 		durationInput:   durIn,
 		timeInput:       timeIn,
 		dateInput:       dateIn,
+		workspaceTodos:  []journal.Todo{},
 		selectedEntry:   -1,
+		selectedTodo:    0,
+		selectedSub:     -1,
+		selectedSub2:    -1,
+		todoEditTop:     -1,
+		todoEditSub:     -1,
+		todoEditSub2:    -1,
 		editEntryIdx:    -1,
 		version:         version,
 	}
 }
 
 func (m Model) Init() tea.Cmd {
-	return loadRecords
+	return tea.Batch(loadRecords, loadWorkspaceTodos)
 }
 
 // ── Update ────────────────────────────────────────────────────────────────────
@@ -290,6 +319,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			items[i] = dayListItem{rec: r, isWorkDay: isWork}
 		}
 		m.list.SetItems(items)
+		return m, nil
+
+	case workspaceTodosLoadedMsg:
+		m.workspaceTodos = msg.todos.Todos
 		return m, nil
 
 	case daySavedMsg:
@@ -349,6 +382,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.handleTimeInputKey(msg)
 		case stateNotesEditor:
 			return m.handleNotesEditorKey(msg)
+		case stateTodoForm:
+			return m.handleTodoFormKey(msg)
 		case stateConfirmDelete:
 			return m.handleConfirmDeleteKey(msg)
 		case stateDateInput:
@@ -396,6 +431,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case stateNotesEditor:
 		var cmd tea.Cmd
 		m.textarea, cmd = m.textarea.Update(msg)
+		return m, cmd
+	case stateTodoForm:
+		var cmd tea.Cmd
+		m.todoInput, cmd = m.todoInput.Update(msg)
 		return m, cmd
 	case stateDateInput:
 		var cmd tea.Cmd

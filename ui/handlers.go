@@ -3,11 +3,14 @@ package ui
 import (
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/sleepypxnda/schmournal/journal"
 )
+
+const deleteTodoIdx = -2
 
 func (m Model) handleListKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	filtering := m.list.FilterState() == list.Filtering
@@ -58,6 +61,42 @@ func (m Model) handleListKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 func (m Model) handleDayViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	n := len(m.dayRecord.Entries)
 	kb := m.cfg.Keybinds.Day
+	inTodoPane := m.dayViewTab == 0 && m.selectedPane == 1
+	if inTodoPane {
+		switch msg.Type {
+		case tea.KeyRunes:
+			if m.todoInputMode {
+				m.appendTodoDraft(string(msg.Runes))
+				m.viewport.SetContent(m.renderDayContent())
+				return m, nil
+			}
+			// In TODO navigation mode, begin inline drafting immediately for printable
+			// characters that are not bound to other day-view commands.
+			if m.shouldStartInlineTodoDraft(msg) {
+				m.todoInputMode = true
+				m.todoDraft = string(msg.Runes)
+				m.viewport.SetContent(m.renderDayContent())
+				return m, nil
+			}
+		case tea.KeyBackspace:
+			if m.todoInputMode {
+				m.backspaceTodoDraft()
+				m.viewport.SetContent(m.renderDayContent())
+				return m, nil
+			}
+			if m.deleteSelectedTodoNow() {
+				m.viewport.SetContent(m.renderDayContent())
+				return m, m.saveWorkspaceTodosCmd("✓ TODO deleted")
+			}
+			return m, nil
+		}
+	}
+	if inTodoPane && m.todoInputMode {
+		switch msg.String() {
+		case "tab", "shift+tab", "delete", "up", "down", "left", "right":
+			return m, nil
+		}
+	}
 	switch msg.String() {
 	case "left":
 		if m.dayViewTab > 0 {
@@ -74,17 +113,103 @@ func (m Model) handleDayViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	case "j", "down":
-		if m.dayViewTab == 0 && m.selectedEntry < n-1 {
-			m.selectedEntry++
-			m.viewport.SetContent(m.renderDayContent())
-			m.scrollToSelected()
+		if m.dayViewTab == 0 {
+			if m.selectedPane == 0 && m.selectedEntry < n-1 {
+				m.selectedEntry++
+				m.viewport.SetContent(m.renderDayContent())
+				m.scrollToSelected()
+			} else if m.selectedPane == 1 {
+				m.todoMove(1)
+				m.viewport.SetContent(m.renderDayContent())
+			}
 		}
 		return m, nil
 	case "k", "up":
-		if m.dayViewTab == 0 && m.selectedEntry > 0 {
-			m.selectedEntry--
+		if m.dayViewTab == 0 {
+			if m.selectedPane == 0 && m.selectedEntry > 0 {
+				m.selectedEntry--
+				m.viewport.SetContent(m.renderDayContent())
+				m.scrollToSelected()
+			} else if m.selectedPane == 1 {
+				m.todoMove(-1)
+				m.viewport.SetContent(m.renderDayContent())
+			}
+		}
+		return m, nil
+	case "tab":
+		if m.dayViewTab == 0 {
+			if m.selectedPane == 1 && m.todoInputMode {
+				return m, nil
+			}
+			if m.selectedPane == 1 && !m.todoInputMode {
+				if m.indentSelectedTodo() {
+					m.viewport.SetContent(m.renderDayContent())
+					return m, m.saveWorkspaceTodosCmd("✓ TODO indented")
+				}
+				// In focused TODO navigation mode, tab is reserved for indenting and does not cycle panes.
+				return m, nil
+			}
+			m.selectedPane = (m.selectedPane + 1) % 2
 			m.viewport.SetContent(m.renderDayContent())
-			m.scrollToSelected()
+		}
+		return m, nil
+	case "shift+tab":
+		if m.dayViewTab == 0 && m.selectedPane == 1 && m.outdentSelectedTodo() {
+			m.viewport.SetContent(m.renderDayContent())
+			return m, m.saveWorkspaceTodosCmd("✓ TODO outdented")
+		}
+		return m, nil
+	case "delete":
+		if m.dayViewTab == 0 && m.selectedPane == 1 && m.deleteSelectedTodoNow() {
+			m.viewport.SetContent(m.renderDayContent())
+			return m, m.saveWorkspaceTodosCmd("✓ TODO deleted")
+		}
+		return m, nil
+	case "enter":
+		if m.dayViewTab == 0 && m.selectedPane == 1 {
+			if m.todoInputMode {
+				saved := m.commitTodoDraft()
+				m.exitTodoInputMode()
+				m.viewport.SetContent(m.renderDayContent())
+				if saved {
+					return m, m.saveWorkspaceTodosCmd("✓ TODO saved")
+				}
+				return m, nil
+			}
+			m.todoInputMode = true
+			m.todoDraft = ""
+			m.viewport.SetContent(m.renderDayContent())
+		}
+		return m, nil
+	case " ":
+		// Some terminals report space as a dedicated key type (not KeyRunes).
+		// Preserve typing spaces while drafting a TODO title.
+		if m.dayViewTab == 0 && m.selectedPane == 1 && m.todoInputMode {
+			m.appendTodoDraft(" ")
+			m.viewport.SetContent(m.renderDayContent())
+			return m, nil
+		}
+		if m.dayViewTab == 0 && m.selectedPane == 1 && m.toggleSelectedTodo() {
+			m.viewport.SetContent(m.renderDayContent())
+			return m, m.saveWorkspaceTodosCmd("✓ TODO updated")
+		}
+		return m, nil
+	case "a":
+		if m.dayViewTab == 0 && m.selectedPane == 1 {
+			m.todoInputMode = true
+			m.todoDraft = ""
+			m.viewport.SetContent(m.renderDayContent())
+			return m, nil
+		}
+		return m, nil
+	case "A":
+		if m.dayViewTab == 0 && m.selectedPane == 1 && m.selectedTodo >= 0 && m.selectedTodo < len(m.workspaceTodos) {
+			if m.selectedSub >= 0 && m.selectedSub < len(m.workspaceTodos[m.selectedTodo].Subtodos) {
+				newSubIdx2 := len(m.workspaceTodos[m.selectedTodo].Subtodos[m.selectedSub].Subtodos)
+				return m.openTodoForm(m.selectedTodo, m.selectedSub, newSubIdx2)
+			}
+			newSubIdx := len(m.workspaceTodos[m.selectedTodo].Subtodos)
+			return m.openTodoForm(m.selectedTodo, newSubIdx, -1)
 		}
 		return m, nil
 	case kb.AddWork:
@@ -92,11 +217,23 @@ func (m Model) handleDayViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case kb.AddBreak:
 		return m.openWorkForm(true, -1)
 	case kb.Edit:
+		if m.dayViewTab == 0 && m.selectedPane == 1 {
+			return m.openTodoFormForSelection()
+		}
 		if m.selectedEntry >= 0 && m.selectedEntry < n {
 			return m.openWorkForm(m.dayRecord.Entries[m.selectedEntry].IsBreak, m.selectedEntry)
 		}
 		return m.openNotesEditor()
 	case kb.Delete:
+		if m.dayViewTab == 0 && m.selectedPane == 1 {
+			if m.selectedTodo >= 0 && m.selectedTodo < len(m.workspaceTodos) {
+				m.deleteDay = false
+				m.deleteIdx = deleteTodoIdx
+				m.prevState = stateDayView
+				m.state = stateConfirmDelete
+			}
+			return m, nil
+		}
 		if m.selectedEntry >= 0 && m.selectedEntry < n {
 			m.deleteDay = false
 			m.deleteIdx = m.selectedEntry
@@ -123,6 +260,22 @@ func (m Model) handleDayViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.openTimeInput(false)
 	case kb.Notes:
 		return m.openNotesEditor()
+	case kb.TodoOverview:
+		if m.dayViewTab == 0 {
+			if m.selectedPane != 1 {
+				m.selectedPane = 1
+			} else {
+				m.selectedPane = 0
+				m.exitTodoInputMode()
+			}
+			m.viewport.SetContent(m.renderDayContent())
+			return m, nil
+		}
+		m.dayViewTab = 0
+		m.selectedPane = 1
+		m.viewport.GotoTop()
+		m.viewport.SetContent(m.renderDayContent())
+		return m, nil
 	case kb.Export:
 		rec := m.dayRecord
 		return m, func() tea.Msg {
@@ -162,6 +315,116 @@ func (m Model) handleDayViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 	var cmd tea.Cmd
 	m.viewport, cmd = m.viewport.Update(msg)
+	return m, cmd
+}
+
+func (m Model) openTodoFormForSelection() (tea.Model, tea.Cmd) {
+	if m.selectedTodo >= 0 && m.selectedTodo < len(m.workspaceTodos) {
+		return m.openTodoForm(m.selectedTodo, m.selectedSub, m.selectedSub2)
+	}
+	return m, nil
+}
+
+func (m Model) shouldStartInlineTodoDraft(msg tea.KeyMsg) bool {
+	if msg.Type != tea.KeyRunes || len(msg.Runes) == 0 {
+		return false
+	}
+	for _, r := range msg.Runes {
+		if !unicode.IsPrint(r) {
+			return false
+		}
+	}
+	key := msg.String()
+	switch key {
+	case "j", "k", "a", "A", " ":
+		return false
+	}
+	if m.isDayCommandKey(key) {
+		return false
+	}
+	return true
+}
+
+func (m Model) isDayCommandKey(key string) bool {
+	if key == "" {
+		return false
+	}
+	kb := m.cfg.Keybinds.Day
+	return key == kb.AddWork ||
+		key == kb.AddBreak ||
+		key == kb.Edit ||
+		key == kb.Delete ||
+		key == kb.SetStartNow ||
+		key == kb.SetStartManual ||
+		key == kb.SetEndNow ||
+		key == kb.SetEndManual ||
+		key == kb.Notes ||
+		key == kb.TodoOverview ||
+		key == kb.Export ||
+		key == kb.ClockStart ||
+		key == kb.ClockStop
+}
+
+func (m Model) handleTodoFormKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.Type {
+	case tea.KeyEnter:
+		title := strings.TrimSpace(m.todoInput.Value())
+		if title == "" {
+			m.statusMsg = "✗ TODO title is required"
+			m.isError = true
+			return m, clearStatusCmd()
+		}
+		if m.todoEditTop >= 0 && m.todoEditTop < len(m.workspaceTodos) {
+			if m.todoEditSub >= 0 {
+				if m.todoEditSub < len(m.workspaceTodos[m.todoEditTop].Subtodos) {
+					if m.todoEditSub2 >= 0 && m.todoEditSub2 < len(m.workspaceTodos[m.todoEditTop].Subtodos[m.todoEditSub].Subtodos) {
+						m.workspaceTodos[m.todoEditTop].Subtodos[m.todoEditSub].Subtodos[m.todoEditSub2].Title = title
+					} else if m.todoEditSub2 >= 0 {
+						m.workspaceTodos[m.todoEditTop].Subtodos[m.todoEditSub].Subtodos = append(m.workspaceTodos[m.todoEditTop].Subtodos[m.todoEditSub].Subtodos, journal.Todo{
+							ID:       journal.NewID(),
+							Title:    title,
+							Subtodos: []journal.Todo{},
+						})
+						m.selectedSub2 = len(m.workspaceTodos[m.todoEditTop].Subtodos[m.todoEditSub].Subtodos) - 1
+					} else {
+						m.workspaceTodos[m.todoEditTop].Subtodos[m.todoEditSub].Title = title
+					}
+				} else {
+					m.workspaceTodos[m.todoEditTop].Subtodos = append(m.workspaceTodos[m.todoEditTop].Subtodos, journal.Todo{
+						ID:       journal.NewID(),
+						Title:    title,
+						Subtodos: []journal.Todo{},
+					})
+					m.selectedSub = len(m.workspaceTodos[m.todoEditTop].Subtodos) - 1
+					m.selectedSub2 = -1
+				}
+				m.selectedTodo = m.todoEditTop
+			} else {
+				m.workspaceTodos[m.todoEditTop].Title = title
+				m.selectedTodo = m.todoEditTop
+				m.selectedSub = -1
+				m.selectedSub2 = -1
+			}
+		} else {
+			m.workspaceTodos = append(m.workspaceTodos, journal.Todo{
+				ID:       journal.NewID(),
+				Title:    title,
+				Subtodos: []journal.Todo{},
+			})
+			m.selectedTodo = len(m.workspaceTodos) - 1
+			m.selectedSub = -1
+			m.selectedSub2 = -1
+		}
+		m.state = stateDayView
+		m.selectedPane = 1
+		m.viewport.SetContent(m.renderDayContent())
+		return m, m.saveWorkspaceTodosCmd("✓ TODO saved")
+	case tea.KeyEsc:
+		m.state = stateDayView
+		return m, nil
+	}
+	var cmd tea.Cmd
+	m.todoInput, cmd = m.todoInput.Update(msg)
 	return m, cmd
 }
 
@@ -392,6 +655,35 @@ func (m Model) handleConfirmDeleteKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 		}
 		// Delete a single entry from the current day.
+		if m.deleteIdx == deleteTodoIdx {
+			if m.selectedTodo >= 0 && m.selectedTodo < len(m.workspaceTodos) {
+				if m.selectedSub >= 0 && m.selectedSub2 >= 0 && m.selectedSub < len(m.workspaceTodos[m.selectedTodo].Subtodos) {
+					level2 := m.workspaceTodos[m.selectedTodo].Subtodos[m.selectedSub].Subtodos
+					if m.selectedSub2 >= 0 && m.selectedSub2 < len(level2) {
+						m.workspaceTodos[m.selectedTodo].Subtodos[m.selectedSub].Subtodos = append(level2[:m.selectedSub2], level2[m.selectedSub2+1:]...)
+					}
+					m.selectedSub2 = -1
+				} else if m.selectedSub >= 0 && m.selectedSub < len(m.workspaceTodos[m.selectedTodo].Subtodos) {
+					st := m.workspaceTodos[m.selectedTodo].Subtodos
+					m.workspaceTodos[m.selectedTodo].Subtodos = append(st[:m.selectedSub], st[m.selectedSub+1:]...)
+					m.selectedSub = -1
+					m.selectedSub2 = -1
+				} else {
+					m.workspaceTodos = append(m.workspaceTodos[:m.selectedTodo], m.workspaceTodos[m.selectedTodo+1:]...)
+					if m.selectedTodo >= len(m.workspaceTodos) {
+						m.selectedTodo = len(m.workspaceTodos) - 1
+					}
+					if m.selectedTodo < 0 {
+						m.selectedSub = -1
+						m.selectedSub2 = -1
+					}
+				}
+			}
+			m.state = stateDayView
+			m.selectedPane = 1
+			m.viewport.SetContent(m.renderDayContent())
+			return m, m.saveWorkspaceTodosCmd("✓ TODO deleted")
+		}
 		if m.deleteIdx >= 0 && m.deleteIdx < len(m.dayRecord.Entries) {
 			m.dayRecord.Entries = append(
 				m.dayRecord.Entries[:m.deleteIdx],

@@ -90,6 +90,7 @@ func (m Model) switchWorkspace(name string) (tea.Model, tea.Cmd) {
 	m.isError = false
 	return m, tea.Batch(
 		loadRecords,
+		loadWorkspaceTodos,
 		clearStatusCmd(),
 		func() tea.Msg {
 			_ = config.SaveState(config.AppState{ActiveWorkspace: name})
@@ -109,9 +110,17 @@ func (m Model) openDayView(rec journal.DayRecord) (tea.Model, tea.Cmd) {
 		m.dayRecord.Path = rec.Path
 	}
 	m.dayViewTab = 0
+	m.selectedPane = 0
 	m.selectedEntry = -1
 	if len(m.dayRecord.Entries) > 0 {
 		m.selectedEntry = 0
+	}
+	m.selectedTodo = 0
+	m.selectedSub = -1
+	m.selectedSub2 = -1
+	m.exitTodoInputMode()
+	if len(m.workspaceTodos) == 0 {
+		m.selectedTodo = -1
 	}
 	m.state = stateDayView
 	m.viewport.GotoTop()
@@ -198,6 +207,27 @@ func (m Model) openNotesEditor() (tea.Model, tea.Cmd) {
 	blinkCmd := m.textarea.Focus()
 	m.state = stateNotesEditor
 	return m, blinkCmd
+}
+
+func (m Model) openTodoForm(editTop, editSub, editSub2 int) (tea.Model, tea.Cmd) {
+	m.todoEditTop = editTop
+	m.todoEditSub = editSub
+	m.todoEditSub2 = editSub2
+	m.todoInput.SetValue("")
+	m.todoInput.Placeholder = "TODO title…"
+	if editTop >= 0 && editTop < len(m.workspaceTodos) {
+		if editSub >= 0 && editSub < len(m.workspaceTodos[editTop].Subtodos) {
+			if editSub2 >= 0 && editSub2 < len(m.workspaceTodos[editTop].Subtodos[editSub].Subtodos) {
+				m.todoInput.SetValue(m.workspaceTodos[editTop].Subtodos[editSub].Subtodos[editSub2].Title)
+			} else {
+				m.todoInput.SetValue(m.workspaceTodos[editTop].Subtodos[editSub].Title)
+			}
+		} else {
+			m.todoInput.SetValue(m.workspaceTodos[editTop].Title)
+		}
+	}
+	m.state = stateTodoForm
+	return m, m.todoInput.Focus()
 }
 
 func (m Model) openTimeInput(isStart bool) (tea.Model, tea.Cmd) {
