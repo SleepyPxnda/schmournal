@@ -179,21 +179,26 @@ func (m Model) renderWorkLogContent() string {
 	// The clock panel has a left border (+1 char), so:
 	//   leftW + 1 + rightW = innerW  →  leftW = innerW - rightW - 1
 	const clockMinW = 28
-	if innerW >= 60 {
-		rightW := innerW / 2
-		if rightW < clockMinW {
-			rightW = clockMinW
+	if m.cfg.Modules.Clock {
+		if innerW >= 60 {
+			rightW := innerW / 2
+			if rightW < clockMinW {
+				rightW = clockMinW
+			}
+			leftW := innerW - rightW - 1
+			leftBlock := lipgloss.NewStyle().Width(leftW).Render(m.renderEntriesPanel(leftW))
+			rightBlock := clockPanelBorderStyle.Width(rightW).Render(m.renderClockPanel(rightW))
+			b.WriteString(lipgloss.JoinHorizontal(lipgloss.Top, leftBlock, rightBlock))
+			b.WriteString("\n")
+		} else {
+			// Narrow terminal: stack entries above the clock panel.
+			b.WriteString(m.renderEntriesPanel(innerW))
+			b.WriteString("\n" + div + "\n")
+			b.WriteString(m.renderClockPanel(innerW))
+			b.WriteString("\n")
 		}
-		leftW := innerW - rightW - 1
-		leftBlock := lipgloss.NewStyle().Width(leftW).Render(m.renderEntriesPanel(leftW))
-		rightBlock := clockPanelBorderStyle.Width(rightW).Render(m.renderClockPanel(rightW))
-		b.WriteString(lipgloss.JoinHorizontal(lipgloss.Top, leftBlock, rightBlock))
-		b.WriteString("\n")
 	} else {
-		// Narrow terminal: stack entries above the clock panel.
 		b.WriteString(m.renderEntriesPanel(innerW))
-		b.WriteString("\n" + div + "\n")
-		b.WriteString(m.renderClockPanel(innerW))
 		b.WriteString("\n")
 	}
 
@@ -201,32 +206,37 @@ func (m Model) renderWorkLogContent() string {
 
 	// ── Notes + Todos two-column section ───────────────────────────────────────
 	b.WriteString("\n" + div + "\n")
-	if innerW >= 60 {
-		leftW := (innerW - 1) / 2
-		rightW := innerW - leftW - 1
-		leftPanel := m.renderNotesPanel(leftW)
-		rightPanel := m.renderTodosPanel(rightW)
-		maxH := lipgloss.Height(leftPanel)
-		if h := lipgloss.Height(rightPanel); h > maxH {
-			maxH = h
-		}
-		padToHeight := func(s string, h int) string {
-			cur := lipgloss.Height(s)
-			if cur >= h {
-				return s
+	if m.cfg.Modules.Todos {
+		if innerW >= 60 {
+			leftW := (innerW - 1) / 2
+			rightW := innerW - leftW - 1
+			leftPanel := m.renderNotesPanel(leftW)
+			rightPanel := m.renderTodosPanel(rightW)
+			maxH := lipgloss.Height(leftPanel)
+			if h := lipgloss.Height(rightPanel); h > maxH {
+				maxH = h
 			}
-			return s + strings.Repeat("\n", h-cur)
+			padToHeight := func(s string, h int) string {
+				cur := lipgloss.Height(s)
+				if cur >= h {
+					return s
+				}
+				return s + strings.Repeat("\n", h-cur)
+			}
+			leftPanel = padToHeight(leftPanel, maxH)
+			rightPanel = padToHeight(rightPanel, maxH)
+			leftBlock := lipgloss.NewStyle().Width(leftW).Height(maxH).Render(leftPanel)
+			rightBlock := clockPanelBorderStyle.Width(rightW).Height(maxH).Render(rightPanel)
+			b.WriteString(lipgloss.JoinHorizontal(lipgloss.Top, leftBlock, rightBlock))
+			b.WriteString("\n")
+		} else {
+			b.WriteString(m.renderNotesPanel(innerW))
+			b.WriteString("\n" + div + "\n")
+			b.WriteString(m.renderTodosPanel(innerW))
+			b.WriteString("\n")
 		}
-		leftPanel = padToHeight(leftPanel, maxH)
-		rightPanel = padToHeight(rightPanel, maxH)
-		leftBlock := lipgloss.NewStyle().Width(leftW).Height(maxH).Render(leftPanel)
-		rightBlock := clockPanelBorderStyle.Width(rightW).Height(maxH).Render(rightPanel)
-		b.WriteString(lipgloss.JoinHorizontal(lipgloss.Top, leftBlock, rightBlock))
-		b.WriteString("\n")
 	} else {
 		b.WriteString(m.renderNotesPanel(innerW))
-		b.WriteString("\n" + div + "\n")
-		b.WriteString(m.renderTodosPanel(innerW))
 		b.WriteString("\n")
 	}
 
@@ -703,40 +713,46 @@ func (m Model) viewDayView() string {
 	var footerKeys [][2]string
 	kb := m.cfg.Keybinds.Day
 	if m.dayViewTab == 0 {
-		clockKey := kb.ClockStart
-		clockLabel := "start clock"
-		if m.clockRunning {
-			clockKey = kb.ClockStop
-			clockLabel = "stop clock"
-		}
 		editLabel := "edit"
 		deleteLabel := "del"
-		if m.selectedPane == 1 {
+		if m.cfg.Modules.Todos && m.selectedPane == 1 {
 			editLabel = "edit todo"
 			deleteLabel = "del todo"
 		}
 		footerKeys = [][2]string{
 			{"←/→", "switch tab"},
 			{"j/k", "select"},
-			{"tab", "pane/indent"},
-			{"S-tab", "outdent"},
-			{"S-↑/↓", "reorder"},
 			{kb.AddWork, "work"},
 			{kb.AddBreak, "break"},
 			{kb.Edit, editLabel},
 			{kb.Delete, deleteLabel},
-			{"backspace", "del todo"},
-			{"space", "toggle todo"},
 			{joinKeyLabels(kb.SetStartNow, kb.SetStartManual), "start"},
 			{joinKeyLabels(kb.SetEndNow, kb.SetEndManual), "end"},
 			{kb.Notes, "notes"},
-			{kb.TodoOverview, "todo pane"},
-			{clockKey, clockLabel},
 			{kb.Export, "export"},
 			{"esc", "back"},
 		}
-		if m.selectedPane == 1 && len(m.workspaceArchivedTodos) > 0 {
-			footerKeys = append(footerKeys, [2]string{"X", "clear archive"})
+		if m.cfg.Modules.Todos {
+			footerKeys = append(footerKeys,
+				[2]string{"tab", "pane/indent"},
+				[2]string{"S-tab", "outdent"},
+				[2]string{"S-↑/↓", "reorder"},
+				[2]string{"backspace", "del todo"},
+				[2]string{"space", "toggle todo"},
+				[2]string{kb.TodoOverview, "todo pane"},
+			)
+			if m.selectedPane == 1 && len(m.workspaceArchivedTodos) > 0 {
+				footerKeys = append(footerKeys, [2]string{"X", "clear archive"})
+			}
+		}
+		if m.cfg.Modules.Clock {
+			clockKey := kb.ClockStart
+			clockLabel := "start clock"
+			if m.clockRunning {
+				clockKey = kb.ClockStop
+				clockLabel = "stop clock"
+			}
+			footerKeys = append(footerKeys, [2]string{clockKey, clockLabel})
 		}
 	} else {
 		footerKeys = [][2]string{

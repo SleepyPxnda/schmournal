@@ -61,7 +61,7 @@ func (m Model) handleListKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 func (m Model) handleDayViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	n := len(m.dayRecord.Entries)
 	kb := m.cfg.Keybinds.Day
-	inTodoPane := m.dayViewTab == 0 && m.selectedPane == 1
+	inTodoPane := m.cfg.Modules.Todos && m.dayViewTab == 0 && m.selectedPane == 1
 	if inTodoPane {
 		switch msg.Type {
 		case tea.KeyRunes:
@@ -149,8 +149,10 @@ func (m Model) handleDayViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				// In focused TODO navigation mode, tab is reserved for indenting and does not cycle panes.
 				return m, nil
 			}
-			m.selectedPane = (m.selectedPane + 1) % 2
-			m.viewport.SetContent(m.renderDayContent())
+			if m.cfg.Modules.Todos {
+				m.selectedPane = (m.selectedPane + 1) % 2
+				m.viewport.SetContent(m.renderDayContent())
+			}
 		}
 		return m, nil
 	case "shift+tab":
@@ -280,6 +282,9 @@ func (m Model) handleDayViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case kb.Notes:
 		return m.openNotesEditor()
 	case kb.TodoOverview:
+		if !m.cfg.Modules.Todos {
+			return m, nil
+		}
 		if m.dayViewTab == 0 {
 			if m.selectedPane != 1 {
 				m.selectedPane = 1
@@ -305,6 +310,9 @@ func (m Model) handleDayViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return exportedMsg{path: path}
 		}
 	case kb.ClockStart:
+		if !m.cfg.Modules.Clock {
+			return m, nil
+		}
 		if !m.clockRunning {
 			return m.openClockForm()
 		}
@@ -313,6 +321,9 @@ func (m Model) handleDayViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	case kb.ClockStop:
+		if !m.cfg.Modules.Clock {
+			return m, nil
+		}
 		if m.clockRunning {
 			return m.stopClock()
 		}

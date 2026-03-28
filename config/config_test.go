@@ -25,6 +25,78 @@ func TestDefaultStoragePath(t *testing.T) {
 	}
 }
 
+func TestDefaultModulesEnabled(t *testing.T) {
+	cfg := Default()
+	if !cfg.Modules.Clock {
+		t.Error("Default().Modules.Clock = false, want true")
+	}
+	if !cfg.Modules.Todos {
+		t.Error("Default().Modules.Todos = false, want true")
+	}
+}
+
+func TestMigrateConfigPreservesModulesEnabled(t *testing.T) {
+	home := withTempHome(t)
+	cfgPath := filepath.Join(home, ".config", "schmournal.config")
+
+	// Write an old-style config without a [modules] section.
+	raw := `storage_path = "~/.journal"
+weekly_hours_goal = 40.0
+work_days = ["monday", "tuesday", "wednesday", "thursday", "friday"]
+`
+	if err := os.MkdirAll(filepath.Dir(cfgPath), 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	if err := os.WriteFile(cfgPath, []byte(raw), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error: %v", err)
+	}
+
+	// Modules should be enabled after migration (preserving old "all-on" behaviour).
+	if !cfg.Modules.Clock {
+		t.Error("migrated config has Modules.Clock = false, want true")
+	}
+	if !cfg.Modules.Todos {
+		t.Error("migrated config has Modules.Todos = false, want true")
+	}
+}
+
+func TestLoadConfigModulesDisabled(t *testing.T) {
+	home := withTempHome(t)
+	cfgPath := filepath.Join(home, ".config", "schmournal.config")
+
+	// Write a config with modules explicitly disabled.
+	raw := `storage_path = "~/.journal"
+weekly_hours_goal = 40.0
+work_days = ["monday", "tuesday", "wednesday", "thursday", "friday"]
+
+[modules]
+clock = false
+todos = false
+`
+	if err := os.MkdirAll(filepath.Dir(cfgPath), 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	if err := os.WriteFile(cfgPath, []byte(raw), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error: %v", err)
+	}
+	if cfg.Modules.Clock {
+		t.Error("Modules.Clock = true, want false (explicitly disabled)")
+	}
+	if cfg.Modules.Todos {
+		t.Error("Modules.Todos = true, want false (explicitly disabled)")
+	}
+}
+
 func TestDefaultKeybindsNotEmpty(t *testing.T) {
 	cfg := Default()
 

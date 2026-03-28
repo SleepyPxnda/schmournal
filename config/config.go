@@ -60,6 +60,18 @@ type Keybinds struct {
 	Day  DayKeybinds  `toml:"day"`
 }
 
+// ── Modules ───────────────────────────────────────────────────────────────────
+
+// Modules holds feature toggles. Setting a field to false disables the
+// corresponding module entirely (UI, keybinds, and rendering are all hidden).
+// Both fields default to true so that existing configs continue to behave as
+// before — the TOML decoder leaves these fields at the Default() value when
+// the [modules] section is absent.
+type Modules struct {
+	Clock bool `toml:"clock"`
+	Todos bool `toml:"todos"`
+}
+
 // ── Config ────────────────────────────────────────────────────────────────────
 
 // Config is the top-level configuration structure.
@@ -67,6 +79,7 @@ type Config struct {
 	StoragePath     string            `toml:"storage_path"`
 	WeeklyHoursGoal float64           `toml:"weekly_hours_goal"`
 	WorkDays        []string          `toml:"work_days"`
+	Modules         Modules           `toml:"modules"`
 	Keybinds        Keybinds          `toml:"keybinds"`
 	Workspaces      []WorkspaceConfig `toml:"workspaces"`
 }
@@ -90,6 +103,10 @@ func Default() Config {
 		StoragePath:     "~/.journal",
 		WeeklyHoursGoal: 40,
 		WorkDays:        []string{"monday", "tuesday", "wednesday", "thursday", "friday"},
+		Modules: Modules{
+			Clock: true,
+			Todos: true,
+		},
 		Keybinds: Keybinds{
 			List: ListKeybinds{
 				Quit:            "q",
@@ -273,6 +290,14 @@ weekly_hours_goal = %g
 #   friday, saturday, sunday
 work_days = %s
 
+# ── Modules ───────────────────────────────────────────────────────────────────
+# Feature toggles. Set a value to false to disable that module entirely.
+# Disabling a module hides its UI, keybinds, and rendered panels.
+
+[modules]
+clock = %t   # Clocking panel and timer (clock_start / clock_stop keybinds)
+todos = %t   # Todo pane and workspace-wide todo list (todo_overview keybind)
+
 # ── Workspaces ────────────────────────────────────────────────────────────────
 # Workspaces let you maintain separate journal directories with independent
 # settings. When defined you can switch between them from the list view.
@@ -328,6 +353,8 @@ clock_stop      = %q   # Stop the clock and log the entry (Clocking tab)
 		cfg.StoragePath,
 		cfg.WeeklyHoursGoal,
 		workDaysStr,
+		cfg.Modules.Clock,
+		cfg.Modules.Todos,
 		generateWorkspacesTOML(cfg.Workspaces),
 		cfg.Keybinds.List.Quit,
 		cfg.Keybinds.List.OpenToday,
