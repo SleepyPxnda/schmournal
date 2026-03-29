@@ -6,22 +6,11 @@ import (
 	"time"
 )
 
-// Provider abstracts time operations for testability.
-// This allows tests to use fixed/mock time instead of real system time.
-type Provider interface {
-	// Now returns the current time.
-	Now() time.Time
-
-	// GenerateID generates a unique ID based on current time.
-	// This is injectable so domain/application code stays deterministic in tests.
-	GenerateID() string
-}
-
 // RealTimeProvider uses real system time.
 type RealTimeProvider struct{}
 
 // NewRealTimeProvider creates a new RealTimeProvider.
-func NewRealTimeProvider() Provider {
+func NewRealTimeProvider() *RealTimeProvider {
 	return &RealTimeProvider{}
 }
 
@@ -57,7 +46,7 @@ type FixedTimeProvider struct {
 }
 
 // NewFixedTimeProvider creates a new FixedTimeProvider with a fixed time.
-func NewFixedTimeProvider(t time.Time) Provider {
+func NewFixedTimeProvider(t time.Time) *FixedTimeProvider {
 	return &FixedTimeProvider{
 		fixedTime: t,
 		idCounter: 0,

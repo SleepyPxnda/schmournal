@@ -24,7 +24,7 @@ func NewFileSystemTodoRepository(storage *StorageManager) repository.TodoReposit
 
 // Load reads workspace TODOs (active + archived) for the given workspace.
 func (r *FileSystemTodoRepository) Load(workspace string) (model.WorkspaceTodos, error) {
-	path, err := r.storage.TodosPathForWorkspace(workspace)
+	path, err := r.storage.TodosPath()
 	if err != nil {
 		return model.WorkspaceTodos{}, fmt.Errorf("failed to get todos path: %w", err)
 	}
@@ -54,7 +54,7 @@ func (r *FileSystemTodoRepository) Load(workspace string) (model.WorkspaceTodos,
 
 // Save persists workspace TODOs for the given workspace.
 func (r *FileSystemTodoRepository) Save(workspace string, todos model.WorkspaceTodos) error {
-	path, err := r.storage.TodosPathForWorkspace(workspace)
+	path, err := r.storage.TodosPath()
 	if err != nil {
 		return fmt.Errorf("failed to get todos path: %w", err)
 	}
@@ -76,7 +76,7 @@ func (r *FileSystemTodoRepository) Save(workspace string, todos model.WorkspaceT
 
 // Delete removes the TODOs for the given workspace.
 func (r *FileSystemTodoRepository) Delete(workspace string) error {
-	path, err := r.storage.TodosPathForWorkspace(workspace)
+	path, err := r.storage.TodosPath()
 	if err != nil {
 		return fmt.Errorf("failed to get todos path: %w", err)
 	}

@@ -60,15 +60,7 @@ func main() {
 		}
 	}
 
-	// Exports directory is typically ~/.journal/exports
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "Warning: could not determine home directory:", err)
-		homeDir = "."
-	}
-	exportDir := filepath.Join(homeDir, ".journal", "exports")
-
-	useCaseFactory := newUseCaseSetFactory(exportDir, stateRepo)
+	useCaseFactory := newUseCaseSetFactory(stateRepo)
 	initialSet, err := useCaseFactory(storagePath)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "Error: could not initialize use cases:", err)
@@ -103,11 +95,16 @@ func resolveActiveWorkspace(cfg model.AppConfig, saved string) string {
 	return cfg.Workspaces[0].Name
 }
 
-func newUseCaseSetFactory(exportDir string, stateRepo repository.StateRepository) ui.UseCaseSetFactory {
+func newUseCaseSetFactory(stateRepo repository.StateRepository) ui.UseCaseSetFactory {
 	return func(storagePath string) (ui.UseCaseSet, error) {
 		storageManager, err := json.NewStorageManager(storagePath)
 		if err != nil {
 			return ui.UseCaseSet{}, fmt.Errorf("failed to initialize storage manager: %w", err)
+		}
+
+		exportDir, err := storageManager.ExportsDir()
+		if err != nil {
+			return ui.UseCaseSet{}, fmt.Errorf("failed to determine exports directory: %w", err)
 		}
 
 		timeProvider := infrastructuretime.NewRealTimeProvider()
