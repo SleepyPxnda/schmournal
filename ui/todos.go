@@ -5,7 +5,6 @@ import (
 	"unicode/utf8"
 
 	"github.com/charmbracelet/lipgloss"
-	"github.com/sleepypxnda/schmournal/journal"
 )
 
 func truncateRunes(s string, max int) string {
@@ -39,14 +38,14 @@ func todoLinePrefix(depth int, selected bool) string {
 func (m *Model) todoMove(delta int) {
 	cursors := m.todoCursors()
 	if len(cursors) == 0 {
-		m.selectedTodo = -1
-		m.selectedSub = -1
-		m.selectedSub2 = -1
+		m.todoSelection.Top = -1
+		m.todoSelection.Sub = -1
+		m.todoSelection.Sub2 = -1
 		return
 	}
 	idx := 0
 	for i, c := range cursors {
-		if c.top == m.selectedTodo && c.sub == m.selectedSub && c.sub2 == m.selectedSub2 {
+		if c.top == m.todoSelection.Top && c.sub == m.todoSelection.Sub && c.sub2 == m.todoSelection.Sub2 {
 			idx = i
 			break
 		}
@@ -58,14 +57,14 @@ func (m *Model) todoMove(delta int) {
 	if idx >= len(cursors) {
 		idx = len(cursors) - 1
 	}
-	m.selectedTodo = cursors[idx].top
-	m.selectedSub = cursors[idx].sub
-	m.selectedSub2 = cursors[idx].sub2
+	m.todoSelection.Top = cursors[idx].top
+	m.todoSelection.Sub = cursors[idx].sub
+	m.todoSelection.Sub2 = cursors[idx].sub2
 }
 
 func (m Model) todoCursors() []todoCursor {
 	var out []todoCursor
-	for i, t := range m.workspaceTodos {
+	for i, t := range m.workspace.Todos {
 		out = append(out, todoCursor{top: i, sub: -1, sub2: -1})
 		for j, st := range t.Subtodos {
 			out = append(out, todoCursor{top: i, sub: j, sub2: -1})
@@ -78,107 +77,107 @@ func (m Model) todoCursors() []todoCursor {
 }
 
 func (m *Model) toggleSelectedTodo() bool {
-	if m.selectedTodo < 0 || m.selectedTodo >= len(m.workspaceTodos) {
+	if m.todoSelection.Top < 0 || m.todoSelection.Top >= len(m.workspace.Todos) {
 		return false
 	}
-	if m.selectedSub >= 0 && m.selectedSub2 >= 0 {
-		if m.selectedSub >= len(m.workspaceTodos[m.selectedTodo].Subtodos) {
+	if m.todoSelection.Sub >= 0 && m.todoSelection.Sub2 >= 0 {
+		if m.todoSelection.Sub >= len(m.workspace.Todos[m.todoSelection.Top].Subtodos) {
 			return false
 		}
-		level2 := m.workspaceTodos[m.selectedTodo].Subtodos[m.selectedSub]
-		if m.selectedSub2 >= len(level2.Subtodos) {
+		level2 := m.workspace.Todos[m.todoSelection.Top].Subtodos[m.todoSelection.Sub]
+		if m.todoSelection.Sub2 >= len(level2.Subtodos) {
 			return false
 		}
-		m.workspaceTodos[m.selectedTodo].Subtodos[m.selectedSub].Subtodos[m.selectedSub2].Completed = !m.workspaceTodos[m.selectedTodo].Subtodos[m.selectedSub].Subtodos[m.selectedSub2].Completed
+		m.workspace.Todos[m.todoSelection.Top].Subtodos[m.todoSelection.Sub].Subtodos[m.todoSelection.Sub2].Completed = !m.workspace.Todos[m.todoSelection.Top].Subtodos[m.todoSelection.Sub].Subtodos[m.todoSelection.Sub2].Completed
 		return true
 	}
-	if m.selectedSub >= 0 {
-		if m.selectedSub >= len(m.workspaceTodos[m.selectedTodo].Subtodos) {
+	if m.todoSelection.Sub >= 0 {
+		if m.todoSelection.Sub >= len(m.workspace.Todos[m.todoSelection.Top].Subtodos) {
 			return false
 		}
-		m.workspaceTodos[m.selectedTodo].Subtodos[m.selectedSub].Completed = !m.workspaceTodos[m.selectedTodo].Subtodos[m.selectedSub].Completed
+		m.workspace.Todos[m.todoSelection.Top].Subtodos[m.todoSelection.Sub].Completed = !m.workspace.Todos[m.todoSelection.Top].Subtodos[m.todoSelection.Sub].Completed
 		return true
 	}
-	m.workspaceTodos[m.selectedTodo].Completed = !m.workspaceTodos[m.selectedTodo].Completed
+	m.workspace.Todos[m.todoSelection.Top].Completed = !m.workspace.Todos[m.todoSelection.Top].Completed
 	return true
 }
 
 func (m *Model) appendTodoDraft(s string) {
-	m.todoDraft += s
+	m.todoEditor.Draft += s
 }
 
 func (m *Model) backspaceTodoDraft() {
-	if m.todoDraft == "" {
+	if m.todoEditor.Draft == "" {
 		return
 	}
-	r := []rune(m.todoDraft)
-	m.todoDraft = string(r[:len(r)-1])
+	r := []rune(m.todoEditor.Draft)
+	m.todoEditor.Draft = string(r[:len(r)-1])
 }
 
 func (m *Model) exitTodoInputMode() {
-	m.todoInputMode = false
-	m.todoDraft = ""
+	m.todoEditor.InputMode = false
+	m.todoEditor.Draft = ""
 }
 
 func (m *Model) commitTodoDraft() bool {
-	title := strings.TrimSpace(m.todoDraft)
+	title := strings.TrimSpace(m.todoEditor.Draft)
 	if title == "" {
 		return false
 	}
-	m.workspaceTodos = append(m.workspaceTodos, journal.Todo{
-		ID:       journal.NewID(),
+	m.workspace.Todos = append(m.workspace.Todos, Todo{
+		ID:       newID(),
 		Title:    title,
-		Subtodos: []journal.Todo{},
+		Subtodos: []Todo{},
 	})
-	m.selectedTodo = len(m.workspaceTodos) - 1
-	m.selectedSub = -1
-	m.selectedSub2 = -1
-	m.todoDraft = ""
+	m.todoSelection.Top = len(m.workspace.Todos) - 1
+	m.todoSelection.Sub = -1
+	m.todoSelection.Sub2 = -1
+	m.todoEditor.Draft = ""
 	return true
 }
 
 func (m *Model) indentSelectedTodo() bool {
-	if m.selectedTodo < 0 || m.selectedTodo >= len(m.workspaceTodos) {
+	if m.todoSelection.Top < 0 || m.todoSelection.Top >= len(m.workspace.Todos) {
 		return false
 	}
 	// Indent level-2 todo to level-3 under previous level-2 sibling.
-	if m.selectedSub >= 0 && m.selectedSub2 == -1 {
-		parent := m.workspaceTodos[m.selectedTodo]
-		if m.selectedSub <= 0 || m.selectedSub >= len(parent.Subtodos) {
+	if m.todoSelection.Sub >= 0 && m.todoSelection.Sub2 == -1 {
+		parent := m.workspace.Todos[m.todoSelection.Top]
+		if m.todoSelection.Sub <= 0 || m.todoSelection.Sub >= len(parent.Subtodos) {
 			return false
 		}
-		targetParentIdx := m.selectedSub - 1
-		td := parent.Subtodos[m.selectedSub]
-		parent.Subtodos = append(parent.Subtodos[:m.selectedSub], parent.Subtodos[m.selectedSub+1:]...)
+		targetParentIdx := m.todoSelection.Sub - 1
+		td := parent.Subtodos[m.todoSelection.Sub]
+		parent.Subtodos = append(parent.Subtodos[:m.todoSelection.Sub], parent.Subtodos[m.todoSelection.Sub+1:]...)
 		parent.Subtodos[targetParentIdx].Subtodos = append(parent.Subtodos[targetParentIdx].Subtodos, td)
 		parent.Subtodos[targetParentIdx].Subtodos = clampTodoListAtDepth(parent.Subtodos[targetParentIdx].Subtodos, 2)
-		m.workspaceTodos[m.selectedTodo] = parent
-		m.selectedSub = targetParentIdx
-		m.selectedSub2 = findTodoIndexByID(m.workspaceTodos[m.selectedTodo].Subtodos[targetParentIdx].Subtodos, td.ID)
+		m.workspace.Todos[m.todoSelection.Top] = parent
+		m.todoSelection.Sub = targetParentIdx
+		m.todoSelection.Sub2 = findTodoIndexByID(m.workspace.Todos[m.todoSelection.Top].Subtodos[targetParentIdx].Subtodos, td.ID)
 		return true
 	}
 	// Already at max supported depth.
-	if m.selectedSub >= 0 && m.selectedSub2 >= 0 {
+	if m.todoSelection.Sub >= 0 && m.todoSelection.Sub2 >= 0 {
 		return false
 	}
 	// Indent top-level todo to level-2 under previous top-level sibling.
-	if m.selectedTodo <= 0 {
+	if m.todoSelection.Top <= 0 {
 		return false
 	}
-	parentIdx := m.selectedTodo - 1
-	td := m.workspaceTodos[m.selectedTodo]
-	m.workspaceTodos[parentIdx].Subtodos = append(m.workspaceTodos[parentIdx].Subtodos, td)
-	m.workspaceTodos[parentIdx].Subtodos = clampTodoListAtDepth(m.workspaceTodos[parentIdx].Subtodos, 1)
-	m.workspaceTodos = append(m.workspaceTodos[:m.selectedTodo], m.workspaceTodos[m.selectedTodo+1:]...)
-	m.selectedTodo = parentIdx
-	m.selectedSub = findTodoIndexByID(m.workspaceTodos[parentIdx].Subtodos, td.ID)
-	m.selectedSub2 = -1
+	parentIdx := m.todoSelection.Top - 1
+	td := m.workspace.Todos[m.todoSelection.Top]
+	m.workspace.Todos[parentIdx].Subtodos = append(m.workspace.Todos[parentIdx].Subtodos, td)
+	m.workspace.Todos[parentIdx].Subtodos = clampTodoListAtDepth(m.workspace.Todos[parentIdx].Subtodos, 1)
+	m.workspace.Todos = append(m.workspace.Todos[:m.todoSelection.Top], m.workspace.Todos[m.todoSelection.Top+1:]...)
+	m.todoSelection.Top = parentIdx
+	m.todoSelection.Sub = findTodoIndexByID(m.workspace.Todos[parentIdx].Subtodos, td.ID)
+	m.todoSelection.Sub2 = -1
 	return true
 }
 
-func clampTodoListAtDepth(items []journal.Todo, depth int) []journal.Todo {
+func clampTodoListAtDepth(items []Todo, depth int) []Todo {
 	if depth >= 2 {
-		out := make([]journal.Todo, 0, len(items))
+		out := make([]Todo, 0, len(items))
 		for _, item := range items {
 			descendants := flattenTodos(item.Subtodos)
 			item.Subtodos = nil
@@ -193,10 +192,10 @@ func clampTodoListAtDepth(items []journal.Todo, depth int) []journal.Todo {
 	return items
 }
 
-func flattenTodos(items []journal.Todo) []journal.Todo {
-	out := make([]journal.Todo, 0, len(items))
-	var walk func(todo journal.Todo)
-	walk = func(todo journal.Todo) {
+func flattenTodos(items []Todo) []Todo {
+	out := make([]Todo, 0, len(items))
+	var walk func(todo Todo)
+	walk = func(todo Todo) {
 		children := todo.Subtodos
 		todo.Subtodos = nil
 		out = append(out, todo)
@@ -210,7 +209,7 @@ func flattenTodos(items []journal.Todo) []journal.Todo {
 	return out
 }
 
-func findTodoIndexByID(items []journal.Todo, id string) int {
+func findTodoIndexByID(items []Todo, id string) int {
 	for i := range items {
 		if items[i].ID == id {
 			return i
@@ -220,53 +219,53 @@ func findTodoIndexByID(items []journal.Todo, id string) int {
 }
 
 func (m *Model) outdentSelectedTodo() bool {
-	if m.selectedTodo < 0 || m.selectedTodo >= len(m.workspaceTodos) || m.selectedSub < 0 {
+	if m.todoSelection.Top < 0 || m.todoSelection.Top >= len(m.workspace.Todos) || m.todoSelection.Sub < 0 {
 		return false
 	}
 	// Outdent level-3 todo to level-2.
-	if m.selectedSub2 >= 0 {
-		parent := m.workspaceTodos[m.selectedTodo]
-		if m.selectedSub >= len(parent.Subtodos) {
+	if m.todoSelection.Sub2 >= 0 {
+		parent := m.workspace.Todos[m.todoSelection.Top]
+		if m.todoSelection.Sub >= len(parent.Subtodos) {
 			return false
 		}
-		level2 := parent.Subtodos[m.selectedSub]
-		if m.selectedSub2 >= len(level2.Subtodos) {
+		level2 := parent.Subtodos[m.todoSelection.Sub]
+		if m.todoSelection.Sub2 >= len(level2.Subtodos) {
 			return false
 		}
-		td := level2.Subtodos[m.selectedSub2]
-		level2.Subtodos = append(level2.Subtodos[:m.selectedSub2], level2.Subtodos[m.selectedSub2+1:]...)
-		parent.Subtodos[m.selectedSub] = level2
+		td := level2.Subtodos[m.todoSelection.Sub2]
+		level2.Subtodos = append(level2.Subtodos[:m.todoSelection.Sub2], level2.Subtodos[m.todoSelection.Sub2+1:]...)
+		parent.Subtodos[m.todoSelection.Sub] = level2
 
-		insertIdx := m.selectedSub + 1
-		parent.Subtodos = append(parent.Subtodos, journal.Todo{})
+		insertIdx := m.todoSelection.Sub + 1
+		parent.Subtodos = append(parent.Subtodos, Todo{})
 		copy(parent.Subtodos[insertIdx+1:], parent.Subtodos[insertIdx:])
 		parent.Subtodos[insertIdx] = td
-		m.workspaceTodos[m.selectedTodo] = parent
-		m.selectedSub = insertIdx
-		m.selectedSub2 = -1
+		m.workspace.Todos[m.todoSelection.Top] = parent
+		m.todoSelection.Sub = insertIdx
+		m.todoSelection.Sub2 = -1
 		return true
 	}
-	parentIdx := m.selectedTodo
-	parent := m.workspaceTodos[parentIdx]
-	if m.selectedSub >= len(parent.Subtodos) {
+	parentIdx := m.todoSelection.Top
+	parent := m.workspace.Todos[parentIdx]
+	if m.todoSelection.Sub >= len(parent.Subtodos) {
 		return false
 	}
-	td := parent.Subtodos[m.selectedSub]
-	parent.Subtodos = append(parent.Subtodos[:m.selectedSub], parent.Subtodos[m.selectedSub+1:]...)
-	m.workspaceTodos[parentIdx].Subtodos = parent.Subtodos
+	td := parent.Subtodos[m.todoSelection.Sub]
+	parent.Subtodos = append(parent.Subtodos[:m.todoSelection.Sub], parent.Subtodos[m.todoSelection.Sub+1:]...)
+	m.workspace.Todos[parentIdx].Subtodos = parent.Subtodos
 
 	insertIdx := parentIdx + 1
-	m.workspaceTodos = append(m.workspaceTodos, journal.Todo{})
-	copy(m.workspaceTodos[insertIdx+1:], m.workspaceTodos[insertIdx:])
-	m.workspaceTodos[insertIdx] = td
-	m.selectedTodo = insertIdx
-	m.selectedSub = -1
-	m.selectedSub2 = -1
+	m.workspace.Todos = append(m.workspace.Todos, Todo{})
+	copy(m.workspace.Todos[insertIdx+1:], m.workspace.Todos[insertIdx:])
+	m.workspace.Todos[insertIdx] = td
+	m.todoSelection.Top = insertIdx
+	m.todoSelection.Sub = -1
+	m.todoSelection.Sub2 = -1
 	return true
 }
 
 // isFullyCompleted reports whether t and every nested subtodo are all completed.
-func isFullyCompleted(t journal.Todo) bool {
+func isFullyCompleted(t Todo) bool {
 	if !t.Completed {
 		return false
 	}
@@ -281,8 +280,8 @@ func isFullyCompleted(t journal.Todo) bool {
 // collectFullyCompleted returns all top-level todos (and their subtree) for
 // which isFullyCompleted is true. These are the items that will be moved to
 // the archive when the user leaves the day view.
-func collectFullyCompleted(todos []journal.Todo) []journal.Todo {
-	var result []journal.Todo
+func collectFullyCompleted(todos []Todo) []Todo {
+	var result []Todo
 	for _, t := range todos {
 		if isFullyCompleted(t) {
 			result = append(result, t)
@@ -294,8 +293,8 @@ func collectFullyCompleted(todos []journal.Todo) []journal.Todo {
 // pruneCompletedTodos removes todos (at any depth) where the todo itself and
 // all its descendants are completed. Partial branches (some children
 // incomplete) are kept intact.
-func pruneCompletedTodos(todos []journal.Todo) []journal.Todo {
-	result := make([]journal.Todo, 0, len(todos))
+func pruneCompletedTodos(todos []Todo) []Todo {
+	result := make([]Todo, 0, len(todos))
 	for _, t := range todos {
 		if isFullyCompleted(t) {
 			continue
@@ -311,84 +310,84 @@ func pruneCompletedTodos(todos []journal.Todo) []journal.Todo {
 // selection cursor is updated to follow the moved item. Returns true when a
 // swap was performed.
 func (m *Model) moveSelectedTodoDelta(delta int) bool {
-	if m.selectedTodo < 0 || m.selectedTodo >= len(m.workspaceTodos) {
+	if m.todoSelection.Top < 0 || m.todoSelection.Top >= len(m.workspace.Todos) {
 		return false
 	}
 	// Level 3
-	if m.selectedSub >= 0 && m.selectedSub2 >= 0 {
-		if m.selectedSub >= len(m.workspaceTodos[m.selectedTodo].Subtodos) {
+	if m.todoSelection.Sub >= 0 && m.todoSelection.Sub2 >= 0 {
+		if m.todoSelection.Sub >= len(m.workspace.Todos[m.todoSelection.Top].Subtodos) {
 			return false
 		}
-		sub := &m.workspaceTodos[m.selectedTodo].Subtodos[m.selectedSub]
-		newIdx := m.selectedSub2 + delta
+		sub := &m.workspace.Todos[m.todoSelection.Top].Subtodos[m.todoSelection.Sub]
+		newIdx := m.todoSelection.Sub2 + delta
 		if newIdx < 0 || newIdx >= len(sub.Subtodos) {
 			return false
 		}
-		sub.Subtodos[m.selectedSub2], sub.Subtodos[newIdx] = sub.Subtodos[newIdx], sub.Subtodos[m.selectedSub2]
-		m.selectedSub2 = newIdx
+		sub.Subtodos[m.todoSelection.Sub2], sub.Subtodos[newIdx] = sub.Subtodos[newIdx], sub.Subtodos[m.todoSelection.Sub2]
+		m.todoSelection.Sub2 = newIdx
 		return true
 	}
 	// Level 2
-	if m.selectedSub >= 0 {
-		parent := &m.workspaceTodos[m.selectedTodo]
-		newIdx := m.selectedSub + delta
+	if m.todoSelection.Sub >= 0 {
+		parent := &m.workspace.Todos[m.todoSelection.Top]
+		newIdx := m.todoSelection.Sub + delta
 		if newIdx < 0 || newIdx >= len(parent.Subtodos) {
 			return false
 		}
-		parent.Subtodos[m.selectedSub], parent.Subtodos[newIdx] = parent.Subtodos[newIdx], parent.Subtodos[m.selectedSub]
-		m.selectedSub = newIdx
+		parent.Subtodos[m.todoSelection.Sub], parent.Subtodos[newIdx] = parent.Subtodos[newIdx], parent.Subtodos[m.todoSelection.Sub]
+		m.todoSelection.Sub = newIdx
 		return true
 	}
 	// Level 1 (top-level)
-	newIdx := m.selectedTodo + delta
-	if newIdx < 0 || newIdx >= len(m.workspaceTodos) {
+	newIdx := m.todoSelection.Top + delta
+	if newIdx < 0 || newIdx >= len(m.workspace.Todos) {
 		return false
 	}
-	m.workspaceTodos[m.selectedTodo], m.workspaceTodos[newIdx] = m.workspaceTodos[newIdx], m.workspaceTodos[m.selectedTodo]
-	m.selectedTodo = newIdx
+	m.workspace.Todos[m.todoSelection.Top], m.workspace.Todos[newIdx] = m.workspace.Todos[newIdx], m.workspace.Todos[m.todoSelection.Top]
+	m.todoSelection.Top = newIdx
 	return true
 }
 
 func (m *Model) deleteSelectedTodoNow() bool {
-	if m.selectedTodo < 0 || m.selectedTodo >= len(m.workspaceTodos) {
+	if m.todoSelection.Top < 0 || m.todoSelection.Top >= len(m.workspace.Todos) {
 		return false
 	}
-	if m.selectedSub >= 0 && m.selectedSub2 >= 0 {
-		level2 := m.workspaceTodos[m.selectedTodo].Subtodos
-		if m.selectedSub >= len(level2) {
+	if m.todoSelection.Sub >= 0 && m.todoSelection.Sub2 >= 0 {
+		level2 := m.workspace.Todos[m.todoSelection.Top].Subtodos
+		if m.todoSelection.Sub >= len(level2) {
 			return false
 		}
-		level3 := level2[m.selectedSub].Subtodos
-		if m.selectedSub2 >= len(level3) {
+		level3 := level2[m.todoSelection.Sub].Subtodos
+		if m.todoSelection.Sub2 >= len(level3) {
 			return false
 		}
-		level2[m.selectedSub].Subtodos = append(level3[:m.selectedSub2], level3[m.selectedSub2+1:]...)
-		m.workspaceTodos[m.selectedTodo].Subtodos = level2
-		m.selectedSub2 = -1
+		level2[m.todoSelection.Sub].Subtodos = append(level3[:m.todoSelection.Sub2], level3[m.todoSelection.Sub2+1:]...)
+		m.workspace.Todos[m.todoSelection.Top].Subtodos = level2
+		m.todoSelection.Sub2 = -1
 		return true
 	}
-	if m.selectedSub >= 0 {
-		st := m.workspaceTodos[m.selectedTodo].Subtodos
-		if m.selectedSub >= len(st) {
+	if m.todoSelection.Sub >= 0 {
+		st := m.workspace.Todos[m.todoSelection.Top].Subtodos
+		if m.todoSelection.Sub >= len(st) {
 			return false
 		}
-		m.workspaceTodos[m.selectedTodo].Subtodos = append(st[:m.selectedSub], st[m.selectedSub+1:]...)
-		m.selectedSub = -1
-		m.selectedSub2 = -1
+		m.workspace.Todos[m.todoSelection.Top].Subtodos = append(st[:m.todoSelection.Sub], st[m.todoSelection.Sub+1:]...)
+		m.todoSelection.Sub = -1
+		m.todoSelection.Sub2 = -1
 		return true
 	}
-	m.workspaceTodos = append(m.workspaceTodos[:m.selectedTodo], m.workspaceTodos[m.selectedTodo+1:]...)
-	if len(m.workspaceTodos) == 0 {
-		m.selectedTodo = -1
-		m.selectedSub = -1
-		m.selectedSub2 = -1
+	m.workspace.Todos = append(m.workspace.Todos[:m.todoSelection.Top], m.workspace.Todos[m.todoSelection.Top+1:]...)
+	if len(m.workspace.Todos) == 0 {
+		m.todoSelection.Top = -1
+		m.todoSelection.Sub = -1
+		m.todoSelection.Sub2 = -1
 		return true
 	}
-	if m.selectedTodo >= len(m.workspaceTodos) {
-		m.selectedTodo = len(m.workspaceTodos) - 1
+	if m.todoSelection.Top >= len(m.workspace.Todos) {
+		m.todoSelection.Top = len(m.workspace.Todos) - 1
 	}
-	m.selectedSub = -1
-	m.selectedSub2 = -1
+	m.todoSelection.Sub = -1
+	m.todoSelection.Sub2 = -1
 	return true
 }
 
@@ -396,43 +395,43 @@ func (m Model) renderTodosPanel(w int) string {
 	var b strings.Builder
 	b.WriteString(dayViewSectionStyle.Render("✅  Todos") + "\n")
 	b.WriteString(dayViewDividerStyle.Render(strings.Repeat("─", w)) + "\n")
-	if m.selectedPane == 1 {
-		draft := strings.TrimSpace(m.todoDraft)
+	if m.day.Selection.Pane == 1 {
+		draft := strings.TrimSpace(m.todoEditor.Draft)
 		if draft == "" {
 			hint := dayViewMutedStyle.Render("  type to add, enter to save")
-			if m.todoInputMode {
+			if m.todoEditor.InputMode {
 				hint = todoInputActiveStyle.Render("  type to add, enter to save")
 			}
 			b.WriteString(hint + "\n")
 		} else {
-			draftLine := dayViewValueStyle.Render("  + " + m.todoDraft)
-			if m.todoInputMode {
-				draftLine = todoInputActiveStyle.Render("  + " + m.todoDraft)
+			draftLine := dayViewValueStyle.Render("  + " + m.todoEditor.Draft)
+			if m.todoEditor.InputMode {
+				draftLine = todoInputActiveStyle.Render("  + " + m.todoEditor.Draft)
 			}
 			b.WriteString(draftLine + "\n")
 		}
 		b.WriteString(dayViewDividerStyle.Render(strings.Repeat("─", w)) + "\n")
 	}
-	if len(m.workspaceTodos) == 0 {
+	if len(m.workspace.Todos) == 0 {
 		b.WriteString(dayViewMutedStyle.Render("  No todos yet") + "\n")
-		if m.selectedPane != 1 {
+		if m.day.Selection.Pane != 1 {
 			b.WriteString(dayViewMutedStyle.Render("  t open todo overview") + "\n")
 		}
-		if len(m.workspaceArchivedTodos) == 0 {
+		if len(m.workspace.Archived) == 0 {
 			return b.String()
 		}
 	}
-	for i, td := range m.workspaceTodos {
+	for i, td := range m.workspace.Todos {
 		mark := todoIncompleteStyle.Render("—")
 		if td.Completed {
 			mark = todoCompleteStyle.Render("✓")
 		}
-		prefix := todoLinePrefix(0, m.selectedPane == 1 && m.selectedTodo == i && m.selectedSub == -1)
+		prefix := todoLinePrefix(0, m.day.Selection.Pane == 1 && m.todoSelection.Top == i && m.todoSelection.Sub == -1)
 		line := prefix + mark + " " + td.Title
 		if lipgloss.Width(line) > w {
 			line = truncateRunes(line, w)
 		}
-		if m.selectedPane == 1 && m.selectedTodo == i && m.selectedSub == -1 {
+		if m.day.Selection.Pane == 1 && m.todoSelection.Top == i && m.todoSelection.Sub == -1 {
 			line = selectedEntryStyle.Render(line)
 		}
 		b.WriteString(line + "\n")
@@ -442,12 +441,12 @@ func (m Model) renderTodosPanel(w int) string {
 			if st.Completed {
 				smark = todoCompleteStyle.Render("✓")
 			}
-			sprefix := todoLinePrefix(1, m.selectedPane == 1 && m.selectedTodo == i && m.selectedSub == j && m.selectedSub2 == -1)
+			sprefix := todoLinePrefix(1, m.day.Selection.Pane == 1 && m.todoSelection.Top == i && m.todoSelection.Sub == j && m.todoSelection.Sub2 == -1)
 			sline := sprefix + smark + " " + st.Title
 			if lipgloss.Width(sline) > w {
 				sline = truncateRunes(sline, w)
 			}
-			if m.selectedPane == 1 && m.selectedTodo == i && m.selectedSub == j && m.selectedSub2 == -1 {
+			if m.day.Selection.Pane == 1 && m.todoSelection.Top == i && m.todoSelection.Sub == j && m.todoSelection.Sub2 == -1 {
 				sline = selectedEntryStyle.Render(sline)
 			}
 			b.WriteString(sline + "\n")
@@ -457,25 +456,25 @@ func (m Model) renderTodosPanel(w int) string {
 				if thirdLevelTodo.Completed {
 					ssmark = todoCompleteStyle.Render("✓")
 				}
-				thirdLevelPrefix := todoLinePrefix(2, m.selectedPane == 1 && m.selectedTodo == i && m.selectedSub == j && m.selectedSub2 == k)
+				thirdLevelPrefix := todoLinePrefix(2, m.day.Selection.Pane == 1 && m.todoSelection.Top == i && m.todoSelection.Sub == j && m.todoSelection.Sub2 == k)
 				thirdLevelLine := thirdLevelPrefix + ssmark + " " + thirdLevelTodo.Title
 				if lipgloss.Width(thirdLevelLine) > w {
 					thirdLevelLine = truncateRunes(thirdLevelLine, w)
 				}
-				if m.selectedPane == 1 && m.selectedTodo == i && m.selectedSub == j && m.selectedSub2 == k {
+				if m.day.Selection.Pane == 1 && m.todoSelection.Top == i && m.todoSelection.Sub == j && m.todoSelection.Sub2 == k {
 					thirdLevelLine = selectedEntryStyle.Render(thirdLevelLine)
 				}
 				b.WriteString(thirdLevelLine + "\n")
 			}
 		}
 	}
-	if len(m.workspaceArchivedTodos) > 0 {
+	if len(m.workspace.Archived) > 0 {
 		b.WriteString(dayViewDividerStyle.Render(strings.Repeat("─", w)) + "\n")
 		b.WriteString(dayViewMutedStyle.Render("  Archived") + "\n")
-		for _, td := range m.workspaceArchivedTodos {
+		for _, td := range m.workspace.Archived {
 			b.WriteString(renderArchivedTodoTree(td, 0, w))
 		}
-		if m.selectedPane == 1 {
+		if m.day.Selection.Pane == 1 {
 			b.WriteString(dayViewMutedStyle.Render("  X clear archive") + "\n")
 		}
 	}
@@ -484,7 +483,7 @@ func (m Model) renderTodosPanel(w int) string {
 
 // renderArchivedTodoTree renders a single archived todo (and its subtree) at the
 // given indentation depth, capped at the available width w.
-func renderArchivedTodoTree(td journal.Todo, depth int, w int) string {
+func renderArchivedTodoTree(td Todo, depth int, w int) string {
 	var b strings.Builder
 	indent := strings.Repeat("  ", depth)
 	line := todoArchivedStyle.Render(indent + "  ✓ " + td.Title)

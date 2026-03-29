@@ -12,8 +12,7 @@ import (
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/sleepypxnda/schmournal/config"
-	"github.com/sleepypxnda/schmournal/journal"
+	domainmodel "github.com/sleepypxnda/schmournal/internal/domain/model"
 )
 
 // ── View states ───────────────────────────────────────────────────────────────
@@ -30,6 +29,7 @@ const (
 	stateTodoForm
 	stateConfirmDelete
 	stateDateInput
+	stateWeekView
 	stateWorkspacePicker
 	stateStats
 )
@@ -42,19 +42,136 @@ const (
 
 // ── Messages ──────────────────────────────────────────────────────────────────
 
-type recordsLoadedMsg struct{ records []journal.DayRecord }
+type recordsLoadedMsg struct{ records []DayRecord }
 type daySavedMsg struct{ label string }
 type dayDeletedMsg struct{}
 type exportedMsg struct{ path string }
 type clearStatusMsg struct{}
 type errMsg struct{ err error }
-type workspaceTodosLoadedMsg struct{ todos journal.WorkspaceTodos }
+type workspaceTodosLoadedMsg struct{ todos WorkspaceTodos }
 type clockTickMsg struct{}
+
+// ClockState holds all runtime clock/timer fields.
+type ClockState struct {
+	Running bool
+	Start   time.Time
+	Task    string
+	Project string
+	Frame   int // animation frame index (incremented each tick)
+}
+
+// DeleteState groups confirmation-dialog state.
+type DeleteState struct {
+	Day       bool // true = confirm delete whole day, false = confirm delete entry
+	Idx       int  // index in records (Day) or entries (!Day)
+	PrevState viewState
+}
+
+// StatusState groups transient footer status feedback.
+type StatusState struct {
+	Message string
+	IsError bool
+}
+
+// WorkFormState groups work/break form state and controls.
+type WorkFormState struct {
+	TaskInput     textinput.Model
+	ProjectInput  textinput.Model
+	DurationInput textinput.Model
+	ActiveInput   int
+	IsBreakEntry  bool
+	EditEntryIdx  int // -1 = new, >=0 = editing existing entry
+}
+
+// TimeInputState groups state for manual start/end time input.
+type TimeInputState struct {
+	Input   textinput.Model
+	IsStart bool
+}
+
+// DateInputState groups state for opening/creating a day by date.
+type DateInputState struct {
+	Input textinput.Model
+}
+
+// SelectionState groups day-view selection/navigation cursor state.
+type SelectionState struct {
+	EntryIdx int // index into dayRecord.Entries; -1 = no selection
+	DayTab   int // 0 = Work Log, 1 = Summary
+	Pane     int // 0 = work log entries, 1 = todos
+}
+
+// TodoEditorState groups todo edit/input runtime state.
+type TodoEditorState struct {
+	EditTop   int // -1 = new, >=0 = editing top-level todo index
+	EditSub   int // -1 = top-level, >=0 = editing level-2 todo index
+	EditSub2  int // -1 = not level-3, >=0 = editing level-3 todo index
+	Draft     string
+	InputMode bool
+	Input     textinput.Model
+}
+
+// TodoSelectionState tracks selection cursor within workspace todos.
+type TodoSelectionState struct {
+	Top  int // top-level todo index
+	Sub  int // -1 = top-level, >=0 = level-2 todo index
+	Sub2 int // -1 = not level-3, >=0 = level-3 todo index
+}
+
+// StatsViewState groups tab selection for the stats view.
+type StatsViewState struct {
+	Tab int // 0=Overview 1=Monthly 2=Yearly 3=All-time
+}
+
+// WorkspacePickerState groups current selection in workspace picker.
+type WorkspacePickerState struct {
+	Index int // currently highlighted row in the workspace picker
+}
+
+// ListState groups list component model and loaded day records.
+type ListState struct {
+	Model   list.Model
+	Records []DayRecord
+}
+
+// UIState groups top-level app navigation state and static metadata.
+type UIState struct {
+	Current viewState
+	Version string
+}
+
+// WindowState groups runtime terminal/window dimensions.
+type WindowState struct {
+	Width  int
+	Height int
+	Ready  bool
+}
+
+// AppContextState groups injected dependencies and app-level context.
+type AppContextState struct {
+	Config          domainmodel.AppConfig
+	ActiveWorkspace string // empty = no workspaces
+	UseCases        *UseCases
+}
+
+// WorkspaceDataState groups workspace-wide todo datasets.
+type WorkspaceDataState struct {
+	Todos    []Todo
+	Archived []Todo
+}
+
+// DayViewState groups day-view record, selection and widgets.
+type DayViewState struct {
+	Record    DayRecord
+	Selection SelectionState
+	Viewport  viewport.Model
+	Notes     textarea.Model
+}
 
 // ── List item ─────────────────────────────────────────────────────────────────
 
 type dayListItem struct {
-	rec       journal.DayRecord
+	rec       DayRecord
 	isWorkDay bool
 }
 
@@ -88,74 +205,52 @@ func (d dayListItem) Description() string { return d.rec.Summary() }
 
 // ── Model ─────────────────────────────────────────────────────────────────────
 
+// Model holds the entire application state grouped into focused sub-states.
 type Model struct {
-	state  viewState
-	width  int
-	height int
-	ready  bool
+	// ── App shell state ────────────────────────────────────────────────────────
+	ui      UIState
+	window  WindowState
+	context AppContextState
 
-	cfg             config.Config
-	activeWorkspace string // name of the currently active workspace (empty = no workspaces)
+	// ── List view state ────────────────────────────────────────────────────────
+	listState ListState
 
-	list           list.Model
-	records        []journal.DayRecord
-	workspaceTodos         []journal.Todo
-	workspaceArchivedTodos []journal.Todo
+	// ── Workspace-level data ───────────────────────────────────────────────────
+	workspace WorkspaceDataState
 
-	dayRecord     journal.DayRecord
-	selectedEntry int // index into dayRecord.Entries; -1 = no selection
-	dayViewTab    int // 0 = Work Log, 1 = Summary
+	// ── Day view state ─────────────────────────────────────────────────────────
+	day DayViewState
 
-	taskInput     textinput.Model
-	projectInput  textinput.Model
-	durationInput textinput.Model
-	activeInput   int
-	isBreakEntry  bool
-	editEntryIdx  int // -1 = new, >=0 = editing existing entry
+	// ── Todo pane state (within day view) ──────────────────────────────────────
+	todoSelection TodoSelectionState
+	todoEditor    TodoEditorState
 
-	textarea  textarea.Model // notes editor
-	todoInput textinput.Model
+	// ── Work/Break form state ──────────────────────────────────────────────────
+	workForm WorkFormState
 
-	timeInput      textinput.Model
-	timeInputStart bool
+	// ── Time input state ───────────────────────────────────────────────────────
+	timeForm TimeInputState
 
-	dateInput textinput.Model // for opening/creating any day
+	// ── Date input state ───────────────────────────────────────────────────────
+	dateForm DateInputState
 
-	deleteDay bool // true = confirm delete whole day, false = confirm delete entry
-	deleteIdx int  // index in records (deleteDay) or entries (!deleteDay)
-	prevState viewState
+	// ── Delete confirmation state ──────────────────────────────────────────────
+	delete DeleteState
 
-	viewport viewport.Model
+	// ── Stats and picker state ─────────────────────────────────────────────────
+	stats           StatsViewState
+	workspacePicker WorkspacePickerState
+	weekOffset      int
 
-	statsTab int // 0=Overview 1=Monthly 2=Yearly 3=All-time
+	// ── Clock timer state ──────────────────────────────────────────────────────
+	clock ClockState
 
-	selectedPane  int // 0 = work log entries, 1 = todos
-	selectedTodo  int // top-level todo index
-	selectedSub   int // -1 = top-level, >=0 = level-2 todo index
-	selectedSub2  int // -1 = not level-3, >=0 = level-3 todo index under selectedSub
-	todoEditTop   int // -1 = new, >=0 = editing top-level todo index
-	todoEditSub   int // -1 = top-level, >=0 = editing level-2 todo index
-	todoEditSub2  int // -1 = not level-3, >=0 = editing level-3 todo index
-	todoDraft     string
-	todoInputMode bool
-
-	workspaceIdx int // currently highlighted row in the workspace picker
-
-	// ── Clock (Clocking tab) ──────────────────────────────────────────────────
-	clockRunning bool
-	clockStart   time.Time
-	clockTask    string
-	clockProject string
-	clockFrame   int // animation frame index (incremented each tick)
-
-	statusMsg string
-	isError   bool
-
-	version string
+	// ── Status message (global) ────────────────────────────────────────────────
+	status StatusState
 }
 
 func (m Model) contentHeight() int {
-	return m.height - headerHeight - footerHeight
+	return m.window.Height - headerHeight - footerHeight
 }
 
 // workDayDelegate wraps list.DefaultDelegate and renders non-working-day
@@ -192,7 +287,7 @@ func newDelegate() workDayDelegate {
 }
 
 // New constructs the initial model using the provided configuration.
-func New(cfg config.Config, activeWorkspace string, version string) Model {
+func New(cfg domainmodel.AppConfig, activeWorkspace string, version string, useCases *UseCases) Model {
 	l := list.New([]list.Item{}, newDelegate(), 0, 0)
 	l.SetShowTitle(false)
 	l.SetShowStatusBar(false)
@@ -255,33 +350,58 @@ func New(cfg config.Config, activeWorkspace string, version string) Model {
 	todoIn.PlaceholderStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(cOverlay0))
 
 	return Model{
-		cfg:             cfg,
-		activeWorkspace: activeWorkspace,
-		state:           stateList,
-		list:            l,
-		textarea:        ta,
-		todoInput:       todoIn,
-		taskInput:       taskIn,
-		projectInput:    projIn,
-		durationInput:   durIn,
-		timeInput:       timeIn,
-		dateInput:       dateIn,
-		workspaceTodos:         []journal.Todo{},
-		workspaceArchivedTodos: []journal.Todo{},
-		selectedEntry:   -1,
-		selectedTodo:    0,
-		selectedSub:     -1,
-		selectedSub2:    -1,
-		todoEditTop:     -1,
-		todoEditSub:     -1,
-		todoEditSub2:    -1,
-		editEntryIdx:    -1,
-		version:         version,
+		ui: UIState{
+			Current: stateList,
+			Version: version,
+		},
+		context: AppContextState{
+			Config:          cfg,
+			ActiveWorkspace: activeWorkspace,
+			UseCases:        useCases,
+		},
+		listState: ListState{
+			Model: l,
+		},
+		day: DayViewState{
+			Selection: SelectionState{
+				EntryIdx: -1,
+				DayTab:   0,
+				Pane:     0,
+			},
+			Notes: ta,
+		},
+		workForm: WorkFormState{
+			TaskInput:     taskIn,
+			ProjectInput:  projIn,
+			DurationInput: durIn,
+			EditEntryIdx:  -1,
+		},
+		timeForm: TimeInputState{
+			Input: timeIn,
+		},
+		dateForm: DateInputState{
+			Input: dateIn,
+		},
+		workspace: WorkspaceDataState{
+			Todos:    []Todo{},
+			Archived: []Todo{},
+		},
+		todoSelection: TodoSelectionState{
+			Top:  0,
+			Sub:  -1,
+			Sub2: -1,
+		},
+		todoEditor: TodoEditorState{
+			EditTop:  -1,
+			EditSub:  -1,
+			EditSub2: -1,
+			Input:    todoIn,
+		},
 	}
 }
 
 func (m Model) Init() tea.Cmd {
-	return tea.Batch(loadRecords, loadWorkspaceTodos)
+	return tea.Batch(m.loadRecordsCmd(), m.loadWorkspaceTodosCmd())
 }
 
 // ── Update ────────────────────────────────────────────────────────────────────
@@ -290,79 +410,79 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 
 	case tea.WindowSizeMsg:
-		m.width = msg.Width
-		m.height = msg.Height
+		m.window.Width = msg.Width
+		m.window.Height = msg.Height
 		ch := m.contentHeight()
 		vpH := ch - 2 // 2 lines for tab bar + separator
-		if !m.ready {
-			m.viewport = viewport.New(m.width, vpH)
-			m.ready = true
+		if !m.window.Ready {
+			m.day.Viewport = viewport.New(m.window.Width, vpH)
+			m.window.Ready = true
 		} else {
-			m.viewport.Width = m.width
-			m.viewport.Height = vpH
+			m.day.Viewport.Width = m.window.Width
+			m.day.Viewport.Height = vpH
 		}
 		listH := ch - statsHeight
 		if m.renderEOMBanner() != "" {
 			listH--
 		}
-		m.list.SetSize(m.width, listH)
-		m.textarea.SetWidth(m.width - 4)
-		m.textarea.SetHeight(ch - 2)
+		m.listState.Model.SetSize(m.window.Width, listH)
+		m.day.Notes.SetWidth(m.window.Width - 4)
+		m.day.Notes.SetHeight(ch - 2)
 		return m, nil
 
 	case recordsLoadedMsg:
-		m.records = msg.records
-		items := make([]list.Item, len(m.records))
-		for i, r := range m.records {
+		m.listState.Records = msg.records
+		items := make([]list.Item, len(m.listState.Records))
+		for i, r := range m.listState.Records {
 			isWork := true
 			if t, err := r.ParseDate(); err == nil {
 				isWork = m.effectiveIsWorkDay(t)
 			}
 			items[i] = dayListItem{rec: r, isWorkDay: isWork}
 		}
-		m.list.SetItems(items)
+		m.listState.Model.SetItems(items)
 		return m, nil
 
 	case workspaceTodosLoadedMsg:
-		m.workspaceTodos = msg.todos.Todos
-		m.workspaceArchivedTodos = msg.todos.Archived
+		m.workspace.Todos = msg.todos.Todos
+		m.workspace.Archived = msg.todos.Archived
 		return m, nil
 
 	case daySavedMsg:
-		m.statusMsg = msg.label
-		m.isError = false
-		return m, tea.Batch(loadRecords, clearStatusCmd())
+		m.status.Message = msg.label
+		m.status.IsError = false
+		return m, tea.Batch(m.loadRecordsCmd(), clearStatusCmd())
 
 	case dayDeletedMsg:
-		m.statusMsg = "✓ Day deleted"
-		m.isError = false
-		m.state = stateList
-		return m, tea.Batch(loadRecords, clearStatusCmd())
+		m.status.Message = "✓ Day deleted"
+		m.status.IsError = false
+		m.ui.Current = stateList
+		return m, tea.Batch(m.loadRecordsCmd(), clearStatusCmd())
 
 	case exportedMsg:
 		display := msg.path
 		if home, err := os.UserHomeDir(); err == nil {
 			display = strings.Replace(display, home, "~", 1)
 		}
-		m.statusMsg = "✓ Exported → " + display
-		m.isError = false
+		m.status.Message = "✓ Exported → " + display
+		m.status.IsError = false
 		return m, clearStatusCmd()
 
 	case errMsg:
-		m.statusMsg = "✗ " + msg.err.Error()
-		m.isError = true
+		m.status.Message = "✗ " + msg.err.Error()
+		m.status.IsError = true
 		return m, clearStatusCmd()
 
 	case clearStatusMsg:
-		m.statusMsg = ""
-		m.isError = false
+		m.status.Message = ""
+		m.status.IsError = false
 		return m, nil
 
 	case clockTickMsg:
-		if m.clockRunning {
-			m.clockFrame++
-			if m.state == stateDayView && m.dayViewTab == 0 {
-				m.viewport.SetContent(m.renderDayContent())
+		if m.clock.Running {
+			m.clock.Frame++
+			if m.ui.Current == stateDayView && m.day.Selection.DayTab == 0 {
+				m.day.Viewport.SetContent(m.renderDayContent())
 			}
 			return m, clockTickCmd()
 		}
@@ -372,7 +492,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.String() == "ctrl+c" {
 			return m, tea.Quit
 		}
-		switch m.state {
+		switch m.ui.Current {
 		case stateList:
 			return m.handleListKey(msg)
 		case stateDayView:
@@ -391,6 +511,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.handleConfirmDeleteKey(msg)
 		case stateDateInput:
 			return m.handleDateInputKey(msg)
+		case stateWeekView:
+			return m.handleWeekViewKey(msg)
 		case stateWorkspacePicker:
 			return m.handleWorkspacePickerKey(msg)
 		case stateStats:
@@ -399,49 +521,49 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	// Forward non-key messages to active sub-model.
-	switch m.state {
+	switch m.ui.Current {
 	case stateList:
 		var cmd tea.Cmd
-		m.list, cmd = m.list.Update(msg)
+		m.listState.Model, cmd = m.listState.Model.Update(msg)
 		return m, cmd
-	case stateDayView, stateStats:
+	case stateDayView, stateWeekView, stateStats:
 		var cmd tea.Cmd
-		m.viewport, cmd = m.viewport.Update(msg)
+		m.day.Viewport, cmd = m.day.Viewport.Update(msg)
 		return m, cmd
 	case stateWorkForm:
 		var cmd tea.Cmd
 		switch {
-		case m.activeInput == 0:
-			m.taskInput, cmd = m.taskInput.Update(msg)
-		case m.activeInput == 1 && !m.isBreakEntry:
-			m.projectInput, cmd = m.projectInput.Update(msg)
+		case m.workForm.ActiveInput == 0:
+			m.workForm.TaskInput, cmd = m.workForm.TaskInput.Update(msg)
+		case m.workForm.ActiveInput == 1 && !m.workForm.IsBreakEntry:
+			m.workForm.ProjectInput, cmd = m.workForm.ProjectInput.Update(msg)
 		default:
-			m.durationInput, cmd = m.durationInput.Update(msg)
+			m.workForm.DurationInput, cmd = m.workForm.DurationInput.Update(msg)
 		}
 		return m, cmd
 	case stateClockForm:
 		var cmd tea.Cmd
-		if m.activeInput == 0 {
-			m.taskInput, cmd = m.taskInput.Update(msg)
+		if m.workForm.ActiveInput == 0 {
+			m.workForm.TaskInput, cmd = m.workForm.TaskInput.Update(msg)
 		} else {
-			m.projectInput, cmd = m.projectInput.Update(msg)
+			m.workForm.ProjectInput, cmd = m.workForm.ProjectInput.Update(msg)
 		}
 		return m, cmd
 	case stateTimeInput:
 		var cmd tea.Cmd
-		m.timeInput, cmd = m.timeInput.Update(msg)
+		m.timeForm.Input, cmd = m.timeForm.Input.Update(msg)
 		return m, cmd
 	case stateNotesEditor:
 		var cmd tea.Cmd
-		m.textarea, cmd = m.textarea.Update(msg)
+		m.day.Notes, cmd = m.day.Notes.Update(msg)
 		return m, cmd
 	case stateTodoForm:
 		var cmd tea.Cmd
-		m.todoInput, cmd = m.todoInput.Update(msg)
+		m.todoEditor.Input, cmd = m.todoEditor.Input.Update(msg)
 		return m, cmd
 	case stateDateInput:
 		var cmd tea.Cmd
-		m.dateInput, cmd = m.dateInput.Update(msg)
+		m.dateForm.Input, cmd = m.dateForm.Input.Update(msg)
 		return m, cmd
 	}
 	return m, nil
