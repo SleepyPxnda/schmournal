@@ -130,6 +130,7 @@ func newUseCaseSetFactory(stateRepo repository.StateRepository) tui.UseCaseSetFa
 			AddWorkEntry:       usecase.NewAddWorkEntryUseCase(dayRepo, timeProvider),
 			UpdateWorkEntry:    usecase.NewUpdateWorkEntryUseCase(dayRepo),
 			DeleteWorkEntry:    usecase.NewDeleteWorkEntryUseCase(dayRepo),
+			SubmitWorkForm:     usecase.NewSubmitWorkFormUseCase(dayRepo, timeProvider),
 			SetDayTimes:        usecase.NewSetDayTimesUseCase(dayRepo),
 			UpdateNotes:        usecase.NewUpdateNotesUseCase(dayRepo),
 			ExportDay:          usecase.NewExportDayUseCase(dayRepo, exportDir, exportGenerator),

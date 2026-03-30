@@ -11,7 +11,7 @@ func (m Model) viewDayView() string {
 		subtitle = t.Format("Monday, 02 January 2006")
 	}
 	header := m.renderHeader(m.appTitle(), subtitle)
-	tabBar := m.renderTabBar()
+	tabBar := m.renderDayTabBar()
 
 	var footerKeys [][2]string
 	kb := m.context.Config.Keybinds.Day

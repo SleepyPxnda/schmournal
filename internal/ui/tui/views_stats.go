@@ -24,21 +24,6 @@ func (m Model) viewStats() string {
 	return lipgloss.JoinVertical(lipgloss.Left, header, tabBar, m.day.Viewport.View(), footer)
 }
 
-func (m Model) renderStatsTabBar() string {
-	tabs := []string{"🔥  Overview", "📆  Monthly", "📈  Yearly", "🏆  All-time"}
-	var parts []string
-	for i, label := range tabs {
-		if i == m.stats.Tab {
-			parts = append(parts, activeTabStyle.Render(" "+label+" "))
-		} else {
-			parts = append(parts, inactiveTabStyle.Render(" "+label+" "))
-		}
-	}
-	bar := strings.Join(parts, inactiveTabStyle.Render("  "))
-	sep := dayViewDividerStyle.Render(strings.Repeat("─", m.window.Width))
-	return bar + "\n" + sep
-}
-
 // renderStatsTabContent dispatches to the appropriate tab renderer.
 func (m Model) renderStatsTabContent() string {
 	switch m.stats.Tab {
