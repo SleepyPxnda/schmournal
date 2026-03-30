@@ -89,7 +89,7 @@ func (m Model) saveWorkspaceTodosCmd(label string) tea.Cmd {
 	}
 }
 
-func (m Model) archiveCompletedTodosCmd(label string) tea.Cmd {
+func (m Model) collectCompletedTodosCmd(label string) tea.Cmd {
 	return func() tea.Msg {
 		if m.context.UseCases == nil || m.context.UseCases.ManageTodos == nil {
 			return errMsg{err: fmt.Errorf("todo management use case is not configured")}
@@ -106,8 +106,8 @@ func (m Model) archiveCompletedTodosCmd(label string) tea.Cmd {
 			return errMsg{err: err}
 		}
 		return workspaceTodosManagedMsg{
-			archivedToday: toUITodos(output.ArchivedTodos),
-			label:         label,
+			completedToday: toUITodos(output.ArchivedTodos),
+			label:          label,
 		}
 	}
 }

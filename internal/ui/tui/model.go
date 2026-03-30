@@ -50,9 +50,9 @@ type clearStatusMsg struct{}
 type errMsg struct{ err error }
 type workspaceTodosLoadedMsg struct{ todos WorkspaceTodos }
 type workspaceTodosManagedMsg struct {
-	todos         WorkspaceTodos
-	archivedToday []Todo
-	label         string
+	todos          WorkspaceTodos
+	completedToday []Todo
+	label          string
 }
 type workFormSubmittedMsg struct {
 	record   DayRecord
@@ -460,8 +460,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case workspaceTodosManagedMsg:
 		m.workspace.Todos = msg.todos.Todos
-		if len(msg.archivedToday) > 0 {
-			m.day.Record.TodayDone = mergeArchivedTodoTrees(m.day.Record.TodayDone, msg.archivedToday)
+		if len(msg.completedToday) > 0 {
+			m.day.Record.TodayDone = mergeTodayDoneTrees(m.day.Record.TodayDone, msg.completedToday)
 			return m, m.saveDayCmd("")
 		}
 		if m.ui.Current == stateDayView && m.day.Selection.DayTab == 0 {

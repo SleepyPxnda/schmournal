@@ -209,11 +209,11 @@ func flattenTodos(items []Todo) []Todo {
 	return out
 }
 
-// mergeArchivedTodoTrees recursively merges incoming archived trees into existing
-// trees by ID. Matching nodes (and descendants) are merged, non-matching nodes
-// are appended, and incomplete context nodes are upgraded when a completed
-// version of the same TODO arrives.
-func mergeArchivedTodoTrees(existing []Todo, incoming []Todo) []Todo {
+// mergeTodayDoneTrees recursively merges incoming completed trees into existing
+// Today Done trees by ID. Matching nodes (and descendants) are merged,
+// non-matching nodes are appended, and incomplete context nodes are upgraded
+// when a completed version of the same TODO arrives.
+func mergeTodayDoneTrees(existing []Todo, incoming []Todo) []Todo {
 	merged := append([]Todo(nil), existing...)
 	for _, in := range incoming {
 		merged = mergeOrAppendTodo(merged, in)
@@ -506,15 +506,15 @@ func (m Model) renderTodosPanel(w int) string {
 		b.WriteString(dayViewDividerStyle.Render(strings.Repeat("─", w)) + "\n")
 		b.WriteString(dayViewMutedStyle.Render("  Today Done") + "\n")
 		for _, td := range m.day.Record.TodayDone {
-			b.WriteString(renderArchivedTodoTree(td, 0, w))
+			b.WriteString(renderTodayDoneTodoTree(td, 0, w))
 		}
 	}
 	return b.String()
 }
 
-// renderArchivedTodoTree renders a single archived todo (and its subtree) at the
+// renderTodayDoneTodoTree renders a single Today Done todo (and its subtree) at the
 // given indentation depth, capped at the available width w.
-func renderArchivedTodoTree(td Todo, depth int, w int) string {
+func renderTodayDoneTodoTree(td Todo, depth int, w int) string {
 	var b strings.Builder
 	indent := strings.Repeat("  ", depth)
 	mark := "✓"
@@ -529,7 +529,7 @@ func renderArchivedTodoTree(td Todo, depth int, w int) string {
 	}
 	b.WriteString(line + "\n")
 	for _, sub := range td.Subtodos {
-		b.WriteString(renderArchivedTodoTree(sub, depth+1, w))
+		b.WriteString(renderTodayDoneTodoTree(sub, depth+1, w))
 	}
 	return b.String()
 }

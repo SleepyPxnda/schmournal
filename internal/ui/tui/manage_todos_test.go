@@ -50,7 +50,7 @@ func newUseCasesWithMockTodos(t *testing.T, workspaceTodos domainmodel.Workspace
 	}, nil)
 }
 
-func TestArchiveCompletedTodosCmdReturnsArchivedTodayPayload(t *testing.T) {
+func TestCollectCompletedTodosCmdReturnsCompletedTodayPayload(t *testing.T) {
 	uc := newUseCasesWithMockTodos(t, domainmodel.WorkspaceTodos{
 		Todos: []domainmodel.Todo{
 			{ID: "a", Title: "Done", Completed: true},
@@ -61,14 +61,14 @@ func TestArchiveCompletedTodosCmdReturnsArchivedTodayPayload(t *testing.T) {
 	m.context.UseCases = uc
 	m.context.ActiveWorkspace = "default"
 
-	msg := m.archiveCompletedTodosCmd("")()
+	msg := m.collectCompletedTodosCmd("")()
 	managed, ok := msg.(workspaceTodosManagedMsg)
 	if !ok {
 		t.Fatalf("expected workspaceTodosManagedMsg, got %T", msg)
 	}
 
-	if len(managed.archivedToday) != 1 || managed.archivedToday[0].ID != "a" {
-		t.Fatalf("expected completed todo in archivedToday payload, got %+v", managed.archivedToday)
+	if len(managed.completedToday) != 1 || managed.completedToday[0].ID != "a" {
+		t.Fatalf("expected completed todo in completedToday payload, got %+v", managed.completedToday)
 	}
 }
 
@@ -100,7 +100,7 @@ func TestUpdateWorkspaceTodosManagedMsgTracksTodayDoneOnDayRecord(t *testing.T) 
 
 	updated, cmd := m.Update(workspaceTodosManagedMsg{
 		todos:         WorkspaceTodos{Todos: []Todo{}},
-		archivedToday: []Todo{{ID: "done", Title: "Done today", Completed: true}},
+		completedToday: []Todo{{ID: "done", Title: "Done today", Completed: true}},
 	})
 	got := updated.(Model)
 
@@ -108,7 +108,7 @@ func TestUpdateWorkspaceTodosManagedMsgTracksTodayDoneOnDayRecord(t *testing.T) 
 		t.Fatalf("expected today done to be appended on day record, got %+v", got.day.Record.TodayDone)
 	}
 	if cmd == nil {
-		t.Fatalf("expected save-day command when archivedToday is present")
+		t.Fatalf("expected save-day command when completedToday is present")
 	}
 }
 
@@ -127,7 +127,7 @@ func TestUpdateWorkspaceTodosManagedMsgResolvesTodayDonePlaceholderWhenParentCom
 
 	updated, cmd := m.Update(workspaceTodosManagedMsg{
 		todos: WorkspaceTodos{Todos: []Todo{}},
-		archivedToday: []Todo{
+		completedToday: []Todo{
 			{
 				ID:        "parent",
 				Title:     "Parent",
@@ -150,7 +150,7 @@ func TestUpdateWorkspaceTodosManagedMsgResolvesTodayDonePlaceholderWhenParentCom
 		t.Fatalf("expected merged child subtree to be preserved, got %+v", got.day.Record.TodayDone[0].Subtodos)
 	}
 	if cmd == nil {
-		t.Fatalf("expected save-day command when archivedToday is present")
+		t.Fatalf("expected save-day command when completedToday is present")
 	}
 }
 

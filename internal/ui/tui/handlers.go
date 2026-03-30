@@ -399,14 +399,14 @@ func (m Model) handleDayConfiguredCommandKey(key string, n int) (Model, tea.Cmd,
 			cmds = append(cmds, clearStatusCmd())
 		}
 		if m.context.UseCases != nil && m.context.UseCases.ManageTodos != nil {
-			cmds = append(cmds, m.archiveCompletedTodosCmd(""))
+			cmds = append(cmds, m.collectCompletedTodosCmd(""))
 		} else {
 			// Fallback path: preserve existing behavior if use case wiring is unavailable.
 			harvested := collectFullyCompleted(m.workspace.Todos)
 			pruned := pruneCompletedTodos(m.workspace.Todos)
 			if len(pruned) != len(m.workspace.Todos) {
 				m.workspace.Todos = pruned
-				m.day.Record.TodayDone = mergeArchivedTodoTrees(m.day.Record.TodayDone, harvested)
+				m.day.Record.TodayDone = mergeTodayDoneTrees(m.day.Record.TodayDone, harvested)
 				cmds = append(cmds, m.saveWorkspaceTodosCmd(""))
 				cmds = append(cmds, m.saveDayCmd(""))
 			}
