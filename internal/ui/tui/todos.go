@@ -209,6 +209,33 @@ func flattenTodos(items []Todo) []Todo {
 	return out
 }
 
+func mergeArchivedTodoTrees(existing []Todo, incoming []Todo) []Todo {
+	merged := append([]Todo(nil), existing...)
+	for _, in := range incoming {
+		merged = mergeOrAppendTodo(merged, in)
+	}
+	return merged
+}
+
+func mergeOrAppendTodo(items []Todo, in Todo) []Todo {
+	for i := range items {
+		if items[i].ID != in.ID {
+			continue
+		}
+		items[i] = mergeTodoNode(items[i], in)
+		return items
+	}
+	return append(items, in)
+}
+
+func mergeTodoNode(existing Todo, incoming Todo) Todo {
+	existing.Completed = existing.Completed || incoming.Completed
+	for _, inSub := range incoming.Subtodos {
+		existing.Subtodos = mergeOrAppendTodo(existing.Subtodos, inSub)
+	}
+	return existing
+}
+
 func findTodoIndexByID(items []Todo, id string) int {
 	for i := range items {
 		if items[i].ID == id {

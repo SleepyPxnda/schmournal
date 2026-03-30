@@ -465,7 +465,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.workspace.Todos = msg.todos.Todos
 		m.workspace.Archived = msg.todos.Archived
 		if len(msg.archivedToday) > 0 {
-			m.day.Record.TodayDone = append(m.day.Record.TodayDone, msg.archivedToday...)
+			m.day.Record.TodayDone = mergeArchivedTodoTrees(m.day.Record.TodayDone, msg.archivedToday)
 			return m, m.saveDayCmd("")
 		}
 		if m.ui.Current == stateDayView && m.day.Selection.DayTab == 0 {

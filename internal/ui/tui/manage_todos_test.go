@@ -148,6 +148,51 @@ func TestUpdateWorkspaceTodosManagedMsgTracksTodayDoneOnDayRecord(t *testing.T) 
 	}
 }
 
+func TestUpdateWorkspaceTodosManagedMsgResolvesTodayDonePlaceholderWhenParentCompletes(t *testing.T) {
+	m := newDayViewTestModel(t)
+	m.day.Record.TodayDone = []Todo{
+		{
+			ID:        "parent",
+			Title:     "Parent",
+			Completed: false,
+			Subtodos: []Todo{
+				{ID: "child", Title: "Child", Completed: true},
+			},
+		},
+	}
+
+	updated, cmd := m.Update(workspaceTodosManagedMsg{
+		todos: WorkspaceTodos{
+			Todos:    []Todo{},
+			Archived: []Todo{},
+		},
+		archivedToday: []Todo{
+			{
+				ID:        "parent",
+				Title:     "Parent",
+				Completed: true,
+				Subtodos: []Todo{
+					{ID: "child", Title: "Child", Completed: true},
+				},
+			},
+		},
+	})
+	got := updated.(Model)
+
+	if len(got.day.Record.TodayDone) != 1 {
+		t.Fatalf("expected merged today done to keep one parent entry, got %+v", got.day.Record.TodayDone)
+	}
+	if !got.day.Record.TodayDone[0].Completed {
+		t.Fatalf("expected placeholder parent to resolve to completed, got %+v", got.day.Record.TodayDone[0])
+	}
+	if len(got.day.Record.TodayDone[0].Subtodos) != 1 || got.day.Record.TodayDone[0].Subtodos[0].ID != "child" {
+		t.Fatalf("expected merged child subtree to be preserved, got %+v", got.day.Record.TodayDone[0].Subtodos)
+	}
+	if cmd == nil {
+		t.Fatalf("expected save-day command when archivedToday is present")
+	}
+}
+
 func TestDayEscUsesManageTodosWhenConfigured(t *testing.T) {
 	uc := newUseCasesWithMockTodos(t, domainmodel.WorkspaceTodos{
 		Todos: []domainmodel.Todo{
