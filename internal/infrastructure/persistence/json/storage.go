@@ -59,16 +59,6 @@ func (s *StorageManager) TodosPath() (string, error) {
 	return filepath.Join(dir, "todos.json"), nil
 }
 
-// ExportsDir returns the directory for markdown exports.
-func (s *StorageManager) ExportsDir() (string, error) {
-	dir, err := s.Dir()
-	if err != nil {
-		return "", err
-	}
-	exportsDir := filepath.Join(dir, "exports")
-	return exportsDir, os.MkdirAll(exportsDir, 0o755)
-}
-
 // expandPath expands a leading ~ to the user's home directory.
 func expandPath(path string) (string, error) {
 	if !strings.HasPrefix(path, "~") {

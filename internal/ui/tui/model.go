@@ -2,7 +2,6 @@ package tui
 
 import (
 	"io"
-	"os"
 	"strings"
 	"time"
 
@@ -45,7 +44,6 @@ const (
 type recordsLoadedMsg struct{ records []DayRecord }
 type daySavedMsg struct{ label string }
 type dayDeletedMsg struct{}
-type exportedMsg struct{ path string }
 type clearStatusMsg struct{}
 type errMsg struct{ err error }
 type workspaceTodosLoadedMsg struct{ todos WorkspaceTodos }
@@ -492,15 +490,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.status.IsError = false
 		m.ui.Current = stateList
 		return m, tea.Batch(m.loadRecordsCmd(), clearStatusCmd())
-
-	case exportedMsg:
-		display := msg.path
-		if home, err := os.UserHomeDir(); err == nil {
-			display = strings.Replace(display, home, "~", 1)
-		}
-		m.status.Message = "✓ Exported → " + display
-		m.status.IsError = false
-		return m, clearStatusCmd()
 
 	case errMsg:
 		m.status.Message = "✗ " + msg.err.Error()

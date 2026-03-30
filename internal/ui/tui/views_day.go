@@ -49,7 +49,6 @@ func (m Model) viewDayView() string {
 			{kb.Notes, "notes"},
 			{kb.TodoOverview, "todo pane"},
 			{clockKey, clockLabel},
-			{kb.Export, "export"},
 			{"esc", "back"},
 		}
 	} else {
@@ -57,7 +56,6 @@ func (m Model) viewDayView() string {
 			{"←/→", "switch tab"},
 			{joinKeyLabels(kb.SetStartNow, kb.SetStartManual), "start"},
 			{joinKeyLabels(kb.SetEndNow, kb.SetEndManual), "end"},
-			{kb.Export, "export"},
 			{"esc", "back"},
 		}
 	}

@@ -27,7 +27,6 @@ type UseCaseSet struct {
 	SubmitWorkForm  *usecase.SubmitWorkFormUseCase
 	SetDayTimes     *usecase.SetDayTimesUseCase
 	UpdateNotes     *usecase.UpdateNotesUseCase
-	ExportDay       *usecase.ExportDayUseCase
 	ManageTodos     *usecase.ManageTodosUseCase
 }
 

@@ -34,7 +34,6 @@ func TestDefaultAppConfigKeybindsNotEmpty(t *testing.T) {
 	checkNotEmpty("list.open_today", lk.OpenToday)
 	checkNotEmpty("list.open_date", lk.OpenDate)
 	checkNotEmpty("list.delete", lk.Delete)
-	checkNotEmpty("list.export", lk.Export)
 	checkNotEmpty("list.week_view", lk.WeekView)
 	checkNotEmpty("list.stats_view", lk.StatsView)
 	checkNotEmpty("list.switch_workspace", lk.SwitchWorkspace)
@@ -50,7 +49,6 @@ func TestDefaultAppConfigKeybindsNotEmpty(t *testing.T) {
 	checkNotEmpty("day.set_end_manual", dk.SetEndManual)
 	checkNotEmpty("day.notes", dk.Notes)
 	checkNotEmpty("day.todo_overview", dk.TodoOverview)
-	checkNotEmpty("day.export", dk.Export)
 	checkNotEmpty("day.clock_start", dk.ClockStart)
 	checkNotEmpty("day.clock_stop", dk.ClockStop)
 }
@@ -93,7 +91,7 @@ func TestValidateAndNormalizeDuplicateListKeybindReturnsError(t *testing.T) {
 func TestValidateAndNormalizeDuplicateDayKeybindReturnsError(t *testing.T) {
 	cfg := DefaultAppConfig()
 	cfg.Keybinds.Day.AddWork = "x"
-	cfg.Keybinds.Day.Export = "x"
+	cfg.Keybinds.Day.AddBreak = "x"
 
 	if err := cfg.ValidateAndNormalize(); err == nil {
 		t.Error("ValidateAndNormalize() expected error for duplicate day keybind, got nil")

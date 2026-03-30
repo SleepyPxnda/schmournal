@@ -11,7 +11,6 @@ const (
 	listActionOpenDate
 	listActionOpenSelected
 	listActionDeleteSelected
-	listActionExportSelected
 	listActionOpenWeekView
 	listActionOpenStatsView
 	listActionOpenWorkspacePicker
@@ -29,8 +28,6 @@ func listActionForKey(key string, kb domainmodel.ListKeybinds) listAction {
 		return listActionOpenSelected
 	case kb.Delete:
 		return listActionDeleteSelected
-	case kb.Export:
-		return listActionExportSelected
 	case kb.WeekView:
 		return listActionOpenWeekView
 	case kb.StatsView:

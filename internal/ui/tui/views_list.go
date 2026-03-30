@@ -22,7 +22,6 @@ func (m Model) viewList() string {
 		[2]string{kb.WeekView, "week"},
 		[2]string{kb.StatsView, "stats"},
 		[2]string{kb.Delete, "delete"},
-		[2]string{kb.Export, "export"},
 		[2]string{"/", "filter"},
 	)
 	if len(m.context.Config.Workspaces) > 0 {

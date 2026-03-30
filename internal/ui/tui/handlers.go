@@ -37,10 +37,6 @@ func (m Model) handleListKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.ui.Current = stateConfirmDelete
 				return m, nil
 			}
-		case listActionExportSelected:
-			if item, ok := m.listState.Model.SelectedItem().(dayListItem); ok {
-				return m, m.exportDayCmd(item.rec)
-			}
 		case listActionOpenWeekView:
 			return m.openWeekView()
 		case listActionOpenStatsView:
@@ -367,8 +363,6 @@ func (m Model) handleDayConfiguredCommandKey(key string, n int) (Model, tea.Cmd,
 		m.day.Viewport.GotoTop()
 		m.day.Viewport.SetContent(m.renderDayContent())
 		return m, nil, true
-	case kb.Export:
-		return m, m.exportDayCmd(m.day.Record), true
 	case kb.ClockStart:
 		if !m.clock.Running {
 			modelOut, cmd := m.openClockForm()
@@ -459,7 +453,6 @@ func (m Model) isDayCommandKey(key string) bool {
 		key == kb.SetEndManual ||
 		key == kb.Notes ||
 		key == kb.TodoOverview ||
-		key == kb.Export ||
 		key == kb.ClockStart ||
 		key == kb.ClockStop
 }

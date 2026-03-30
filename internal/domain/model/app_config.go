@@ -20,7 +20,6 @@ type ListKeybinds struct {
 	OpenToday       string `toml:"open_today"`
 	OpenDate        string `toml:"open_date"`
 	Delete          string `toml:"delete"`
-	Export          string `toml:"export"`
 	WeekView        string `toml:"week_view"`
 	StatsView       string `toml:"stats_view"`
 	SwitchWorkspace string `toml:"switch_workspace"`
@@ -38,7 +37,6 @@ type DayKeybinds struct {
 	SetEndManual   string `toml:"set_end_manual"`
 	Notes          string `toml:"notes"`
 	TodoOverview   string `toml:"todo_overview"`
-	Export         string `toml:"export"`
 	ClockStart     string `toml:"clock_start"`
 	ClockStop      string `toml:"clock_stop"`
 }
@@ -70,7 +68,6 @@ func DefaultAppConfig() AppConfig {
 				OpenToday:       "n",
 				OpenDate:        "c",
 				Delete:          "d",
-				Export:          "x",
 				WeekView:        "v",
 				StatsView:       "s",
 				SwitchWorkspace: "p",
@@ -86,7 +83,6 @@ func DefaultAppConfig() AppConfig {
 				SetEndManual:   "F",
 				Notes:          "n",
 				TodoOverview:   "t",
-				Export:         "x",
 				ClockStart:     "c",
 				ClockStop:      "c",
 			},
@@ -141,7 +137,6 @@ func (cfg *AppConfig) ValidateAndNormalize() error {
 	fill(&lk.OpenToday, dl.OpenToday)
 	fill(&lk.OpenDate, dl.OpenDate)
 	fill(&lk.Delete, dl.Delete)
-	fill(&lk.Export, dl.Export)
 	fill(&lk.WeekView, dl.WeekView)
 	fill(&lk.StatsView, dl.StatsView)
 	fill(&lk.SwitchWorkspace, dl.SwitchWorkspace)
@@ -158,17 +153,16 @@ func (cfg *AppConfig) ValidateAndNormalize() error {
 	fill(&dk.SetEndManual, dd.SetEndManual)
 	fill(&dk.Notes, dd.Notes)
 	fill(&dk.TodoOverview, dd.TodoOverview)
-	fill(&dk.Export, dd.Export)
 	fill(&dk.ClockStart, dd.ClockStart)
 	fill(&dk.ClockStop, dd.ClockStop)
 
-	if err := checkDuplicates(lk.Quit, lk.OpenToday, lk.OpenDate, lk.Delete, lk.Export, lk.WeekView, lk.StatsView, lk.SwitchWorkspace); err != nil {
+	if err := checkDuplicates(lk.Quit, lk.OpenToday, lk.OpenDate, lk.Delete, lk.WeekView, lk.StatsView, lk.SwitchWorkspace); err != nil {
 		return err
 	}
 	dayKeys := []string{
 		dk.AddWork, dk.AddBreak, dk.Edit, dk.Delete,
 		dk.SetStartNow, dk.SetStartManual, dk.SetEndNow, dk.SetEndManual,
-		dk.Notes, dk.TodoOverview, dk.Export, dk.ClockStart,
+		dk.Notes, dk.TodoOverview, dk.ClockStart,
 	}
 	if dk.ClockStop != dk.ClockStart {
 		dayKeys = append(dayKeys, dk.ClockStop)

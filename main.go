@@ -102,20 +102,10 @@ func newUseCaseSetFactory(stateRepo repository.StateRepository) tui.UseCaseSetFa
 			return tui.UseCaseSet{}, fmt.Errorf("failed to initialize storage manager: %w", err)
 		}
 
-		exportDir, err := storageManager.ExportsDir()
-		if err != nil {
-			return tui.UseCaseSet{}, fmt.Errorf("failed to determine exports directory: %w", err)
-		}
-
 		timeProvider := infrastructuretime.NewRealTimeProvider()
 		dayRepo := json.NewFileSystemDayRecordRepository(storageManager)
 		todoRepo := json.NewFileSystemTodoRepository(storageManager)
 		todoOps := service.NewTodoOperations()
-		exportGenerator := service.NewExportGenerator(
-			service.NewDurationFormatter(),
-			service.NewEntryConsolidator(),
-			timeProvider,
-		)
 
 		return tui.UseCaseSet{
 			DayRecordRepo:      dayRepo,
@@ -133,7 +123,6 @@ func newUseCaseSetFactory(stateRepo repository.StateRepository) tui.UseCaseSetFa
 			SubmitWorkForm:     usecase.NewSubmitWorkFormUseCase(dayRepo, timeProvider),
 			SetDayTimes:        usecase.NewSetDayTimesUseCase(dayRepo),
 			UpdateNotes:        usecase.NewUpdateNotesUseCase(dayRepo),
-			ExportDay:          usecase.NewExportDayUseCase(dayRepo, exportDir, exportGenerator),
 			ManageTodos:        usecase.NewManageTodosUseCase(todoRepo, todoOps),
 		}, nil
 	}

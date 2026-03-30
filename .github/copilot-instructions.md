@@ -33,7 +33,6 @@ Do not introduce reverse dependencies.
 - Workspace todos: `todos.json` per workspace (active TODOs only).
 - App config: TOML in `~/.config/schmournal.config`.
 - App runtime state: JSON in `~/.config/schmournal.state`.
-- Exports: Markdown files in `~/.journal/exports/`.
 - List view shortcuts include both weekly summary (`week_view`, default `v`) and stats overview (`stats_view`, default `s`).
 
 Important: Active TODOs are workspace-global, not day-specific. Day records persist a `today_done` snapshot of TODO trees completed on that day for day-level review. Completed TODOs are pruned from active workspace todos and are not persisted in a workspace archive list.

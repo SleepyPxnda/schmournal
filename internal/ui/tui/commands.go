@@ -120,15 +120,3 @@ func (m Model) collectCompletedTodosCmd(label string) tea.Cmd {
 	}
 }
 
-func (m Model) exportDayCmd(rec DayRecord) tea.Cmd {
-	return func() tea.Msg {
-		if m.context.UseCases == nil || m.context.UseCases.ExportDay == nil {
-			return errMsg{err: fmt.Errorf("export use case is not configured")}
-		}
-		output, err := m.context.UseCases.ExportDay.Execute(usecase.ExportDayInput{Date: rec.Date})
-		if err != nil {
-			return errMsg{err: err}
-		}
-		return exportedMsg{path: output.FilePath}
-	}
-}
