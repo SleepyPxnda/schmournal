@@ -56,6 +56,7 @@ func (m Model) handleListKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 func (m Model) handleDayViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	n := len(m.day.Record.Entries)
+	todoEnabled := m.context.Config.Modules.TodoEnabled
 	if !todoEnabled && m.day.Selection.Pane == 1 {
 		// Clamp selection to the main pane when TODOs are disabled so TODO-specific
 		// navigation/actions are effectively unbound.
