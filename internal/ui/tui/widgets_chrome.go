@@ -7,8 +7,12 @@ import (
 )
 
 func (m Model) renderHeader(title, subtitle string) string {
+	return m.renderHeaderStyled(title, subtitle, headerSubtitleStyle)
+}
+
+func (m Model) renderHeaderStyled(title, subtitle string, subtitleStyle lipgloss.Style) string {
 	left := headerTitleStyle.Render(title)
-	right := headerSubtitleStyle.Render(subtitle)
+	right := subtitleStyle.Render(subtitle)
 	gap := m.window.Width - lipgloss.Width(left) - lipgloss.Width(right)
 	if gap < 0 {
 		gap = 0
