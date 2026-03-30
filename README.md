@@ -3,7 +3,7 @@
 > A minimal, distraction-free **terminal work journal** built with Go and the [Charm](https://charm.sh) TUI stack, themed with **Catppuccin Mocha**.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Go Version](https://img.shields.io/badge/Go-1.21%2B-00ADD8?logo=go)](go.mod)
+[![Go Version](https://img.shields.io/badge/Go-1.25.0-00ADD8?logo=go)](go.mod)
 
 <!-- PLACEHOLDER: Add a hero GIF or banner screenshot here -->
 <!-- Suggested: a short terminal recording showing list → day view → stats -->
@@ -22,7 +22,7 @@
 - **Work entry logging** — log tasks with an optional project, a duration, and free-form notes
 - **Break logging** — track breaks separately so your summaries stay accurate
 - **Multi-project split** — enter comma-separated projects on any entry to split the duration evenly across all of them automatically
-- **Clock / timer** — start a live in-terminal stopwatch; elapsed time is rounded to the nearest minute and saved automatically when stopped
+- **Clock / timer** — start a live in-terminal stopwatch; elapsed time is truncated to whole minutes (rounded down) and saved automatically when stopped
 - **Workspace TODOs** — one global, hierarchical TODO list per workspace with subtasks, indentation, and completion toggling
 - **Workspaces** — maintain entirely separate journal directories (e.g. personal vs. work) and switch between them instantly
 - **Daily export** — generate a formatted Markdown report grouped by project with per-project subtotals
@@ -120,7 +120,7 @@ sudo dpkg -i schmournal_2.1_amd64.deb
 
 ### Build from source
 
-Requires **Go 1.21+**.
+Requires **Go 1.25+**.
 
 ```bash
 git clone https://github.com/SleepyPxnda/schmournal.git
@@ -315,7 +315,7 @@ Track time against a task in real time without estimating duration up front.
 
 1. From the **Work Log tab**, press `c` to open the **Start Clock** form — enter a task name and an optional project (comma-separated for multi-project splits).
 2. Press `enter` to start the timer. A live clock panel appears on the right side of the Work Log tab, updating every second.
-3. Press `c` again at any time to **stop** the timer. The elapsed duration is rounded to the nearest minute and saved as a new work entry automatically. If multiple projects were entered the duration is split evenly.
+3. Press `c` again at any time to **stop** the timer. The elapsed duration is truncated to whole minutes (rounded down) — e.g. 89 seconds logs as 1 minute — and saved as a new work entry automatically. If multiple projects were entered the duration is split evenly across them.
 
 ![Day view – Clock running](images/day-worklog-clock.png)
 
@@ -468,9 +468,9 @@ storage_path      = "~/.journal/work"
 weekly_hours_goal = 37.5
 
 # ── Keybinds ──────────────────────────────────────────────────────────────────
-# Single-character strings only. Arrow keys, Enter, Esc, and Tab always keep
-# their built-in roles and cannot be rebound.
-# Duplicate binds within the same view context are not allowed.
+# Keybinds use Bubble Tea key strings (e.g. "q", "ctrl+s", "f1", "left").
+# Enter, Esc, Tab, and the arrow keys always keep their built-in roles and
+# cannot be rebound. Duplicate binds within the same view context are not allowed.
 
 [keybinds.list]
 quit             = "q"   # Quit the application
@@ -523,7 +523,9 @@ Each `[[workspaces]]` block can override `storage_path`, `weekly_hours_goal`, an
 ## 🗃 Storage layout
 
 ```
-~/.config/schmournal.config   ← app configuration (TOML)
+~/.config/
+├── schmournal.config         ← app configuration (TOML)
+└── schmournal.state          ← runtime state: last active workspace (JSON)
 
 ~/.journal/                   ← default storage root
 ├── 2024-01-15.json           ← one file per logged day
