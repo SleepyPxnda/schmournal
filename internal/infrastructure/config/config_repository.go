@@ -60,6 +60,17 @@ func (r *FileSystemConfigRepository) Load() (model.AppConfig, error) {
 	if err != nil {
 		return def, err
 	}
+
+	// Apply defaults for boolean module fields that were absent in older configs.
+	// We cannot rely on ValidateAndNormalize for booleans because false is a valid
+	// explicit value and also the zero value; TOML metadata tells us which is which.
+	if !md.IsDefined("modules", "clock_enabled") {
+		cfg.Modules.ClockEnabled = true
+	}
+	if !md.IsDefined("modules", "todo_enabled") {
+		cfg.Modules.TodoEnabled = true
+	}
+
 	if err := cfg.ValidateAndNormalize(); err != nil {
 		return def, err
 	}

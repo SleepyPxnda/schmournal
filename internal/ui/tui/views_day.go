@@ -19,39 +19,59 @@ func (m Model) viewDayView() string {
 
 	var footerKeys [][2]string
 	kb := m.context.Config.Keybinds.Day
+	clockEnabled := m.context.Config.Modules.ClockEnabled
+	todoEnabled := m.context.Config.Modules.TodoEnabled
 	if m.day.Selection.DayTab == 0 {
-		clockKey := kb.ClockStart
-		clockLabel := "start clock"
-		if m.clock.Running {
-			clockKey = kb.ClockStop
-			clockLabel = "stop clock"
-		}
 		editLabel := "edit"
 		deleteLabel := "del"
-		if m.day.Selection.Pane == 1 {
+		if todoEnabled && m.day.Selection.Pane == 1 {
 			editLabel = "edit todo"
 			deleteLabel = "del todo"
 		}
 		footerKeys = [][2]string{
 			{"←/→", "switch tab"},
 			{"j/k", "select"},
-			{"tab", "pane/indent"},
-			{"S-tab", "outdent"},
-			{"S-↑/↓", "reorder"},
-			{kb.AddWork, "work"},
-			{kb.AddBreak, "break"},
-			{kb.Edit, editLabel},
-			{kb.Delete, deleteLabel},
-			{"backspace", "del todo"},
-			{"space", "toggle todo"},
-			{joinKeyLabels(kb.SetStartNow, kb.SetStartManual), "start"},
-			{joinKeyLabels(kb.SetEndNow, kb.SetEndManual), "end"},
-			{kb.Notes, "notes"},
-			{kb.TodoOverview, "todo pane"},
-			{clockKey, clockLabel},
-			{kb.Export, "export"},
-			{"esc", "back"},
 		}
+		if todoEnabled {
+			footerKeys = append(footerKeys,
+				[2]string{"tab", "pane/indent"},
+				[2]string{"S-tab", "outdent"},
+				[2]string{"S-↑/↓", "reorder"},
+			)
+		}
+		footerKeys = append(footerKeys,
+			[2]string{kb.AddWork, "work"},
+			[2]string{kb.AddBreak, "break"},
+			[2]string{kb.Edit, editLabel},
+			[2]string{kb.Delete, deleteLabel},
+		)
+		if todoEnabled {
+			footerKeys = append(footerKeys,
+				[2]string{"backspace", "del todo"},
+				[2]string{"space", "toggle todo"},
+			)
+		}
+		footerKeys = append(footerKeys,
+			[2]string{joinKeyLabels(kb.SetStartNow, kb.SetStartManual), "start"},
+			[2]string{joinKeyLabels(kb.SetEndNow, kb.SetEndManual), "end"},
+			[2]string{kb.Notes, "notes"},
+		)
+		if todoEnabled {
+			footerKeys = append(footerKeys, [2]string{kb.TodoOverview, "todo pane"})
+		}
+		if clockEnabled {
+			clockKey := kb.ClockStart
+			clockLabel := "start clock"
+			if m.clock.Running {
+				clockKey = kb.ClockStop
+				clockLabel = "stop clock"
+			}
+			footerKeys = append(footerKeys, [2]string{clockKey, clockLabel})
+		}
+		footerKeys = append(footerKeys,
+			[2]string{kb.Export, "export"},
+			[2]string{"esc", "back"},
+		)
 	} else {
 		footerKeys = [][2]string{
 			{"←/→", "switch tab"},
