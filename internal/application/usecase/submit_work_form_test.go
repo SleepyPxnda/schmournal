@@ -1,6 +1,7 @@
 package usecase
 
 import (
+	"strings"
 	"testing"
 	"time"
 )
@@ -107,3 +108,57 @@ func TestSubmitWorkForm_EditSingleWorkEntryReturnsUpdatedLabel(t *testing.T) {
 	}
 }
 
+func TestSubmitWorkForm_RejectsZeroDuration(t *testing.T) {
+	repo := NewMockDayRecordRepository()
+	timeProvider := newTestTimeProviderAt(time.Date(2026, 3, 30, 9, 0, 0, 0, time.UTC))
+	uc := NewSubmitWorkFormUseCase(repo, timeProvider)
+
+	_, err := uc.Execute(SubmitWorkFormInput{
+		Date:      "2026-03-30",
+		Task:      "Lunch",
+		Duration:  "0m",
+		IsBreak:   true,
+		EditEntry: -1,
+	})
+	if err == nil || !strings.Contains(err.Error(), "duration must be positive") {
+		t.Fatalf("expected positive duration validation error, got %v", err)
+	}
+}
+
+func TestSubmitWorkForm_EditBreakEnforcesBreakInvariants(t *testing.T) {
+	repo := NewMockDayRecordRepository()
+	timeProvider := newTestTimeProviderAt(time.Date(2026, 3, 30, 9, 0, 0, 0, time.UTC))
+	if err := repo.Save(mapDayRecordDTOToDomain(DayRecordDTO{
+		Date: "2026-03-30",
+		Entries: []WorkEntryDTO{
+			{ID: "w1", Task: "Old work", Project: "Backend", DurationMin: 30, IsBreak: false},
+		},
+	})); err != nil {
+		t.Fatalf("failed to seed repo: %v", err)
+	}
+
+	uc := NewSubmitWorkFormUseCase(repo, timeProvider)
+	out, err := uc.Execute(SubmitWorkFormInput{
+		Date:      "2026-03-30",
+		Task:      "Lunch",
+		Duration:  "15m",
+		IsBreak:   true,
+		EditEntry: 0,
+	})
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if len(out.Record.Entries) != 1 {
+		t.Fatalf("expected 1 entry, got %d", len(out.Record.Entries))
+	}
+	entry := out.Record.Entries[0]
+	if !entry.IsBreak {
+		t.Fatalf("expected edited entry to be break, got %+v", entry)
+	}
+	if entry.Project != "" {
+		t.Fatalf("expected edited break project to be empty, got %q", entry.Project)
+	}
+	if entry.Task != "Lunch" || entry.DurationMin != 15 {
+		t.Fatalf("unexpected edited break values: %+v", entry)
+	}
+}

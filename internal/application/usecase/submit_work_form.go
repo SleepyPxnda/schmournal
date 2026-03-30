@@ -51,6 +51,10 @@ func (uc *SubmitWorkFormUseCase) Execute(input SubmitWorkFormInput) (*SubmitWork
 	if err != nil {
 		return nil, err
 	}
+	durationMin := int(dur.Minutes())
+	if durationMin <= 0 {
+		return nil, fmt.Errorf("duration must be positive")
+	}
 	if uc.dayRepo == nil || uc.timeProvider == nil {
 		return nil, fmt.Errorf("work entry dependencies are not configured")
 	}
@@ -65,15 +69,18 @@ func (uc *SubmitWorkFormUseCase) Execute(input SubmitWorkFormInput) (*SubmitWork
 	selectedIdx := -1
 	if input.IsBreak {
 		if editIdx >= 0 && editIdx < len(record.Entries) {
-			record.Entries[editIdx].Task = task
-			record.Entries[editIdx].DurationMin = int(dur.Minutes())
+			entry := &record.Entries[editIdx]
+			entry.Task = task
+			entry.DurationMin = durationMin
+			entry.IsBreak = true
+			entry.Project = ""
 			selectedIdx = editIdx
 		} else {
 			taskLower := strings.ToLower(task)
 			merged := false
 			for i := range record.Entries {
 				if record.Entries[i].IsBreak && strings.ToLower(record.Entries[i].Task) == taskLower {
-					record.Entries[i].DurationMin += int(dur.Minutes())
+					record.Entries[i].DurationMin += durationMin
 					selectedIdx = i
 					merged = true
 					break
@@ -83,7 +90,7 @@ func (uc *SubmitWorkFormUseCase) Execute(input SubmitWorkFormInput) (*SubmitWork
 				record.Entries = append(record.Entries, model.WorkEntry{
 					ID:          uc.timeProvider.GenerateID(),
 					Task:        task,
-					DurationMin: int(dur.Minutes()),
+					DurationMin: durationMin,
 					IsBreak:     true,
 				})
 				selectedIdx = len(record.Entries) - 1
@@ -164,4 +171,3 @@ func (uc *SubmitWorkFormUseCase) distributeWorkEntries(task, projectRaw string, 
 	}
 	return newEntries, nil
 }
-
