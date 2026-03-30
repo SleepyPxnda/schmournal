@@ -99,9 +99,10 @@ func (m Model) archiveCompletedTodosCmd(label string) tea.Cmd {
 			workspace = "default"
 		}
 
-		if _, err := m.context.UseCases.ManageTodos.ArchiveCompletedTodos(usecase.ArchiveCompletedTodosInput{
+		output, err := m.context.UseCases.ManageTodos.ArchiveCompletedTodos(usecase.ArchiveCompletedTodosInput{
 			Workspace: workspace,
-		}); err != nil {
+		})
+		if err != nil {
 			return errMsg{err: err}
 		}
 
@@ -111,7 +112,11 @@ func (m Model) archiveCompletedTodosCmd(label string) tea.Cmd {
 		if err != nil {
 			return errMsg{err: err}
 		}
-		return workspaceTodosManagedMsg{todos: toUIWorkspaceTodos(todos), label: label}
+		return workspaceTodosManagedMsg{
+			todos:         toUIWorkspaceTodos(todos),
+			archivedToday: toUITodos(output.ArchivedTodos),
+			label:         label,
+		}
 	}
 }
 

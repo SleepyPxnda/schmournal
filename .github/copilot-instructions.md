@@ -36,7 +36,7 @@ Do not introduce reverse dependencies.
 - Exports: Markdown files in `~/.journal/exports/`.
 - List view shortcuts include both weekly summary (`week_view`, default `v`) and stats overview (`stats_view`, default `s`).
 
-Important: TODOs are workspace-global, not day-specific.
+Important: Active TODOs are workspace-global, not day-specific. Day records may persist a `today_done` snapshot of TODO trees completed and archived on that day for day-level review.
 
 ## Layer-Specific Coding Rules
 

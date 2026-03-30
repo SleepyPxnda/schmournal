@@ -72,6 +72,9 @@ func TestManageTodos_ArchiveCompletedTodos_Success(t *testing.T) {
 	if output.RemainingCount != 1 {
 		t.Errorf("expected 1 remaining, got %d", output.RemainingCount)
 	}
+	if len(output.ArchivedTodos) != 1 || output.ArchivedTodos[0].ID != "1" {
+		t.Errorf("expected archived todo IDs in output, got %+v", output.ArchivedTodos)
+	}
 
 	// Verify state
 	saved, err := repo.Load("default")
@@ -123,9 +126,20 @@ func TestManageTodos_ArchiveCompletedTodos_NestedTodos(t *testing.T) {
 	}
 
 	// First todo is fully complete → archived
-	// Second todo is incomplete but has a completed child → child should be pruned
+	// Second todo is incomplete but has a completed child:
+	// - child should be pruned from active todos
+	// - archived output should include contextual parent branch
 	if output.ArchivedCount != 1 {
 		t.Errorf("expected 1 archived (fully complete tree), got %d", output.ArchivedCount)
+	}
+	if len(output.ArchivedTodos) != 2 {
+		t.Fatalf("expected fully done tree + contextual branch in output, got %+v", output.ArchivedTodos)
+	}
+	if output.ArchivedTodos[1].ID != "2" || output.ArchivedTodos[1].Completed {
+		t.Fatalf("expected second archived output item to be incomplete parent context, got %+v", output.ArchivedTodos[1])
+	}
+	if len(output.ArchivedTodos[1].Subtodos) != 1 || output.ArchivedTodos[1].Subtodos[0].ID != "2a" {
+		t.Fatalf("expected contextual parent to include completed child, got %+v", output.ArchivedTodos[1].Subtodos)
 	}
 
 	// Verify state
@@ -145,15 +159,23 @@ func TestManageTodos_ArchiveCompletedTodos_NestedTodos(t *testing.T) {
 		t.Errorf("expected completed child to be pruned, got %d subtodos", len(saved.Todos[0].Subtodos))
 	}
 
-	// Archived should contain the fully complete tree (parent 1 + child 1a)
-	if len(saved.Archived) != 1 {
-		t.Fatalf("expected 1 archived todo, got %d", len(saved.Archived))
+	// Archived should contain both:
+	// - fully complete tree (parent 1 + child 1a)
+	// - contextual branch for parent 2 -> child 2a
+	if len(saved.Archived) != 2 {
+		t.Fatalf("expected 2 archived todos, got %d", len(saved.Archived))
 	}
 	if saved.Archived[0].ID != "1" {
 		t.Error("expected parent 1 to be archived")
 	}
 	if len(saved.Archived[0].Subtodos) != 1 {
 		t.Error("expected child 1a to be archived with parent")
+	}
+	if saved.Archived[1].ID != "2" || saved.Archived[1].Completed {
+		t.Fatalf("expected parent 2 context to be archived as incomplete reference, got %+v", saved.Archived[1])
+	}
+	if len(saved.Archived[1].Subtodos) != 1 || saved.Archived[1].Subtodos[0].ID != "2a" {
+		t.Fatalf("expected contextual branch to include completed child 2a, got %+v", saved.Archived[1].Subtodos)
 	}
 }
 

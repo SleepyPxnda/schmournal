@@ -417,7 +417,7 @@ func (m Model) renderTodosPanel(w int) string {
 		if m.day.Selection.Pane != 1 {
 			b.WriteString(dayViewMutedStyle.Render("  t open todo overview") + "\n")
 		}
-		if len(m.workspace.Archived) == 0 {
+		if len(m.workspace.Archived) == 0 && len(m.day.Record.TodayDone) == 0 {
 			return b.String()
 		}
 	}
@@ -468,6 +468,13 @@ func (m Model) renderTodosPanel(w int) string {
 			}
 		}
 	}
+	if len(m.day.Record.TodayDone) > 0 {
+		b.WriteString(dayViewDividerStyle.Render(strings.Repeat("─", w)) + "\n")
+		b.WriteString(dayViewMutedStyle.Render("  Today Done") + "\n")
+		for _, td := range m.day.Record.TodayDone {
+			b.WriteString(renderArchivedTodoTree(td, 0, w))
+		}
+	}
 	if len(m.workspace.Archived) > 0 {
 		b.WriteString(dayViewDividerStyle.Render(strings.Repeat("─", w)) + "\n")
 		b.WriteString(dayViewMutedStyle.Render("  Archived") + "\n")
@@ -486,7 +493,13 @@ func (m Model) renderTodosPanel(w int) string {
 func renderArchivedTodoTree(td Todo, depth int, w int) string {
 	var b strings.Builder
 	indent := strings.Repeat("  ", depth)
-	line := todoArchivedStyle.Render(indent + "  ✓ " + td.Title)
+	mark := "✓"
+	style := todoArchivedStyle
+	if !td.Completed {
+		mark = "-"
+		style = dayViewMutedStyle
+	}
+	line := style.Render(indent + "  " + mark + " " + td.Title)
 	if lipgloss.Width(line) > w {
 		line = truncateRunes(line, w)
 	}

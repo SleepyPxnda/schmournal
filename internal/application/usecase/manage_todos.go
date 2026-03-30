@@ -17,6 +17,7 @@ type ArchiveCompletedTodosInput struct {
 type ArchiveCompletedTodosOutput struct {
 	ArchivedCount  int
 	RemainingCount int
+	ArchivedTodos  []TodoDTO
 }
 
 // ManageTodosUseCase handles TODO operations like archiving and pruning.
@@ -56,9 +57,9 @@ func (uc *ManageTodosUseCase) ArchiveCompletedTodos(input ArchiveCompletedTodosI
 		return nil, fmt.Errorf("failed to load TODOs: %w", err)
 	}
 
-	// Collect fully completed TODOs
-	completedTodos := uc.todoOps.CollectFullyCompleted(workspaceTodos.Todos)
-	archivedCount := len(completedTodos)
+	// Collect completed TODOs with contextual parent trees for display.
+	completedTodos := uc.todoOps.CollectCompletedWithContext(workspaceTodos.Todos)
+	archivedCount := len(uc.todoOps.CollectFullyCompleted(workspaceTodos.Todos))
 
 	// Prune completed TODOs from active list
 	workspaceTodos.Todos = uc.todoOps.PruneCompleted(workspaceTodos.Todos)
@@ -74,6 +75,7 @@ func (uc *ManageTodosUseCase) ArchiveCompletedTodos(input ArchiveCompletedTodosI
 	return &ArchiveCompletedTodosOutput{
 		ArchivedCount:  archivedCount,
 		RemainingCount: len(workspaceTodos.Todos),
+		ArchivedTodos:  mapDomainTodosToDTO(completedTodos),
 	}, nil
 }
 

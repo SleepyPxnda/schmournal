@@ -127,6 +127,27 @@ func TestUpdateWorkspaceTodosManagedMsgRefreshesDayViewportAndStatus(t *testing.
 	}
 }
 
+func TestUpdateWorkspaceTodosManagedMsgTracksTodayDoneOnDayRecord(t *testing.T) {
+	m := newDayViewTestModel(t)
+	m.ui.Current = stateList
+
+	updated, cmd := m.Update(workspaceTodosManagedMsg{
+		todos: WorkspaceTodos{
+			Todos:    []Todo{},
+			Archived: []Todo{{ID: "arch", Title: "Archived", Completed: true}},
+		},
+		archivedToday: []Todo{{ID: "done", Title: "Done today", Completed: true}},
+	})
+	got := updated.(Model)
+
+	if len(got.day.Record.TodayDone) != 1 || got.day.Record.TodayDone[0].ID != "done" {
+		t.Fatalf("expected today done to be appended on day record, got %+v", got.day.Record.TodayDone)
+	}
+	if cmd == nil {
+		t.Fatalf("expected save-day command when archivedToday is present")
+	}
+}
+
 func TestDayEscUsesManageTodosWhenConfigured(t *testing.T) {
 	uc := newUseCasesWithMockTodos(t, domainmodel.WorkspaceTodos{
 		Todos: []domainmodel.Todo{
@@ -157,4 +178,3 @@ func TestDayEscUsesManageTodosWhenConfigured(t *testing.T) {
 		t.Fatalf("expected no immediate local todo mutation when manage use case is configured, got todos=%+v archived=%+v", got.workspace.Todos, got.workspace.Archived)
 	}
 }
-

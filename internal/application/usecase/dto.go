@@ -16,6 +16,7 @@ type DayRecordDTO struct {
 	EndTime   string
 	Entries   []WorkEntryDTO
 	Notes     string
+	TodayDone []TodoDTO
 }
 
 type TodoDTO struct {
@@ -47,6 +48,7 @@ func mapDomainDayRecordToDTO(rec model.DayRecord) DayRecordDTO {
 		EndTime:   rec.EndTime,
 		Entries:   entries,
 		Notes:     rec.Notes,
+		TodayDone: mapDomainTodosToDTO(rec.TodayDone),
 	}
 }
 
@@ -67,6 +69,7 @@ func mapDayRecordDTOToDomain(rec DayRecordDTO) model.DayRecord {
 		EndTime:   rec.EndTime,
 		Entries:   entries,
 		Notes:     rec.Notes,
+		TodayDone: mapTodosDTOToDomain(rec.TodayDone),
 	}
 }
 

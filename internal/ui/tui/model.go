@@ -50,13 +50,14 @@ type clearStatusMsg struct{}
 type errMsg struct{ err error }
 type workspaceTodosLoadedMsg struct{ todos WorkspaceTodos }
 type workspaceTodosManagedMsg struct {
-	todos WorkspaceTodos
-	label string
+	todos         WorkspaceTodos
+	archivedToday []Todo
+	label         string
 }
 type workFormSubmittedMsg struct {
-	record    DayRecord
-	label     string
-	entryIdx  int
+	record   DayRecord
+	label    string
+	entryIdx int
 }
 type clockTickMsg struct{}
 
@@ -463,6 +464,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case workspaceTodosManagedMsg:
 		m.workspace.Todos = msg.todos.Todos
 		m.workspace.Archived = msg.todos.Archived
+		if len(msg.archivedToday) > 0 {
+			m.day.Record.TodayDone = append(m.day.Record.TodayDone, msg.archivedToday...)
+			return m, m.saveDayCmd("")
+		}
 		if m.ui.Current == stateDayView && m.day.Selection.DayTab == 0 {
 			m.day.Viewport.SetContent(m.renderDayContent())
 		}
