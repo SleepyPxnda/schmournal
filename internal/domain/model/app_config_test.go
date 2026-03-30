@@ -5,6 +5,33 @@ import (
 	"time"
 )
 
+func TestDefaultAppConfigModulesEnabled(t *testing.T) {
+	cfg := DefaultAppConfig()
+	if !cfg.Modules.ClockEnabled {
+		t.Error("DefaultAppConfig().Modules.ClockEnabled = false, want true")
+	}
+	if !cfg.Modules.TodoEnabled {
+		t.Error("DefaultAppConfig().Modules.TodoEnabled = false, want true")
+	}
+}
+
+func TestValidateAndNormalizePreservesModuleSettings(t *testing.T) {
+	cfg := DefaultAppConfig()
+	cfg.Modules.ClockEnabled = false
+	cfg.Modules.TodoEnabled = false
+
+	if err := cfg.ValidateAndNormalize(); err != nil {
+		t.Fatalf("ValidateAndNormalize() error: %v", err)
+	}
+	if cfg.Modules.ClockEnabled {
+		t.Error("ValidateAndNormalize() reset ClockEnabled to true, want false preserved")
+	}
+	if cfg.Modules.TodoEnabled {
+		t.Error("ValidateAndNormalize() reset TodoEnabled to true, want false preserved")
+	}
+}
+
+
 func TestDefaultAppConfigWeeklyHoursGoal(t *testing.T) {
 	cfg := DefaultAppConfig()
 	if cfg.WeeklyHoursGoal != 40 {

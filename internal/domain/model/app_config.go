@@ -49,11 +49,18 @@ type Keybinds struct {
 	Day  DayKeybinds  `toml:"day"`
 }
 
+// Modules holds feature-toggle settings for optional UI modules.
+type Modules struct {
+	ClockEnabled bool `toml:"clock_enabled"`
+	TodoEnabled  bool `toml:"todo_enabled"`
+}
+
 // AppConfig is the top-level application configuration.
 type AppConfig struct {
 	StoragePath     string            `toml:"storage_path"`
 	WeeklyHoursGoal float64           `toml:"weekly_hours_goal"`
 	WorkDays        []string          `toml:"work_days"`
+	Modules         Modules           `toml:"modules"`
 	Keybinds        Keybinds          `toml:"keybinds"`
 	Workspaces      []WorkspaceConfig `toml:"workspaces"`
 }
@@ -64,6 +71,10 @@ func DefaultAppConfig() AppConfig {
 		StoragePath:     "~/.journal",
 		WeeklyHoursGoal: 40,
 		WorkDays:        []string{"monday", "tuesday", "wednesday", "thursday", "friday"},
+		Modules: Modules{
+			ClockEnabled: true,
+			TodoEnabled:  true,
+		},
 		Keybinds: Keybinds{
 			List: ListKeybinds{
 				Quit:            "q",

@@ -9,6 +9,132 @@ import (
 	"github.com/sleepypxnda/schmournal/internal/domain/model"
 )
 
+func TestFileSystemConfigRepository_LoadDefaultsModulesWhenAbsentInOldConfig(t *testing.T) {
+	dir := t.TempDir()
+	repo, err := NewFileSystemConfigRepository(dir)
+	if err != nil {
+		t.Fatalf("NewFileSystemConfigRepository() error = %v", err)
+	}
+
+	// Old config without a [modules] section at all (simulating pre-module config).
+	cfgPath := filepath.Join(dir, "schmournal.config")
+	oldCfg := `storage_path = "~/.journal"
+weekly_hours_goal = 40.0
+work_days = ["monday", "tuesday", "wednesday", "thursday", "friday"]
+
+[keybinds.list]
+quit = "q"
+open_today = "n"
+open_date = "c"
+delete = "d"
+export = "x"
+week_view = "v"
+stats_view = "s"
+switch_workspace = "p"
+
+[keybinds.day]
+add_work = "w"
+add_break = "b"
+edit = "e"
+delete = "d"
+set_start_now = "s"
+set_start_manual = "S"
+set_end_now = "f"
+set_end_manual = "F"
+notes = "n"
+todo_overview = "t"
+export = "x"
+clock_start = "c"
+clock_stop = "c"
+`
+	if err := os.WriteFile(cfgPath, []byte(oldCfg), 0o644); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	loaded, err := repo.Load()
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	// [modules] section was absent; both should default to enabled.
+	if !loaded.Modules.ClockEnabled {
+		t.Error("Load() ClockEnabled = false for old config without [modules], want true (default enabled)")
+	}
+	if !loaded.Modules.TodoEnabled {
+		t.Error("Load() TodoEnabled = false for old config without [modules], want true (default enabled)")
+	}
+
+	// Migration should have been triggered; migrated file should contain [modules].
+	newRaw, err := os.ReadFile(cfgPath)
+	if err != nil {
+		t.Fatalf("ReadFile() error = %v", err)
+	}
+	if !strings.Contains(string(newRaw), "clock_enabled") {
+		t.Error("migrated config should contain clock_enabled")
+	}
+	if !strings.Contains(string(newRaw), "todo_enabled") {
+		t.Error("migrated config should contain todo_enabled")
+	}
+}
+
+func TestFileSystemConfigRepository_LoadPreservesExplicitFalseModules(t *testing.T) {
+	dir := t.TempDir()
+	repo, err := NewFileSystemConfigRepository(dir)
+	if err != nil {
+		t.Fatalf("NewFileSystemConfigRepository() error = %v", err)
+	}
+
+	// Config that explicitly disables both modules.
+	cfgPath := filepath.Join(dir, "schmournal.config")
+	oldCfg := `storage_path = "~/.journal"
+weekly_hours_goal = 40.0
+work_days = ["monday", "tuesday", "wednesday", "thursday", "friday"]
+
+[modules]
+clock_enabled = false
+todo_enabled = false
+
+[keybinds.list]
+quit = "q"
+open_today = "n"
+open_date = "c"
+delete = "d"
+export = "x"
+week_view = "v"
+stats_view = "s"
+switch_workspace = "p"
+
+[keybinds.day]
+add_work = "w"
+add_break = "b"
+edit = "e"
+delete = "d"
+set_start_now = "s"
+set_start_manual = "S"
+set_end_now = "f"
+set_end_manual = "F"
+notes = "n"
+todo_overview = "t"
+export = "x"
+clock_start = "c"
+clock_stop = "c"
+`
+	if err := os.WriteFile(cfgPath, []byte(oldCfg), 0o644); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	loaded, err := repo.Load()
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if loaded.Modules.ClockEnabled {
+		t.Error("Load() ClockEnabled = true, want false (explicitly set in config)")
+	}
+	if loaded.Modules.TodoEnabled {
+		t.Error("Load() TodoEnabled = true, want false (explicitly set in config)")
+	}
+}
+
+
 func TestFileSystemConfigRepository_LoadSaveRoundTrip(t *testing.T) {
 	repo, err := NewFileSystemConfigRepository(t.TempDir())
 	if err != nil {
