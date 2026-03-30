@@ -1,4 +1,4 @@
-package ui
+package tui
 
 import (
 	"errors"
@@ -24,6 +24,7 @@ type UseCaseSet struct {
 	AddWorkEntry    *usecase.AddWorkEntryUseCase
 	UpdateWorkEntry *usecase.UpdateWorkEntryUseCase
 	DeleteWorkEntry *usecase.DeleteWorkEntryUseCase
+	SubmitWorkForm  *usecase.SubmitWorkFormUseCase
 	SetDayTimes     *usecase.SetDayTimesUseCase
 	UpdateNotes     *usecase.UpdateNotesUseCase
 	ExportDay       *usecase.ExportDayUseCase

@@ -1,4 +1,4 @@
-package ui
+package tui
 
 import (
 	"fmt"
@@ -17,18 +17,18 @@ func (m Model) handleListKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	filtering := m.listState.Model.FilterState() == list.Filtering
 	if !filtering {
 		kb := m.context.Config.Keybinds.List
-		switch msg.String() {
-		case kb.Quit, "esc":
+		switch listActionForKey(msg.String(), kb) {
+		case listActionQuit:
 			return m, tea.Quit
-		case kb.OpenToday:
+		case listActionOpenToday:
 			return m.openDayViewToday()
-		case kb.OpenDate:
+		case listActionOpenDate:
 			return m.openDateInput()
-		case "enter":
+		case listActionOpenSelected:
 			if item, ok := m.listState.Model.SelectedItem().(dayListItem); ok {
 				return m.openDayView(item.rec)
 			}
-		case kb.Delete:
+		case listActionDeleteSelected:
 			idx := m.listState.Model.Index()
 			if idx >= 0 && idx < len(m.listState.Records) {
 				m.delete.Day = true
@@ -37,15 +37,15 @@ func (m Model) handleListKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.ui.Current = stateConfirmDelete
 				return m, nil
 			}
-		case kb.Export:
+		case listActionExportSelected:
 			if item, ok := m.listState.Model.SelectedItem().(dayListItem); ok {
 				return m, m.exportDayCmd(item.rec)
 			}
-		case kb.WeekView:
+		case listActionOpenWeekView:
 			return m.openWeekView()
-		case kb.StatsView:
+		case listActionOpenStatsView:
 			return m.openStatsView()
-		case kb.SwitchWorkspace:
+		case listActionOpenWorkspacePicker:
 			return m.openWorkspacePicker()
 		}
 	}
@@ -56,58 +56,93 @@ func (m Model) handleListKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 func (m Model) handleDayViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	n := len(m.day.Record.Entries)
-	kb := m.context.Config.Keybinds.Day
 	inTodoPane := m.day.Selection.DayTab == 0 && m.day.Selection.Pane == 1
-	if inTodoPane {
-		switch msg.Type {
-		case tea.KeyRunes:
-			if m.todoEditor.InputMode {
-				m.appendTodoDraft(string(msg.Runes))
-				m.day.Viewport.SetContent(m.renderDayContent())
-				return m, nil
-			}
-			// In TODO navigation mode, begin inline drafting immediately for printable
-			// characters that are not bound to other day-view commands.
-			if m.shouldStartInlineTodoDraft(msg) {
-				m.todoEditor.InputMode = true
-				m.todoEditor.Draft = string(msg.Runes)
-				m.day.Viewport.SetContent(m.renderDayContent())
-				return m, nil
-			}
-		case tea.KeyBackspace:
-			if m.todoEditor.InputMode {
-				m.backspaceTodoDraft()
-				m.day.Viewport.SetContent(m.renderDayContent())
-				return m, nil
-			}
-			if m.deleteSelectedTodoNow() {
-				m.day.Viewport.SetContent(m.renderDayContent())
-				return m, m.saveWorkspaceTodosCmd("✓ TODO deleted")
-			}
-			return m, nil
-		}
+
+	updated, cmd, handled := m.handleDayTodoInlineInput(msg, inTodoPane)
+	if handled {
+		return updated, cmd
 	}
-	if inTodoPane && m.todoEditor.InputMode {
-		switch msg.String() {
-		case "tab", "shift+tab", "delete", "up", "down", "left", "right", "shift+up", "shift+down":
-			return m, nil
-		}
+
+	if inTodoPane && m.todoEditor.InputMode && isBlockedTodoInputKey(msg.String()) {
+		return m, nil
 	}
-	switch msg.String() {
+
+	updated, cmd, handled = m.handleDayNavigationKey(msg.String(), n)
+	if handled {
+		return updated, cmd
+	}
+
+	updated, cmd, handled = m.handleDayConfiguredCommandKey(msg.String(), n)
+	if handled {
+		return updated, cmd
+	}
+
+	var viewportCmd tea.Cmd
+	m.day.Viewport, viewportCmd = m.day.Viewport.Update(msg)
+	return m, viewportCmd
+}
+
+func (m Model) handleDayTodoInlineInput(msg tea.KeyMsg, inTodoPane bool) (Model, tea.Cmd, bool) {
+	if !inTodoPane {
+		return m, nil, false
+	}
+
+	switch msg.Type {
+	case tea.KeyRunes:
+		if m.todoEditor.InputMode {
+			m.appendTodoDraft(string(msg.Runes))
+			m.day.Viewport.SetContent(m.renderDayContent())
+			return m, nil, true
+		}
+		// In TODO navigation mode, begin inline drafting immediately for printable
+		// characters that are not bound to other day-view commands.
+		if m.shouldStartInlineTodoDraft(msg) {
+			m.todoEditor.InputMode = true
+			m.todoEditor.Draft = string(msg.Runes)
+			m.day.Viewport.SetContent(m.renderDayContent())
+			return m, nil, true
+		}
+	case tea.KeyBackspace:
+		if m.todoEditor.InputMode {
+			m.backspaceTodoDraft()
+			m.day.Viewport.SetContent(m.renderDayContent())
+			return m, nil, true
+		}
+		if m.deleteSelectedTodoNow() {
+			m.day.Viewport.SetContent(m.renderDayContent())
+			return m, m.saveWorkspaceTodosCmd("✓ TODO deleted"), true
+		}
+		return m, nil, true
+	}
+
+	return m, nil, false
+}
+
+func isBlockedTodoInputKey(key string) bool {
+	switch key {
+	case "tab", "shift+tab", "delete", "up", "down", "left", "right", "shift+up", "shift+down":
+		return true
+	default:
+		return false
+	}
+}
+
+func (m Model) handleDayNavigationKey(key string, n int) (Model, tea.Cmd, bool) {
+	switch key {
 	case "left":
 		if m.day.Selection.DayTab > 0 {
 			m.day.Selection.DayTab--
 			m.day.Viewport.GotoTop()
 			m.day.Viewport.SetContent(m.renderDayContent())
 		}
-		return m, nil
+		return m, nil, true
 	case "right":
 		if m.day.Selection.DayTab < 1 {
 			m.day.Selection.DayTab++
 			m.day.Viewport.GotoTop()
 			m.day.Viewport.SetContent(m.renderDayContent())
 		}
-		return m, nil
+		return m, nil, true
 	case "j", "down":
 		if m.day.Selection.DayTab == 0 {
 			if m.day.Selection.Pane == 0 && m.day.Selection.EntryIdx < n-1 {
@@ -119,7 +154,7 @@ func (m Model) handleDayViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.day.Viewport.SetContent(m.renderDayContent())
 			}
 		}
-		return m, nil
+		return m, nil, true
 	case "k", "up":
 		if m.day.Selection.DayTab == 0 {
 			if m.day.Selection.Pane == 0 && m.day.Selection.EntryIdx > 0 {
@@ -131,48 +166,48 @@ func (m Model) handleDayViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.day.Viewport.SetContent(m.renderDayContent())
 			}
 		}
-		return m, nil
+		return m, nil, true
 	case "tab":
 		if m.day.Selection.DayTab == 0 {
 			if m.day.Selection.Pane == 1 && m.todoEditor.InputMode {
-				return m, nil
+				return m, nil, true
 			}
 			if m.day.Selection.Pane == 1 && !m.todoEditor.InputMode {
 				if m.indentSelectedTodo() {
 					m.day.Viewport.SetContent(m.renderDayContent())
-					return m, m.saveWorkspaceTodosCmd("✓ TODO indented")
+					return m, m.saveWorkspaceTodosCmd("✓ TODO indented"), true
 				}
 				// In focused TODO navigation mode, tab is reserved for indenting and does not cycle panes.
-				return m, nil
+				return m, nil, true
 			}
 			m.day.Selection.Pane = (m.day.Selection.Pane + 1) % 2
 			m.day.Viewport.SetContent(m.renderDayContent())
 		}
-		return m, nil
+		return m, nil, true
 	case "shift+tab":
 		if m.day.Selection.DayTab == 0 && m.day.Selection.Pane == 1 && m.outdentSelectedTodo() {
 			m.day.Viewport.SetContent(m.renderDayContent())
-			return m, m.saveWorkspaceTodosCmd("✓ TODO outdented")
+			return m, m.saveWorkspaceTodosCmd("✓ TODO outdented"), true
 		}
-		return m, nil
+		return m, nil, true
 	case "shift+up":
 		if m.day.Selection.DayTab == 0 && m.day.Selection.Pane == 1 && m.moveSelectedTodoDelta(-1) {
 			m.day.Viewport.SetContent(m.renderDayContent())
-			return m, m.saveWorkspaceTodosCmd("✓ TODO moved up")
+			return m, m.saveWorkspaceTodosCmd("✓ TODO moved up"), true
 		}
-		return m, nil
+		return m, nil, true
 	case "shift+down":
 		if m.day.Selection.DayTab == 0 && m.day.Selection.Pane == 1 && m.moveSelectedTodoDelta(1) {
 			m.day.Viewport.SetContent(m.renderDayContent())
-			return m, m.saveWorkspaceTodosCmd("✓ TODO moved down")
+			return m, m.saveWorkspaceTodosCmd("✓ TODO moved down"), true
 		}
-		return m, nil
+		return m, nil, true
 	case "delete":
 		if m.day.Selection.DayTab == 0 && m.day.Selection.Pane == 1 && m.deleteSelectedTodoNow() {
 			m.day.Viewport.SetContent(m.renderDayContent())
-			return m, m.saveWorkspaceTodosCmd("✓ TODO deleted")
+			return m, m.saveWorkspaceTodosCmd("✓ TODO deleted"), true
 		}
-		return m, nil
+		return m, nil, true
 	case "enter":
 		if m.day.Selection.DayTab == 0 && m.day.Selection.Pane == 1 {
 			if m.todoEditor.InputMode {
@@ -180,65 +215,78 @@ func (m Model) handleDayViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.exitTodoInputMode()
 				m.day.Viewport.SetContent(m.renderDayContent())
 				if saved {
-					return m, m.saveWorkspaceTodosCmd("✓ TODO saved")
+					return m, m.saveWorkspaceTodosCmd("✓ TODO saved"), true
 				}
-				return m, nil
+				return m, nil, true
 			}
 			m.todoEditor.InputMode = true
 			m.todoEditor.Draft = ""
 			m.day.Viewport.SetContent(m.renderDayContent())
 		}
-		return m, nil
+		return m, nil, true
 	case " ":
 		// Some terminals report space as a dedicated key type (not KeyRunes).
 		// Preserve typing spaces while drafting a TODO title.
 		if m.day.Selection.DayTab == 0 && m.day.Selection.Pane == 1 && m.todoEditor.InputMode {
 			m.appendTodoDraft(" ")
 			m.day.Viewport.SetContent(m.renderDayContent())
-			return m, nil
+			return m, nil, true
 		}
 		if m.day.Selection.DayTab == 0 && m.day.Selection.Pane == 1 && m.toggleSelectedTodo() {
 			m.day.Viewport.SetContent(m.renderDayContent())
-			return m, m.saveWorkspaceTodosCmd("✓ TODO updated")
+			return m, m.saveWorkspaceTodosCmd("✓ TODO updated"), true
 		}
-		return m, nil
+		return m, nil, true
 	case "a":
 		if m.day.Selection.DayTab == 0 && m.day.Selection.Pane == 1 {
 			m.todoEditor.InputMode = true
 			m.todoEditor.Draft = ""
 			m.day.Viewport.SetContent(m.renderDayContent())
-			return m, nil
+			return m, nil, true
 		}
-		return m, nil
+		return m, nil, true
 	case "A":
 		if m.day.Selection.DayTab == 0 && m.day.Selection.Pane == 1 && m.todoSelection.Top >= 0 && m.todoSelection.Top < len(m.workspace.Todos) {
 			if m.todoSelection.Sub >= 0 && m.todoSelection.Sub < len(m.workspace.Todos[m.todoSelection.Top].Subtodos) {
 				newSubIdx2 := len(m.workspace.Todos[m.todoSelection.Top].Subtodos[m.todoSelection.Sub].Subtodos)
-				return m.openTodoForm(m.todoSelection.Top, m.todoSelection.Sub, newSubIdx2)
+				modelOut, cmd := m.openTodoForm(m.todoSelection.Top, m.todoSelection.Sub, newSubIdx2)
+				return modelOut.(Model), cmd, true
 			}
 			newSubIdx := len(m.workspace.Todos[m.todoSelection.Top].Subtodos)
-			return m.openTodoForm(m.todoSelection.Top, newSubIdx, -1)
+			modelOut, cmd := m.openTodoForm(m.todoSelection.Top, newSubIdx, -1)
+			return modelOut.(Model), cmd, true
 		}
-		return m, nil
+		return m, nil, true
 	case "X":
 		if m.day.Selection.DayTab == 0 && m.day.Selection.Pane == 1 && len(m.workspace.Archived) > 0 {
-			m.workspace.Archived = []Todo{}
-			m.day.Viewport.SetContent(m.renderDayContent())
-			return m, m.saveWorkspaceTodosCmd("✓ Archive cleared")
+			return m, m.clearArchiveCmd("✓ Archive cleared"), true
 		}
-		return m, nil
+		return m, nil, true
+	}
+
+	return m, nil, false
+}
+
+func (m Model) handleDayConfiguredCommandKey(key string, n int) (Model, tea.Cmd, bool) {
+	kb := m.context.Config.Keybinds.Day
+	switch key {
 	case kb.AddWork:
-		return m.openWorkForm(false, -1)
+		modelOut, cmd := m.openWorkForm(false, -1)
+		return modelOut.(Model), cmd, true
 	case kb.AddBreak:
-		return m.openWorkForm(true, -1)
+		modelOut, cmd := m.openWorkForm(true, -1)
+		return modelOut.(Model), cmd, true
 	case kb.Edit:
 		if m.day.Selection.DayTab == 0 && m.day.Selection.Pane == 1 {
-			return m.openTodoFormForSelection()
+			modelOut, cmd := m.openTodoFormForSelection()
+			return modelOut.(Model), cmd, true
 		}
 		if m.day.Selection.EntryIdx >= 0 && m.day.Selection.EntryIdx < n {
-			return m.openWorkForm(m.day.Record.Entries[m.day.Selection.EntryIdx].IsBreak, m.day.Selection.EntryIdx)
+			modelOut, cmd := m.openWorkForm(m.day.Record.Entries[m.day.Selection.EntryIdx].IsBreak, m.day.Selection.EntryIdx)
+			return modelOut.(Model), cmd, true
 		}
-		return m.openNotesEditor()
+		modelOut, cmd := m.openNotesEditor()
+		return modelOut.(Model), cmd, true
 	case kb.Delete:
 		if m.day.Selection.DayTab == 0 && m.day.Selection.Pane == 1 {
 			if m.todoSelection.Top >= 0 && m.todoSelection.Top < len(m.workspace.Todos) {
@@ -247,25 +295,25 @@ func (m Model) handleDayViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.delete.PrevState = stateDayView
 				m.ui.Current = stateConfirmDelete
 			}
-			return m, nil
+			return m, nil, true
 		}
 		if m.day.Selection.EntryIdx >= 0 && m.day.Selection.EntryIdx < n {
 			m.delete.Day = false
 			m.delete.Idx = m.day.Selection.EntryIdx
 			m.delete.PrevState = stateDayView
 			m.ui.Current = stateConfirmDelete
-			return m, nil
+			return m, nil, true
 		}
 		m.delete.Day = true
 		m.delete.Idx = -1 // current day
 		m.delete.PrevState = stateDayView
 		m.ui.Current = stateConfirmDelete
-		return m, nil
+		return m, nil, true
 	case kb.SetStartNow:
 		m.day.Record.StartTime = time.Now().Format("15:04")
 		m.day.Viewport.SetContent(m.renderDayContent())
 		if m.context.UseCases == nil || m.context.UseCases.SetDayTimes == nil {
-			return m, func() tea.Msg { return errMsg{err: fmt.Errorf("set day times use case is not configured")} }
+			return m, func() tea.Msg { return errMsg{err: fmt.Errorf("set day times use case is not configured")} }, true
 		}
 		start := m.day.Record.StartTime
 		end := m.day.Record.EndTime
@@ -279,14 +327,15 @@ func (m Model) handleDayViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				return errMsg{err: err}
 			}
 			return daySavedMsg{label: "✓ Start time set to " + start}
-		}
+		}, true
 	case kb.SetStartManual:
-		return m.openTimeInput(true)
+		modelOut, cmd := m.openTimeInput(true)
+		return modelOut.(Model), cmd, true
 	case kb.SetEndNow:
 		m.day.Record.EndTime = time.Now().Format("15:04")
 		m.day.Viewport.SetContent(m.renderDayContent())
 		if m.context.UseCases == nil || m.context.UseCases.SetDayTimes == nil {
-			return m, func() tea.Msg { return errMsg{err: fmt.Errorf("set day times use case is not configured")} }
+			return m, func() tea.Msg { return errMsg{err: fmt.Errorf("set day times use case is not configured")} }, true
 		}
 		start := m.day.Record.StartTime
 		end := m.day.Record.EndTime
@@ -300,11 +349,13 @@ func (m Model) handleDayViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				return errMsg{err: err}
 			}
 			return daySavedMsg{label: "✓ End time set to " + end}
-		}
+		}, true
 	case kb.SetEndManual:
-		return m.openTimeInput(false)
+		modelOut, cmd := m.openTimeInput(false)
+		return modelOut.(Model), cmd, true
 	case kb.Notes:
-		return m.openNotesEditor()
+		modelOut, cmd := m.openNotesEditor()
+		return modelOut.(Model), cmd, true
 	case kb.TodoOverview:
 		if m.day.Selection.DayTab == 0 {
 			if m.day.Selection.Pane != 1 {
@@ -314,28 +365,31 @@ func (m Model) handleDayViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.exitTodoInputMode()
 			}
 			m.day.Viewport.SetContent(m.renderDayContent())
-			return m, nil
+			return m, nil, true
 		}
 		m.day.Selection.DayTab = 0
 		m.day.Selection.Pane = 1
 		m.day.Viewport.GotoTop()
 		m.day.Viewport.SetContent(m.renderDayContent())
-		return m, nil
+		return m, nil, true
 	case kb.Export:
-		return m, m.exportDayCmd(m.day.Record)
+		return m, m.exportDayCmd(m.day.Record), true
 	case kb.ClockStart:
 		if !m.clock.Running {
-			return m.openClockForm()
+			modelOut, cmd := m.openClockForm()
+			return modelOut.(Model), cmd, true
 		}
 		if kb.ClockStart == kb.ClockStop {
-			return m.stopClock()
+			modelOut, cmd := m.stopClock()
+			return modelOut.(Model), cmd, true
 		}
-		return m, nil
+		return m, nil, true
 	case kb.ClockStop:
 		if m.clock.Running {
-			return m.stopClock()
+			modelOut, cmd := m.stopClock()
+			return modelOut.(Model), cmd, true
 		}
-		return m, nil
+		return m, nil, true
 	case "esc":
 		clockWasRunning := m.clock.Running
 		m.clock.Running = false
@@ -349,19 +403,22 @@ func (m Model) handleDayViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.status.IsError = false
 			cmds = append(cmds, clearStatusCmd())
 		}
-		// Move fully-completed todos to the archive, then prune them from active.
-		harvested := collectFullyCompleted(m.workspace.Todos)
-		pruned := pruneCompletedTodos(m.workspace.Todos)
-		if len(pruned) != len(m.workspace.Todos) {
-			m.workspace.Archived = append(m.workspace.Archived, harvested...)
-			m.workspace.Todos = pruned
-			cmds = append(cmds, m.saveWorkspaceTodosCmd(""))
+		if m.context.UseCases != nil && m.context.UseCases.ManageTodos != nil {
+			cmds = append(cmds, m.archiveCompletedTodosCmd(""))
+		} else {
+			// Fallback path: preserve existing behavior if use case wiring is unavailable.
+			harvested := collectFullyCompleted(m.workspace.Todos)
+			pruned := pruneCompletedTodos(m.workspace.Todos)
+			if len(pruned) != len(m.workspace.Todos) {
+				m.workspace.Archived = append(m.workspace.Archived, harvested...)
+				m.workspace.Todos = pruned
+				cmds = append(cmds, m.saveWorkspaceTodosCmd(""))
+			}
 		}
-		return m, tea.Batch(cmds...)
+		return m, tea.Batch(cmds...), true
 	}
-	var cmd tea.Cmd
-	m.day.Viewport, cmd = m.day.Viewport.Update(msg)
-	return m, cmd
+
+	return m, nil, false
 }
 
 func (m Model) openTodoFormForSelection() (tea.Model, tea.Cmd) {
@@ -494,235 +551,37 @@ func (m Model) handleWorkFormKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.status.IsError = true
 			return m, clearStatusCmd()
 		}
-		dur, err := parseDuration(durStr)
-		if err != nil {
+		if _, err := parseDuration(durStr); err != nil {
 			m.status.Message = "✗ " + err.Error()
 			m.status.IsError = true
 			return m, clearStatusCmd()
 		}
+		if m.context.UseCases == nil || m.context.UseCases.SubmitWorkForm == nil {
+			return m, func() tea.Msg { return errMsg{err: fmt.Errorf("submit work form use case is not configured")} }
+		}
+
+		date := m.day.Record.Date
 		projectRaw := strings.TrimSpace(m.workForm.ProjectInput.Value())
 		isBreak := m.workForm.IsBreakEntry
 		editIdx := m.workForm.EditEntryIdx
-		wasSplit := false
-		originalEntries := append([]WorkEntry(nil), m.day.Record.Entries...)
-		mergedBreakIdx := -1
-		distributedEntries := []WorkEntry{}
-
-		if editIdx >= 0 && editIdx < len(m.day.Record.Entries) && isBreak {
-			// Update existing break entry in-place.
-			m.day.Record.Entries[editIdx].Task = task
-			m.day.Record.Entries[editIdx].DurationMin = int(dur.Minutes())
-			m.day.Selection.EntryIdx = editIdx
-		} else if isBreak {
-			// For new breaks: merge into an existing break with the same label (case-insensitive).
-			taskLower := strings.ToLower(task)
-			merged := false
-			for i, e := range m.day.Record.Entries {
-				if e.IsBreak && strings.ToLower(e.Task) == taskLower {
-					m.day.Record.Entries[i].DurationMin += int(dur.Minutes())
-					m.day.Selection.EntryIdx = i
-					mergedBreakIdx = i
-					merged = true
-					break
-				}
+		return m, func() tea.Msg {
+			out, err := m.context.UseCases.SubmitWorkForm.Execute(usecase.SubmitWorkFormInput{
+				Date:       date,
+				Task:       task,
+				ProjectRaw: projectRaw,
+				Duration:   durStr,
+				IsBreak:    isBreak,
+				EditEntry:  editIdx,
+			})
+			if err != nil {
+				return errMsg{err: err}
 			}
-			if !merged {
-				entry := WorkEntry{
-					ID:          newID(),
-					Task:        task,
-					DurationMin: int(dur.Minutes()),
-					IsBreak:     true,
-				}
-				m.day.Record.Entries = append(m.day.Record.Entries, entry)
-				m.day.Selection.EntryIdx = len(m.day.Record.Entries) - 1
-			}
-		} else {
-			// Split comma-separated projects and distribute duration evenly.
-			// This applies both to new entries and edited entries.
-			rawParts := strings.Split(projectRaw, ",")
-			projects := make([]string, 0, len(rawParts))
-			for _, p := range rawParts {
-				if trimmed := strings.TrimSpace(p); trimmed != "" {
-					projects = append(projects, trimmed)
-				}
-			}
-			if len(projects) == 0 {
-				projects = []string{""}
-			}
-			totalMin := int(dur.Minutes())
-			base := totalMin / len(projects)
-			remainder := totalMin % len(projects)
-			newEntries := make([]WorkEntry, 0, len(projects))
-			for i, proj := range projects {
-				mins := base
-				if i < remainder {
-					mins++ // distribute remainder evenly: one extra minute to first N projects
-				}
-				if mins == 0 {
-					continue // skip zero-duration entries when duration < number of projects
-				}
-				newEntries = append(newEntries, WorkEntry{
-					ID:          newID(),
-					Task:        task,
-					Project:     proj,
-					DurationMin: mins,
-					IsBreak:     false,
-				})
-			}
-			if len(newEntries) == 0 {
-				m.status.Message = "✗ Duration too short to distribute across projects"
-				m.status.IsError = true
-				return m, clearStatusCmd()
-			}
-			distributedEntries = append(distributedEntries, newEntries...)
-			wasSplit = len(projects) > 1
-			if editIdx >= 0 && editIdx < len(m.day.Record.Entries) {
-				// Replace the edited entry with the split entries.
-				updated := make([]WorkEntry, 0, len(m.day.Record.Entries)-1+len(newEntries))
-				updated = append(updated, m.day.Record.Entries[:editIdx]...)
-				updated = append(updated, newEntries...)
-				updated = append(updated, m.day.Record.Entries[editIdx+1:]...)
-				m.day.Record.Entries = updated
-				m.day.Selection.EntryIdx = editIdx + len(newEntries) - 1
-			} else {
-				m.day.Record.Entries = append(m.day.Record.Entries, newEntries...)
-				m.day.Selection.EntryIdx = len(m.day.Record.Entries) - 1
+			return workFormSubmittedMsg{
+				record:   toUIDayRecord(out.Record),
+				label:    out.Label,
+				entryIdx: out.SelectedEntryIdx,
 			}
 		}
-
-		m.ui.Current = stateDayView
-		m.day.Viewport.SetContent(m.renderDayContent())
-		m.scrollToSelected()
-
-		label := "✓ Work entry logged"
-		if editIdx >= 0 && !wasSplit {
-			label = "✓ Entry updated"
-		} else if isBreak {
-			label = "✓ Break logged"
-		} else if wasSplit {
-			label = "✓ Work entries split across projects"
-		}
-
-		if m.context.UseCases == nil ||
-			m.context.UseCases.AddWorkEntry == nil ||
-			m.context.UseCases.UpdateWorkEntry == nil ||
-			m.context.UseCases.DeleteWorkEntry == nil ||
-			m.context.UseCases.LoadDayRecord == nil {
-			return m, func() tea.Msg { return errMsg{err: fmt.Errorf("work entry use cases are not configured")} }
-		}
-		var persistErr error
-		date := m.day.Record.Date
-		durationMin := int(dur.Minutes())
-
-		if isBreak {
-			switch {
-			case editIdx >= 0 && editIdx < len(originalEntries):
-				_, persistErr = m.context.UseCases.UpdateWorkEntry.Execute(usecase.UpdateWorkEntryInput{
-					Date:        date,
-					EntryID:     originalEntries[editIdx].ID,
-					Task:        task,
-					DurationMin: durationMin,
-				})
-			case mergedBreakIdx >= 0 && mergedBreakIdx < len(m.day.Record.Entries):
-				_, persistErr = m.context.UseCases.UpdateWorkEntry.Execute(usecase.UpdateWorkEntryInput{
-					Date:        date,
-					EntryID:     m.day.Record.Entries[mergedBreakIdx].ID,
-					DurationMin: m.day.Record.Entries[mergedBreakIdx].DurationMin,
-				})
-			case m.day.Selection.EntryIdx >= 0 && m.day.Selection.EntryIdx < len(m.day.Record.Entries):
-				out, err := m.context.UseCases.AddWorkEntry.Execute(usecase.AddWorkEntryInput{
-					Date:        date,
-					Task:        task,
-					DurationMin: durationMin,
-					IsBreak:     true,
-				})
-				if err != nil {
-					persistErr = err
-				} else {
-					m.day.Record.Entries[m.day.Selection.EntryIdx].ID = out.EntryID
-				}
-			default:
-				persistErr = fmt.Errorf("unable to resolve break persistence target")
-			}
-		} else {
-			if len(distributedEntries) == 0 {
-				persistErr = fmt.Errorf("no entries to persist after project distribution")
-			} else if editIdx >= 0 && editIdx < len(originalEntries) {
-				if len(distributedEntries) == 1 {
-					project := distributedEntries[0].Project
-					if project == "" {
-						project = "-"
-					}
-					_, persistErr = m.context.UseCases.UpdateWorkEntry.Execute(usecase.UpdateWorkEntryInput{
-						Date:        date,
-						EntryID:     originalEntries[editIdx].ID,
-						Task:        task,
-						Project:     project,
-						DurationMin: distributedEntries[0].DurationMin,
-					})
-				} else {
-					_, persistErr = m.context.UseCases.DeleteWorkEntry.Execute(usecase.DeleteWorkEntryInput{
-						Date:    date,
-						EntryID: originalEntries[editIdx].ID,
-					})
-					if persistErr == nil {
-						for i, entry := range distributedEntries {
-							out, addErr := m.context.UseCases.AddWorkEntry.Execute(usecase.AddWorkEntryInput{
-								Date:        date,
-								Task:        entry.Task,
-								Project:     entry.Project,
-								DurationMin: entry.DurationMin,
-								IsBreak:     false,
-							})
-							if addErr != nil {
-								persistErr = addErr
-								break
-							}
-							newIdx := editIdx + i
-							if newIdx >= 0 && newIdx < len(m.day.Record.Entries) {
-								m.day.Record.Entries[newIdx].ID = out.EntryID
-							}
-						}
-					}
-				}
-			} else {
-				startIdx := len(m.day.Record.Entries) - len(distributedEntries)
-				for i, entry := range distributedEntries {
-					out, addErr := m.context.UseCases.AddWorkEntry.Execute(usecase.AddWorkEntryInput{
-						Date:        date,
-						Task:        entry.Task,
-						Project:     entry.Project,
-						DurationMin: entry.DurationMin,
-						IsBreak:     false,
-					})
-					if addErr != nil {
-						persistErr = addErr
-						break
-					}
-					newIdx := startIdx + i
-					if newIdx >= 0 && newIdx < len(m.day.Record.Entries) {
-						m.day.Record.Entries[newIdx].ID = out.EntryID
-					}
-				}
-			}
-		}
-
-		if persistErr != nil {
-			if m.day.Record.Date != "" {
-				if fresh, loadErr := m.context.UseCases.LoadDayRecord.ExecuteDTO(usecase.LoadDayRecordInput{Date: m.day.Record.Date}); loadErr == nil {
-					m.day.Record = toUIDayRecord(fresh)
-				} else {
-					m.day.Record.Entries = originalEntries
-				}
-			} else {
-				m.day.Record.Entries = originalEntries
-			}
-			m.day.Viewport.SetContent(m.renderDayContent())
-			m.status.Message = "✗ " + persistErr.Error()
-			m.status.IsError = true
-			return m, clearStatusCmd()
-		}
-		return m, func() tea.Msg { return daySavedMsg{label: label} }
 
 	case tea.KeyEsc:
 		m.ui.Current = stateDayView
@@ -987,22 +846,22 @@ func (m Model) handleDateInputKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 func (m Model) handleWorkspacePickerKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	n := len(m.context.Config.Workspaces)
-	switch msg.String() {
-	case "j", "down":
+	switch workspacePickerActionForKey(msg.String(), m.context.Config.Keybinds.List.Quit) {
+	case workspacePickerActionMoveDown:
 		if m.workspacePicker.Index < n-1 {
 			m.workspacePicker.Index++
 		}
 		return m, nil
-	case "k", "up":
+	case workspacePickerActionMoveUp:
 		if m.workspacePicker.Index > 0 {
 			m.workspacePicker.Index--
 		}
 		return m, nil
-	case "enter":
+	case workspacePickerActionConfirm:
 		if m.workspacePicker.Index >= 0 && m.workspacePicker.Index < n {
 			return m.switchWorkspace(m.context.Config.Workspaces[m.workspacePicker.Index].Name)
 		}
-	case "esc", m.context.Config.Keybinds.List.Quit:
+	case workspacePickerActionCancel:
 		m.ui.Current = stateList
 	}
 	return m, nil
@@ -1053,18 +912,18 @@ func (m Model) handleClockFormKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 func (m Model) handleStatsKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	const numStatsTabs = 4
-	switch msg.String() {
-	case "esc", m.context.Config.Keybinds.List.Quit:
+	switch statsActionForKey(msg.String(), m.context.Config.Keybinds.List.Quit) {
+	case statsActionBack:
 		m.ui.Current = stateList
 		return m, nil
-	case "left":
+	case statsActionLeft:
 		if m.stats.Tab > 0 {
 			m.stats.Tab--
 			m.day.Viewport.GotoTop()
 			m.day.Viewport.SetContent(m.renderStatsTabContent())
 		}
 		return m, nil
-	case "right":
+	case statsActionRight:
 		if m.stats.Tab < numStatsTabs-1 {
 			m.stats.Tab++
 			m.day.Viewport.GotoTop()
@@ -1078,16 +937,16 @@ func (m Model) handleStatsKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) handleWeekViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	switch msg.String() {
-	case "esc", m.context.Config.Keybinds.List.Quit:
+	switch weekViewActionForKey(msg.String(), m.context.Config.Keybinds.List.Quit) {
+	case weekViewActionBack:
 		m.ui.Current = stateList
 		return m, nil
-	case "left":
+	case weekViewActionLeft:
 		m.weekOffset--
 		m.day.Viewport.GotoTop()
 		m.day.Viewport.SetContent(m.renderWeekContent())
 		return m, nil
-	case "right":
+	case weekViewActionRight:
 		if m.weekOffset < 0 {
 			m.weekOffset++
 			m.day.Viewport.GotoTop()

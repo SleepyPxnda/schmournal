@@ -8,7 +8,7 @@ The codebase has been refactored to a layered architecture. When making changes,
 ## Architecture Overview
 
 ### Layer mapping
-- `ui/` and `internal/ui/tui/`:
+- `internal/ui/tui/`:
   Presentation layer (view state, key handling, rendering, user interaction).
 - `internal/application/usecase/` and `internal/application/dto/`:
   Application layer (orchestration, input validation, workflow coordination, DTO mapping).
@@ -40,11 +40,12 @@ Important: TODOs are workspace-global, not day-specific.
 
 ## Layer-Specific Coding Rules
 
-### Presentation (`ui/`, `internal/ui/tui/`)
+### Presentation (`internal/ui/tui/`)
 - Use application use cases for reads/writes; avoid direct repository calls.
 - Keep business rules out of handlers/views.
 - UI model remains a value type; handlers return `(tea.Model, tea.Cmd)`.
 - Use UI adapter helpers for mapping between UI structs and application DTOs.
+- Prefer key-to-action mapping helpers and routing seams for screen handlers to keep input interpretation separate from state mutations.
 - Preserve existing UX behaviors (status auto-clear, todo interaction model, viewport behaviors).
 
 ### Application (`internal/application/usecase`)
@@ -52,6 +53,8 @@ Important: TODOs are workspace-global, not day-specific.
 - Validate inputs and return explicit errors.
 - Use domain repository interfaces and domain services only.
 - Keep DTO mappers centralized (`dto.go`, `state_dto.go`) and reused.
+- Work-form submission orchestration (entry split/merge/edit persistence) belongs in `SubmitWorkFormUseCase`, not UI handlers.
+- TODO archive and archive-clear flows belong in `ManageTodosUseCase`; UI should trigger commands and consume returned DTO state.
 
 ### Domain (`internal/domain`)
 - Pure business logic only.
@@ -96,4 +99,3 @@ Treat `.github/copilot-instructions.md` as a living architecture contract:
 - Update outdated sections immediately.
 - Add new conventions when introducing them.
 - Remove rules that are no longer valid.
-
