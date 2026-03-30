@@ -1,4 +1,4 @@
-package ui
+package tui
 
 import (
 	"github.com/charmbracelet/lipgloss"
@@ -63,4 +63,3 @@ func (m Model) viewDayView() string {
 	footer := m.renderFooter(footerKeys)
 	return lipgloss.JoinVertical(lipgloss.Left, header, tabBar, m.day.Viewport.View(), footer)
 }
-

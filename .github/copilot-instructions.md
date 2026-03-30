@@ -8,7 +8,7 @@ The codebase has been refactored to a layered architecture. When making changes,
 ## Architecture Overview
 
 ### Layer mapping
-- `ui/` and `internal/ui/tui/`:
+- `internal/ui/tui/`:
   Presentation layer (view state, key handling, rendering, user interaction).
 - `internal/application/usecase/` and `internal/application/dto/`:
   Application layer (orchestration, input validation, workflow coordination, DTO mapping).
@@ -40,7 +40,7 @@ Important: TODOs are workspace-global, not day-specific.
 
 ## Layer-Specific Coding Rules
 
-### Presentation (`ui/`, `internal/ui/tui/`)
+### Presentation (`internal/ui/tui/`)
 - Use application use cases for reads/writes; avoid direct repository calls.
 - Keep business rules out of handlers/views.
 - UI model remains a value type; handlers return `(tea.Model, tea.Cmd)`.
@@ -96,4 +96,3 @@ Treat `.github/copilot-instructions.md` as a living architecture contract:
 - Update outdated sections immediately.
 - Add new conventions when introducing them.
 - Remove rules that are no longer valid.
-

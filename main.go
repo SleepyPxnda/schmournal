@@ -13,7 +13,7 @@ import (
 	infraConfig "github.com/sleepypxnda/schmournal/internal/infrastructure/config"
 	"github.com/sleepypxnda/schmournal/internal/infrastructure/persistence/json"
 	infrastructuretime "github.com/sleepypxnda/schmournal/internal/infrastructure/time"
-	"github.com/sleepypxnda/schmournal/ui"
+	"github.com/sleepypxnda/schmournal/internal/ui/tui"
 )
 
 var version = "dev"
@@ -66,10 +66,10 @@ func main() {
 		fmt.Fprintln(os.Stderr, "Error: could not initialize use cases:", err)
 		os.Exit(1)
 	}
-	useCases := ui.NewUseCases(initialSet, useCaseFactory)
+	useCases := tui.NewUseCases(initialSet, useCaseFactory)
 
 	p := tea.NewProgram(
-		ui.New(cfgModel, activeWorkspace, version, useCases),
+		tui.New(cfgModel, activeWorkspace, version, useCases),
 		tea.WithAltScreen(),
 		tea.WithMouseCellMotion(),
 	)
@@ -95,16 +95,16 @@ func resolveActiveWorkspace(cfg model.AppConfig, saved string) string {
 	return cfg.Workspaces[0].Name
 }
 
-func newUseCaseSetFactory(stateRepo repository.StateRepository) ui.UseCaseSetFactory {
-	return func(storagePath string) (ui.UseCaseSet, error) {
+func newUseCaseSetFactory(stateRepo repository.StateRepository) tui.UseCaseSetFactory {
+	return func(storagePath string) (tui.UseCaseSet, error) {
 		storageManager, err := json.NewStorageManager(storagePath)
 		if err != nil {
-			return ui.UseCaseSet{}, fmt.Errorf("failed to initialize storage manager: %w", err)
+			return tui.UseCaseSet{}, fmt.Errorf("failed to initialize storage manager: %w", err)
 		}
 
 		exportDir, err := storageManager.ExportsDir()
 		if err != nil {
-			return ui.UseCaseSet{}, fmt.Errorf("failed to determine exports directory: %w", err)
+			return tui.UseCaseSet{}, fmt.Errorf("failed to determine exports directory: %w", err)
 		}
 
 		timeProvider := infrastructuretime.NewRealTimeProvider()
@@ -117,7 +117,7 @@ func newUseCaseSetFactory(stateRepo repository.StateRepository) ui.UseCaseSetFac
 			timeProvider,
 		)
 
-		return ui.UseCaseSet{
+		return tui.UseCaseSet{
 			DayRecordRepo:      dayRepo,
 			TodoRepo:           todoRepo,
 			StateRepo:          stateRepo,

@@ -1,4 +1,4 @@
-package ui
+package tui
 
 import (
 	"github.com/charmbracelet/lipgloss"
@@ -20,4 +20,3 @@ func (m Model) viewNotesEditor() string {
 		Render(m.day.Notes.View())
 	return lipgloss.JoinVertical(lipgloss.Left, header, editor, footer)
 }
-
