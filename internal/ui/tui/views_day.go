@@ -7,10 +7,14 @@ import (
 // viewDayView renders the detailed day view with work log and summary tabs.
 func (m Model) viewDayView() string {
 	subtitle := m.day.Record.Date
+	subtitleStyle := headerSubtitleStyle
 	if t, err := m.day.Record.ParseDate(); err == nil {
 		subtitle = t.Format("Monday, 02 January 2006")
+		if !m.effectiveIsWorkDay(t) {
+			subtitleStyle = headerNonWorkDaySubtitleStyle
+		}
 	}
-	header := m.renderHeader(m.appTitle(), subtitle)
+	header := m.renderHeaderStyled(m.appTitle(), subtitle, subtitleStyle)
 	tabBar := m.renderDayTabBar()
 
 	var footerKeys [][2]string

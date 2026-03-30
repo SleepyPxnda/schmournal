@@ -44,6 +44,10 @@ var (
 				Foreground(lipgloss.Color(cSubtext0)).
 				Padding(0, 1)
 
+	headerNonWorkDaySubtitleStyle = lipgloss.NewStyle().
+					Foreground(lipgloss.Color(cMaroon)).
+					Padding(0, 1)
+
 	separatorStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color(cSurface2))
 
