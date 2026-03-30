@@ -471,10 +471,10 @@ func (m Model) renderStats() string {
 		switch {
 		case dated[dateStr]:
 			block = statsBlockFilledStyle.Render(filled)
-		case d.After(now):
-			block = statsBlockFutureStyle.Render(empty)
 		case !m.effectiveIsWorkDay(d):
 			block = statsBlockNonWorkStyle.Render(empty)
+		case d.After(now):
+			block = statsBlockFutureStyle.Render(empty)
 		default:
 			block = statsBlockEmptyStyle.Render(empty)
 		}
