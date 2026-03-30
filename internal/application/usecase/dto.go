@@ -16,6 +16,7 @@ type DayRecordDTO struct {
 	EndTime   string
 	Entries   []WorkEntryDTO
 	Notes     string
+	TodayDone []TodoDTO
 }
 
 type TodoDTO struct {
@@ -26,8 +27,7 @@ type TodoDTO struct {
 }
 
 type WorkspaceTodosDTO struct {
-	Todos    []TodoDTO
-	Archived []TodoDTO
+	Todos []TodoDTO
 }
 
 func mapDomainDayRecordToDTO(rec model.DayRecord) DayRecordDTO {
@@ -47,6 +47,7 @@ func mapDomainDayRecordToDTO(rec model.DayRecord) DayRecordDTO {
 		EndTime:   rec.EndTime,
 		Entries:   entries,
 		Notes:     rec.Notes,
+		TodayDone: mapDomainTodosToDTO(rec.TodayDone),
 	}
 }
 
@@ -67,20 +68,19 @@ func mapDayRecordDTOToDomain(rec DayRecordDTO) model.DayRecord {
 		EndTime:   rec.EndTime,
 		Entries:   entries,
 		Notes:     rec.Notes,
+		TodayDone: mapTodosDTOToDomain(rec.TodayDone),
 	}
 }
 
 func mapDomainWorkspaceTodosToDTO(todos model.WorkspaceTodos) WorkspaceTodosDTO {
 	return WorkspaceTodosDTO{
-		Todos:    mapDomainTodosToDTO(todos.Todos),
-		Archived: mapDomainTodosToDTO(todos.Archived),
+		Todos: mapDomainTodosToDTO(todos.Todos),
 	}
 }
 
 func mapWorkspaceTodosDTOToDomain(todos WorkspaceTodosDTO) model.WorkspaceTodos {
 	return model.WorkspaceTodos{
-		Todos:    mapTodosDTOToDomain(todos.Todos),
-		Archived: mapTodosDTOToDomain(todos.Archived),
+		Todos: mapTodosDTOToDomain(todos.Todos),
 	}
 }
 

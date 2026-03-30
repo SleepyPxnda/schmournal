@@ -166,6 +166,14 @@ type persistedDayRecord struct {
 	EndTime   string               `json:"end_time,omitempty"`
 	Entries   []persistedWorkEntry `json:"entries"`
 	Notes     string               `json:"notes,omitempty"`
+	TodayDone []persistedTodo      `json:"today_done,omitempty"`
+}
+
+type persistedTodo struct {
+	ID        string          `json:"id"`
+	Title     string          `json:"title"`
+	Completed bool            `json:"completed"`
+	Subtodos  []persistedTodo `json:"subtodos,omitempty"`
 }
 
 func toDomainDayRecord(rec persistedDayRecord) model.DayRecord {
@@ -186,6 +194,7 @@ func toDomainDayRecord(rec persistedDayRecord) model.DayRecord {
 		EndTime:   rec.EndTime,
 		Entries:   entries,
 		Notes:     rec.Notes,
+		TodayDone: toDomainTodos(rec.TodayDone),
 	}
 }
 
@@ -207,5 +216,32 @@ func toPersistedDayRecord(rec model.DayRecord) persistedDayRecord {
 		EndTime:   rec.EndTime,
 		Entries:   entries,
 		Notes:     rec.Notes,
+		TodayDone: toPersistedTodos(rec.TodayDone),
 	}
+}
+
+func toDomainTodos(todos []persistedTodo) []model.Todo {
+	result := make([]model.Todo, len(todos))
+	for i, todo := range todos {
+		result[i] = model.Todo{
+			ID:        todo.ID,
+			Title:     todo.Title,
+			Completed: todo.Completed,
+			Subtodos:  toDomainTodos(todo.Subtodos),
+		}
+	}
+	return result
+}
+
+func toPersistedTodos(todos []model.Todo) []persistedTodo {
+	result := make([]persistedTodo, len(todos))
+	for i, todo := range todos {
+		result[i] = persistedTodo{
+			ID:        todo.ID,
+			Title:     todo.Title,
+			Completed: todo.Completed,
+			Subtodos:  toPersistedTodos(todo.Subtodos),
+		}
+	}
+	return result
 }

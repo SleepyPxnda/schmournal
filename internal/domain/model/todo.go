@@ -32,7 +32,6 @@ func (t Todo) Validate() error {
 }
 
 // IsFullyCompleted checks if this TODO and ALL nested subtodos are completed.
-// This is used for archive operations.
 func (t Todo) IsFullyCompleted() bool {
 	if !t.Completed {
 		return false
@@ -54,11 +53,9 @@ func (t Todo) CountSubtodos() int {
 	return count
 }
 
-// WorkspaceTodos holds the global TODO list for a workspace.
-// This includes both active TODOs and archived (completed) ones.
+// WorkspaceTodos holds the active TODO list for a workspace.
 type WorkspaceTodos struct {
-	Todos    []Todo
-	Archived []Todo
+	Todos []Todo
 }
 
 // Validate checks if the workspace TODOs structure is valid.
@@ -68,11 +65,6 @@ func (w WorkspaceTodos) Validate() error {
 			return fmt.Errorf("active todo %d invalid: %w", i, err)
 		}
 	}
-	for i, t := range w.Archived {
-		if err := t.Validate(); err != nil {
-			return fmt.Errorf("archived todo %d invalid: %w", i, err)
-		}
-	}
 	return nil
 }
 
@@ -80,15 +72,6 @@ func (w WorkspaceTodos) Validate() error {
 func (w WorkspaceTodos) CountActiveTodos() int {
 	count := len(w.Todos)
 	for _, t := range w.Todos {
-		count += t.CountSubtodos()
-	}
-	return count
-}
-
-// CountArchivedTodos returns the total number of archived TODOs (including nested).
-func (w WorkspaceTodos) CountArchivedTodos() int {
-	count := len(w.Archived)
-	for _, t := range w.Archived {
 		count += t.CountSubtodos()
 	}
 	return count

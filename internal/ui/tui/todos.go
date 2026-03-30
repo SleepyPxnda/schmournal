@@ -209,6 +209,42 @@ func flattenTodos(items []Todo) []Todo {
 	return out
 }
 
+// mergeTodayDoneTrees recursively merges incoming completed trees into existing
+// Today Done trees by ID. Matching nodes (and descendants) are merged,
+// non-matching nodes are appended, and incomplete context nodes are upgraded
+// when a completed version of the same TODO arrives (completion is promoted
+// to true if either node is complete).
+func mergeTodayDoneTrees(existing []Todo, incoming []Todo) []Todo {
+	merged := append([]Todo(nil), existing...)
+	for _, in := range incoming {
+		merged = mergeOrAppendTodo(merged, in)
+	}
+	return merged
+}
+
+func mergeOrAppendTodo(items []Todo, in Todo) []Todo {
+	for i := range items {
+		if items[i].ID != in.ID {
+			continue
+		}
+		items[i] = mergeTodoNode(items[i], in)
+		return items
+	}
+	return append(items, in)
+}
+
+// mergeTodoNode merges two TODO nodes that share the same ID.
+// Completion is promoted (true if either node is complete) and subtodos are
+// recursively merged by ID. Existing node title/other metadata are preserved.
+func mergeTodoNode(existing Todo, incoming Todo) Todo {
+	// OR semantics preserve completion once observed in either branch.
+	existing.Completed = existing.Completed || incoming.Completed
+	for _, inSub := range incoming.Subtodos {
+		existing.Subtodos = mergeOrAppendTodo(existing.Subtodos, inSub)
+	}
+	return existing
+}
+
 func findTodoIndexByID(items []Todo, id string) int {
 	for i := range items {
 		if items[i].ID == id {
@@ -278,8 +314,8 @@ func isFullyCompleted(t Todo) bool {
 }
 
 // collectFullyCompleted returns all top-level todos (and their subtree) for
-// which isFullyCompleted is true. These are the items that will be moved to
-// the archive when the user leaves the day view.
+// which isFullyCompleted is true. These items are removed from active todos
+// and merged into the day record's TodayDone snapshot when leaving day view.
 func collectFullyCompleted(todos []Todo) []Todo {
 	var result []Todo
 	for _, t := range todos {
@@ -417,7 +453,7 @@ func (m Model) renderTodosPanel(w int) string {
 		if m.day.Selection.Pane != 1 {
 			b.WriteString(dayViewMutedStyle.Render("  t open todo overview") + "\n")
 		}
-		if len(m.workspace.Archived) == 0 {
+		if len(m.day.Record.TodayDone) == 0 {
 			return b.String()
 		}
 	}
@@ -468,31 +504,34 @@ func (m Model) renderTodosPanel(w int) string {
 			}
 		}
 	}
-	if len(m.workspace.Archived) > 0 {
+	if len(m.day.Record.TodayDone) > 0 {
 		b.WriteString(dayViewDividerStyle.Render(strings.Repeat("─", w)) + "\n")
-		b.WriteString(dayViewMutedStyle.Render("  Archived") + "\n")
-		for _, td := range m.workspace.Archived {
-			b.WriteString(renderArchivedTodoTree(td, 0, w))
-		}
-		if m.day.Selection.Pane == 1 {
-			b.WriteString(dayViewMutedStyle.Render("  X clear archive") + "\n")
+		b.WriteString(dayViewMutedStyle.Render("  Today Done") + "\n")
+		for _, td := range m.day.Record.TodayDone {
+			b.WriteString(renderTodayDoneTodoTree(td, 0, w))
 		}
 	}
 	return b.String()
 }
 
-// renderArchivedTodoTree renders a single archived todo (and its subtree) at the
+// renderTodayDoneTodoTree renders a single Today Done todo (and its subtree) at the
 // given indentation depth, capped at the available width w.
-func renderArchivedTodoTree(td Todo, depth int, w int) string {
+func renderTodayDoneTodoTree(td Todo, depth int, w int) string {
 	var b strings.Builder
 	indent := strings.Repeat("  ", depth)
-	line := todoArchivedStyle.Render(indent + "  ✓ " + td.Title)
+	mark := "✓"
+	style := todoArchivedStyle
+	if !td.Completed {
+		mark = "-"
+		style = dayViewMutedStyle
+	}
+	line := style.Render(indent + "  " + mark + " " + td.Title)
 	if lipgloss.Width(line) > w {
 		line = truncateRunes(line, w)
 	}
 	b.WriteString(line + "\n")
 	for _, sub := range td.Subtodos {
-		b.WriteString(renderArchivedTodoTree(sub, depth+1, w))
+		b.WriteString(renderTodayDoneTodoTree(sub, depth+1, w))
 	}
 	return b.String()
 }

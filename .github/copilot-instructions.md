@@ -30,13 +30,13 @@ Do not introduce reverse dependencies.
 ## Current Data and Persistence Model
 
 - Day records: one JSON file per day (`YYYY-MM-DD.json`) in the workspace storage directory.
-- Workspace todos: `todos.json` per workspace (active + archived).
+- Workspace todos: `todos.json` per workspace (active TODOs only).
 - App config: TOML in `~/.config/schmournal.config`.
 - App runtime state: JSON in `~/.config/schmournal.state`.
 - Exports: Markdown files in `~/.journal/exports/`.
 - List view shortcuts include both weekly summary (`week_view`, default `v`) and stats overview (`stats_view`, default `s`).
 
-Important: TODOs are workspace-global, not day-specific.
+Important: Active TODOs are workspace-global, not day-specific. Day records persist a `today_done` snapshot of TODO trees completed on that day for day-level review. Completed TODOs are pruned from active workspace todos and are not persisted in a workspace archive list.
 
 ## Layer-Specific Coding Rules
 
@@ -54,7 +54,7 @@ Important: TODOs are workspace-global, not day-specific.
 - Use domain repository interfaces and domain services only.
 - Keep DTO mappers centralized (`dto.go`, `state_dto.go`) and reused.
 - Work-form submission orchestration (entry split/merge/edit persistence) belongs in `SubmitWorkFormUseCase`, not UI handlers.
-- TODO archive and archive-clear flows belong in `ManageTodosUseCase`; UI should trigger commands and consume returned DTO state.
+- TODO completion harvesting/pruning flow belongs in `ManageTodosUseCase`; UI should trigger commands and consume returned DTO state.
 
 ### Domain (`internal/domain`)
 - Pure business logic only.

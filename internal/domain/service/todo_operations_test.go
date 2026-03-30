@@ -140,6 +140,56 @@ func TestTodoOperations_CollectFullyCompleted_EmptyList(t *testing.T) {
 	}
 }
 
+// ─── CollectCompletedWithContext ───────────────────────────────────────────────
+
+func TestTodoOperations_CollectCompletedWithContext_IncludesContextParents(t *testing.T) {
+	ops := NewTodoOperations()
+	todos := []model.Todo{
+		{
+			ID:        "p",
+			Title:     "Parent",
+			Completed: false,
+			Subtodos: []model.Todo{
+				{ID: "c1", Title: "Done child", Completed: true, Subtodos: []model.Todo{}},
+				{ID: "c2", Title: "Undone child", Completed: false, Subtodos: []model.Todo{}},
+			},
+		},
+	}
+
+	result := ops.CollectCompletedWithContext(todos)
+	if len(result) != 1 {
+		t.Fatalf("expected one contextual tree, got %+v", result)
+	}
+	if result[0].ID != "p" || result[0].Completed {
+		t.Fatalf("expected parent context with Completed=false, got %+v", result[0])
+	}
+	if len(result[0].Subtodos) != 1 || result[0].Subtodos[0].ID != "c1" || !result[0].Subtodos[0].Completed {
+		t.Fatalf("expected only completed child branch, got %+v", result[0].Subtodos)
+	}
+}
+
+func TestTodoOperations_CollectCompletedWithContext_ReturnsFullyDoneTreeAsDone(t *testing.T) {
+	ops := NewTodoOperations()
+	todos := []model.Todo{
+		{
+			ID:        "p",
+			Title:     "Parent",
+			Completed: true,
+			Subtodos: []model.Todo{
+				{ID: "c1", Title: "Done child", Completed: true, Subtodos: []model.Todo{}},
+			},
+		},
+	}
+
+	result := ops.CollectCompletedWithContext(todos)
+	if len(result) != 1 {
+		t.Fatalf("expected one fully done tree, got %+v", result)
+	}
+	if !result[0].Completed {
+		t.Fatalf("expected fully done parent to remain Completed=true, got %+v", result[0])
+	}
+}
+
 // ─── PruneCompleted ───────────────────────────────────────────────────────────
 
 func TestTodoOperations_PruneCompleted_RemovesFullyDone(t *testing.T) {

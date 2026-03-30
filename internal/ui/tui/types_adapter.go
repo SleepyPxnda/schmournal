@@ -20,6 +20,7 @@ type DayRecord struct {
 	EndTime   string
 	Entries   []WorkEntry
 	Notes     string
+	TodayDone []Todo
 	Path      string
 }
 
@@ -30,6 +31,7 @@ func (r DayRecord) toDomain() domainmodel.DayRecord {
 		EndTime:   r.EndTime,
 		Entries:   append([]WorkEntry(nil), r.Entries...),
 		Notes:     r.Notes,
+		TodayDone: append([]Todo(nil), r.TodayDone...),
 	}
 }
 
@@ -40,6 +42,7 @@ func dayRecordFromDomain(r domainmodel.DayRecord) DayRecord {
 		EndTime:   r.EndTime,
 		Entries:   append([]WorkEntry(nil), r.Entries...),
 		Notes:     r.Notes,
+		TodayDone: append([]Todo(nil), r.TodayDone...),
 	}
 }
 
@@ -85,6 +88,7 @@ func toUIDayRecord(rec usecase.DayRecordDTO) DayRecord {
 		EndTime:   rec.EndTime,
 		Entries:   entries,
 		Notes:     rec.Notes,
+		TodayDone: toUITodos(rec.TodayDone),
 	}
 }
 
@@ -106,13 +110,13 @@ func toUseCaseDayRecord(rec DayRecord) usecase.DayRecordDTO {
 		EndTime:   rec.EndTime,
 		Entries:   entries,
 		Notes:     rec.Notes,
+		TodayDone: toUseCaseTodos(rec.TodayDone),
 	}
 }
 
 func toUIWorkspaceTodos(todos usecase.WorkspaceTodosDTO) WorkspaceTodos {
 	return WorkspaceTodos{
-		Todos:    toUITodos(todos.Todos),
-		Archived: toUITodos(todos.Archived),
+		Todos: toUITodos(todos.Todos),
 	}
 }
 
@@ -131,8 +135,7 @@ func toUITodos(todos []usecase.TodoDTO) []Todo {
 
 func toUseCaseWorkspaceTodos(todos WorkspaceTodos) usecase.WorkspaceTodosDTO {
 	return usecase.WorkspaceTodosDTO{
-		Todos:    toUseCaseTodos(todos.Todos),
-		Archived: toUseCaseTodos(todos.Archived),
+		Todos: toUseCaseTodos(todos.Todos),
 	}
 }
 

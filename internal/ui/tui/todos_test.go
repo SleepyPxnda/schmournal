@@ -416,6 +416,57 @@ func TestTodosPanelShowsInlineDraftInInputMode(t *testing.T) {
 	}
 }
 
+func TestTodosPanelShowsTodayDoneSection(t *testing.T) {
+	m := Model{
+		day: DayViewState{
+			Selection: SelectionState{Pane: 1, DayTab: 0},
+			Record: DayRecord{
+				TodayDone: []Todo{
+					{ID: "a", Title: "Done today", Completed: true},
+				},
+			},
+		},
+		workspace: WorkspaceDataState{Todos: []Todo{}},
+	}
+
+	rendered := m.renderTodosPanel(60)
+	if !strings.Contains(rendered, "Today Done") {
+		t.Fatalf("expected Today Done section, got:\n%s", rendered)
+	}
+	if !strings.Contains(rendered, "✓ Done today") {
+		t.Fatalf("expected today-done todo line, got:\n%s", rendered)
+	}
+}
+
+func TestTodosPanelShowsDashedContextParentsAndDoneNodes(t *testing.T) {
+	m := Model{
+		day: DayViewState{
+			Selection: SelectionState{Pane: 1, DayTab: 0},
+			Record: DayRecord{
+				TodayDone: []Todo{
+					{
+						ID:        "p",
+						Title:     "Parent context",
+						Completed: false,
+						Subtodos: []Todo{
+							{ID: "c", Title: "Done child", Completed: true},
+						},
+					},
+				},
+			},
+		},
+		workspace: WorkspaceDataState{Todos: []Todo{}},
+	}
+
+	rendered := m.renderTodosPanel(60)
+	if !strings.Contains(rendered, "- Parent context") {
+		t.Fatalf("expected dashed context parent line, got:\n%s", rendered)
+	}
+	if !strings.Contains(rendered, "✓ Done child") {
+		t.Fatalf("expected done child line, got:\n%s", rendered)
+	}
+}
+
 func TestConfirmDeleteUsesTodoSubjectForTodoDeletion(t *testing.T) {
 	m := Model{
 		window:        WindowState{Width: 120, Height: 40},

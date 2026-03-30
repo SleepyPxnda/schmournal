@@ -257,11 +257,6 @@ func (m Model) handleDayNavigationKey(key string, n int) (Model, tea.Cmd, bool) 
 			return modelOut.(Model), cmd, true
 		}
 		return m, nil, true
-	case "X":
-		if m.day.Selection.DayTab == 0 && m.day.Selection.Pane == 1 && len(m.workspace.Archived) > 0 {
-			return m, m.clearArchiveCmd("✓ Archive cleared"), true
-		}
-		return m, nil, true
 	}
 
 	return m, nil, false
@@ -404,15 +399,16 @@ func (m Model) handleDayConfiguredCommandKey(key string, n int) (Model, tea.Cmd,
 			cmds = append(cmds, clearStatusCmd())
 		}
 		if m.context.UseCases != nil && m.context.UseCases.ManageTodos != nil {
-			cmds = append(cmds, m.archiveCompletedTodosCmd(""))
+			cmds = append(cmds, m.collectCompletedTodosCmd(""))
 		} else {
 			// Fallback path: preserve existing behavior if use case wiring is unavailable.
 			harvested := collectFullyCompleted(m.workspace.Todos)
 			pruned := pruneCompletedTodos(m.workspace.Todos)
 			if len(pruned) != len(m.workspace.Todos) {
-				m.workspace.Archived = append(m.workspace.Archived, harvested...)
 				m.workspace.Todos = pruned
+				m.day.Record.TodayDone = mergeTodayDoneTrees(m.day.Record.TodayDone, harvested)
 				cmds = append(cmds, m.saveWorkspaceTodosCmd(""))
+				cmds = append(cmds, m.saveDayCmd(""))
 			}
 		}
 		return m, tea.Batch(cmds...), true
@@ -439,7 +435,7 @@ func (m Model) shouldStartInlineTodoDraft(msg tea.KeyMsg) bool {
 	}
 	key := msg.String()
 	switch key {
-	case "j", "k", "a", "A", "X", " ":
+	case "j", "k", "a", "A", " ":
 		return false
 	}
 	if m.isDayCommandKey(key) {

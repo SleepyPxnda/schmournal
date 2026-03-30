@@ -16,6 +16,7 @@ type DayRecord struct {
 	EndTime   string // HH:MM format
 	Entries   []WorkEntry
 	Notes     string
+	TodayDone []Todo
 }
 
 // WorkTotals calculates the total work time, break time, and overall time

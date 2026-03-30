@@ -42,6 +42,16 @@ func TestFileSystemDayRecordRepository_SaveFindExistsDeleteFlow(t *testing.T) {
 			{ID: "1", Task: "Dev", Project: "Core", DurationMin: 120},
 		},
 		Notes: "done",
+		TodayDone: []model.Todo{
+			{
+				ID:        "t1",
+				Title:     "Top done",
+				Completed: true,
+				Subtodos: []model.Todo{
+					{ID: "t1-1", Title: "Nested done", Completed: true},
+				},
+			},
+		},
 	}
 	if err := repo.Save(record); err != nil {
 		t.Fatalf("Save() error = %v", err)
@@ -56,6 +66,12 @@ func TestFileSystemDayRecordRepository_SaveFindExistsDeleteFlow(t *testing.T) {
 	}
 	if len(loaded.Entries) != 1 || loaded.Entries[0].Task != "Dev" {
 		t.Fatalf("loaded entries mismatch: %#v", loaded.Entries)
+	}
+	if len(loaded.TodayDone) != 1 || loaded.TodayDone[0].ID != "t1" {
+		t.Fatalf("loaded today_done mismatch: %#v", loaded.TodayDone)
+	}
+	if len(loaded.TodayDone[0].Subtodos) != 1 || loaded.TodayDone[0].Subtodos[0].ID != "t1-1" {
+		t.Fatalf("loaded nested today_done mismatch: %#v", loaded.TodayDone[0].Subtodos)
 	}
 
 	exists, err := repo.Exists(record.Date)

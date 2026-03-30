@@ -48,6 +48,41 @@ func (s *TodoOperations) CollectFullyCompleted(todos []model.Todo) []model.Todo 
 	return result
 }
 
+// CollectCompletedWithContext returns TODO trees that should be archived:
+//   - Fully completed top-level TODOs are returned as-is.
+//   - If a TODO is not fully completed but contains completed descendants,
+//     it is returned as a contextual parent (Completed=false) containing only
+//     the completed descendant branches.
+func (s *TodoOperations) CollectCompletedWithContext(todos []model.Todo) []model.Todo {
+	var result []model.Todo
+	for _, t := range todos {
+		if projected, ok := s.projectCompletedTree(t); ok {
+			result = append(result, projected)
+		}
+	}
+	return result
+}
+
+func (s *TodoOperations) projectCompletedTree(todo model.Todo) (model.Todo, bool) {
+	if s.IsFullyCompleted(todo) {
+		return todo, true
+	}
+
+	projectedChildren := make([]model.Todo, 0, len(todo.Subtodos))
+	for _, sub := range todo.Subtodos {
+		if projected, ok := s.projectCompletedTree(sub); ok {
+			projectedChildren = append(projectedChildren, projected)
+		}
+	}
+	if len(projectedChildren) == 0 {
+		return model.Todo{}, false
+	}
+
+	todo.Completed = false
+	todo.Subtodos = projectedChildren
+	return todo, true
+}
+
 // PruneCompleted removes todos (at any depth) where the todo itself and
 // all its descendants are completed.
 //
@@ -55,8 +90,8 @@ func (s *TodoOperations) CollectFullyCompleted(todos []model.Todo) []model.Todo 
 // subtodos recursively pruned. This ensures that incomplete work is never lost.
 //
 // Example:
-//   Input:  [TodoA(✓), TodoB(—) with SubB1(✓), SubB2(—)]
-//   Output: [TodoB(—) with SubB2(—)]
+// Input:  [TodoA(✓), TodoB(—) with SubB1(✓), SubB2(—)]
+// Output: [TodoB(—) with SubB2(—)]
 //
 // TodoA is fully complete → removed
 // TodoB is incomplete → kept, but SubB1 is complete → removed
