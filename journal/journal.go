@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync/atomic"
 	"time"
 )
 
@@ -205,5 +206,20 @@ func Delete(path string) error {
 
 // NewID returns a unique string ID based on the current nanosecond timestamp.
 func NewID() string {
-	return fmt.Sprintf("%d", time.Now().UnixNano())
+	return fmt.Sprintf("%d", nextMonotonicUnixNanoID())
+}
+
+var lastGeneratedID int64
+
+func nextMonotonicUnixNanoID() int64 {
+	for {
+		now := time.Now().UnixNano()
+		last := atomic.LoadInt64(&lastGeneratedID)
+		if now <= last {
+			now = last + 1
+		}
+		if atomic.CompareAndSwapInt64(&lastGeneratedID, last, now) {
+			return now
+		}
+	}
 }

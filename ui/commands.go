@@ -1,26 +1,43 @@
 package ui
 
 import (
+	"fmt"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/sleepypxnda/schmournal/journal"
+	"github.com/sleepypxnda/schmournal/internal/application/usecase"
 )
 
-func loadRecords() tea.Msg {
-	records, err := journal.LoadAll()
-	if err != nil {
-		return errMsg{err: err}
+func (m Model) loadRecordsCmd() tea.Cmd {
+	return func() tea.Msg {
+		if m.context.UseCases == nil || m.context.UseCases.LoadAllDayRecords == nil {
+			return errMsg{err: fmt.Errorf("load all day records use case is not configured")}
+		}
+		records, err := m.context.UseCases.LoadAllDayRecords.ExecuteDTO()
+		if err != nil {
+			return errMsg{err: err}
+		}
+		return recordsLoadedMsg{records: toUIDayRecords(records)}
 	}
-	return recordsLoadedMsg{records: records}
 }
 
-func loadWorkspaceTodos() tea.Msg {
-	todos, err := journal.LoadWorkspaceTodos()
-	if err != nil {
-		return errMsg{err: err}
+func (m Model) loadWorkspaceTodosCmd() tea.Cmd {
+	return func() tea.Msg {
+		if m.context.UseCases == nil || m.context.UseCases.LoadWorkspaceTodos == nil {
+			return errMsg{err: fmt.Errorf("load workspace todos use case is not configured")}
+		}
+		workspace := m.context.ActiveWorkspace
+		if workspace == "" {
+			workspace = "default"
+		}
+		todos, err := m.context.UseCases.LoadWorkspaceTodos.ExecuteDTO(usecase.LoadWorkspaceTodosInput{
+			Workspace: workspace,
+		})
+		if err != nil {
+			return errMsg{err: err}
+		}
+		return workspaceTodosLoadedMsg{todos: toUIWorkspaceTodos(todos)}
 	}
-	return workspaceTodosLoadedMsg{todos: todos}
 }
 
 func clearStatusCmd() tea.Cmd {
@@ -38,9 +55,14 @@ func clockTickCmd() tea.Cmd {
 }
 
 func (m Model) saveDayCmd(label string) tea.Cmd {
-	rec := m.dayRecord
+	rec := m.day.Record
 	return func() tea.Msg {
-		if err := journal.Save(rec); err != nil {
+		if m.context.UseCases == nil || m.context.UseCases.SaveDayRecord == nil {
+			return errMsg{err: fmt.Errorf("save day record use case is not configured")}
+		}
+		if err := m.context.UseCases.SaveDayRecord.ExecuteDTO(usecase.SaveDayRecordDTOInput{
+			Record: toUseCaseDayRecord(rec),
+		}); err != nil {
 			return errMsg{err: err}
 		}
 		return daySavedMsg{label: label}
@@ -48,11 +70,34 @@ func (m Model) saveDayCmd(label string) tea.Cmd {
 }
 
 func (m Model) saveWorkspaceTodosCmd(label string) tea.Cmd {
-	todos := journal.WorkspaceTodos{Todos: m.workspaceTodos, Archived: m.workspaceArchivedTodos}
+	todos := WorkspaceTodos{Todos: m.workspace.Todos, Archived: m.workspace.Archived}
 	return func() tea.Msg {
-		if err := journal.SaveWorkspaceTodos(todos); err != nil {
+		if m.context.UseCases == nil || m.context.UseCases.SaveWorkspaceTodos == nil {
+			return errMsg{err: fmt.Errorf("save workspace todos use case is not configured")}
+		}
+		workspace := m.context.ActiveWorkspace
+		if workspace == "" {
+			workspace = "default"
+		}
+		if err := m.context.UseCases.SaveWorkspaceTodos.ExecuteDTO(usecase.SaveWorkspaceTodosDTOInput{
+			Workspace: workspace,
+			Todos:     toUseCaseWorkspaceTodos(todos),
+		}); err != nil {
 			return errMsg{err: err}
 		}
 		return daySavedMsg{label: label}
+	}
+}
+
+func (m Model) exportDayCmd(rec DayRecord) tea.Cmd {
+	return func() tea.Msg {
+		if m.context.UseCases == nil || m.context.UseCases.ExportDay == nil {
+			return errMsg{err: fmt.Errorf("export use case is not configured")}
+		}
+		output, err := m.context.UseCases.ExportDay.Execute(usecase.ExportDayInput{Date: rec.Date})
+		if err != nil {
+			return errMsg{err: err}
+		}
+		return exportedMsg{path: output.FilePath}
 	}
 }
