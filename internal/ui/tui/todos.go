@@ -209,9 +209,10 @@ func flattenTodos(items []Todo) []Todo {
 	return out
 }
 
-// mergeArchivedTodoTrees merges incoming archived trees into existing trees by ID.
-// Matching nodes are merged (including descendants), and incomplete context nodes
-// are upgraded when a completed version of the same TODO arrives.
+// mergeArchivedTodoTrees recursively merges incoming archived trees into existing
+// trees by ID. Matching nodes (and descendants) are merged, non-matching nodes
+// are appended, and incomplete context nodes are upgraded when a completed
+// version of the same TODO arrives.
 func mergeArchivedTodoTrees(existing []Todo, incoming []Todo) []Todo {
 	merged := append([]Todo(nil), existing...)
 	for _, in := range incoming {
@@ -231,9 +232,9 @@ func mergeOrAppendTodo(items []Todo, in Todo) []Todo {
 	return append(items, in)
 }
 
-// mergeTodoNode merges two TODO nodes with the same identity.
+// mergeTodoNode merges two TODO nodes that share the same ID.
 // Completion is promoted (true if either node is complete) and subtodos are
-// recursively merged by ID.
+// recursively merged by ID. Existing node title/other metadata are preserved.
 func mergeTodoNode(existing Todo, incoming Todo) Todo {
 	existing.Completed = existing.Completed || incoming.Completed
 	for _, inSub := range incoming.Subtodos {
