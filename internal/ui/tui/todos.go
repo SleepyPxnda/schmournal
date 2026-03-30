@@ -212,7 +212,8 @@ func flattenTodos(items []Todo) []Todo {
 // mergeTodayDoneTrees recursively merges incoming completed trees into existing
 // Today Done trees by ID. Matching nodes (and descendants) are merged,
 // non-matching nodes are appended, and incomplete context nodes are upgraded
-// when a completed version of the same TODO arrives.
+// when a completed version of the same TODO arrives (completion is promoted
+// to true if either node is complete).
 func mergeTodayDoneTrees(existing []Todo, incoming []Todo) []Todo {
 	merged := append([]Todo(nil), existing...)
 	for _, in := range incoming {
@@ -236,6 +237,7 @@ func mergeOrAppendTodo(items []Todo, in Todo) []Todo {
 // Completion is promoted (true if either node is complete) and subtodos are
 // recursively merged by ID. Existing node title/other metadata are preserved.
 func mergeTodoNode(existing Todo, incoming Todo) Todo {
+	// OR semantics preserve completion once observed in either branch.
 	existing.Completed = existing.Completed || incoming.Completed
 	for _, inSub := range incoming.Subtodos {
 		existing.Subtodos = mergeOrAppendTodo(existing.Subtodos, inSub)

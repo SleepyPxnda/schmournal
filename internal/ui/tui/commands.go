@@ -91,8 +91,8 @@ func (m Model) saveWorkspaceTodosCmd(label string) tea.Cmd {
 
 func (m Model) collectCompletedTodosCmd(label string) tea.Cmd {
 	return func() tea.Msg {
-		if m.context.UseCases == nil || m.context.UseCases.ManageTodos == nil {
-			return errMsg{err: fmt.Errorf("todo management use case is not configured")}
+		if m.context.UseCases == nil || m.context.UseCases.ManageTodos == nil || m.context.UseCases.LoadWorkspaceTodos == nil {
+			return errMsg{err: fmt.Errorf("todo management use cases are not configured")}
 		}
 		workspace := m.context.ActiveWorkspace
 		if workspace == "" {
@@ -105,7 +105,15 @@ func (m Model) collectCompletedTodosCmd(label string) tea.Cmd {
 		if err != nil {
 			return errMsg{err: err}
 		}
+
+		todos, err := m.context.UseCases.LoadWorkspaceTodos.ExecuteDTO(usecase.LoadWorkspaceTodosInput{
+			Workspace: workspace,
+		})
+		if err != nil {
+			return errMsg{err: err}
+		}
 		return workspaceTodosManagedMsg{
+			todos:          toUIWorkspaceTodos(todos),
 			completedToday: toUITodos(output.ArchivedTodos),
 			label:          label,
 		}
