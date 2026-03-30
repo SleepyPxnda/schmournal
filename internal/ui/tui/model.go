@@ -166,8 +166,7 @@ type AppContextState struct {
 
 // WorkspaceDataState groups workspace-wide todo datasets.
 type WorkspaceDataState struct {
-	Todos    []Todo
-	Archived []Todo
+	Todos []Todo
 }
 
 // DayViewState groups day-view record, selection and widgets.
@@ -393,8 +392,7 @@ func New(cfg domainmodel.AppConfig, activeWorkspace string, version string, useC
 			Input: dateIn,
 		},
 		workspace: WorkspaceDataState{
-			Todos:    []Todo{},
-			Archived: []Todo{},
+			Todos: []Todo{},
 		},
 		todoSelection: TodoSelectionState{
 			Top:  0,
@@ -455,7 +453,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case workspaceTodosLoadedMsg:
 		m.workspace.Todos = msg.todos.Todos
-		m.workspace.Archived = msg.todos.Archived
 		if m.ui.Current == stateDayView && m.day.Selection.DayTab == 0 {
 			m.day.Viewport.SetContent(m.renderDayContent())
 		}
@@ -463,7 +460,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case workspaceTodosManagedMsg:
 		m.workspace.Todos = msg.todos.Todos
-		m.workspace.Archived = msg.todos.Archived
 		if len(msg.archivedToday) > 0 {
 			m.day.Record.TodayDone = mergeArchivedTodoTrees(m.day.Record.TodayDone, msg.archivedToday)
 			return m, m.saveDayCmd("")

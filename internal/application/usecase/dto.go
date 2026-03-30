@@ -27,8 +27,7 @@ type TodoDTO struct {
 }
 
 type WorkspaceTodosDTO struct {
-	Todos    []TodoDTO
-	Archived []TodoDTO
+	Todos []TodoDTO
 }
 
 func mapDomainDayRecordToDTO(rec model.DayRecord) DayRecordDTO {
@@ -75,15 +74,13 @@ func mapDayRecordDTOToDomain(rec DayRecordDTO) model.DayRecord {
 
 func mapDomainWorkspaceTodosToDTO(todos model.WorkspaceTodos) WorkspaceTodosDTO {
 	return WorkspaceTodosDTO{
-		Todos:    mapDomainTodosToDTO(todos.Todos),
-		Archived: mapDomainTodosToDTO(todos.Archived),
+		Todos: mapDomainTodosToDTO(todos.Todos),
 	}
 }
 
 func mapWorkspaceTodosDTOToDomain(todos WorkspaceTodosDTO) model.WorkspaceTodos {
 	return model.WorkspaceTodos{
-		Todos:    mapTodosDTOToDomain(todos.Todos),
-		Archived: mapTodosDTOToDomain(todos.Archived),
+		Todos: mapTodosDTOToDomain(todos.Todos),
 	}
 }
 

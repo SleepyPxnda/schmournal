@@ -70,7 +70,7 @@ func (m Model) saveDayCmd(label string) tea.Cmd {
 }
 
 func (m Model) saveWorkspaceTodosCmd(label string) tea.Cmd {
-	todos := WorkspaceTodos{Todos: m.workspace.Todos, Archived: m.workspace.Archived}
+	todos := WorkspaceTodos{Todos: m.workspace.Todos}
 	return func() tea.Msg {
 		if m.context.UseCases == nil || m.context.UseCases.SaveWorkspaceTodos == nil {
 			return errMsg{err: fmt.Errorf("save workspace todos use case is not configured")}
@@ -91,8 +91,8 @@ func (m Model) saveWorkspaceTodosCmd(label string) tea.Cmd {
 
 func (m Model) archiveCompletedTodosCmd(label string) tea.Cmd {
 	return func() tea.Msg {
-		if m.context.UseCases == nil || m.context.UseCases.ManageTodos == nil || m.context.UseCases.LoadWorkspaceTodos == nil {
-			return errMsg{err: fmt.Errorf("todo management use cases are not configured")}
+		if m.context.UseCases == nil || m.context.UseCases.ManageTodos == nil {
+			return errMsg{err: fmt.Errorf("todo management use case is not configured")}
 		}
 		workspace := m.context.ActiveWorkspace
 		if workspace == "" {
@@ -105,44 +105,10 @@ func (m Model) archiveCompletedTodosCmd(label string) tea.Cmd {
 		if err != nil {
 			return errMsg{err: err}
 		}
-
-		todos, err := m.context.UseCases.LoadWorkspaceTodos.ExecuteDTO(usecase.LoadWorkspaceTodosInput{
-			Workspace: workspace,
-		})
-		if err != nil {
-			return errMsg{err: err}
-		}
 		return workspaceTodosManagedMsg{
-			todos:         toUIWorkspaceTodos(todos),
 			archivedToday: toUITodos(output.ArchivedTodos),
 			label:         label,
 		}
-	}
-}
-
-func (m Model) clearArchiveCmd(label string) tea.Cmd {
-	return func() tea.Msg {
-		if m.context.UseCases == nil || m.context.UseCases.ManageTodos == nil || m.context.UseCases.LoadWorkspaceTodos == nil {
-			return errMsg{err: fmt.Errorf("todo management use cases are not configured")}
-		}
-		workspace := m.context.ActiveWorkspace
-		if workspace == "" {
-			workspace = "default"
-		}
-
-		if err := m.context.UseCases.ManageTodos.ClearArchive(usecase.ArchiveCompletedTodosInput{
-			Workspace: workspace,
-		}); err != nil {
-			return errMsg{err: err}
-		}
-
-		todos, err := m.context.UseCases.LoadWorkspaceTodos.ExecuteDTO(usecase.LoadWorkspaceTodosInput{
-			Workspace: workspace,
-		})
-		if err != nil {
-			return errMsg{err: err}
-		}
-		return workspaceTodosManagedMsg{todos: toUIWorkspaceTodos(todos), label: label}
 	}
 }
 

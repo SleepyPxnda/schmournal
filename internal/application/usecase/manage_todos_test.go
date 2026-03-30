@@ -25,8 +25,7 @@ func (m *MockTodoRepository) Load(workspace string) (model.WorkspaceTodos, error
 	}
 	// Return empty WorkspaceTodos if not found
 	return model.WorkspaceTodos{
-		Todos:    []model.Todo{},
-		Archived: []model.Todo{},
+		Todos: []model.Todo{},
 	}, nil
 }
 
@@ -55,7 +54,6 @@ func TestManageTodos_ArchiveCompletedTodos_Success(t *testing.T) {
 			{ID: "1", Title: "Completed", Completed: true, Subtodos: []model.Todo{}},
 			{ID: "2", Title: "Incomplete", Completed: false, Subtodos: []model.Todo{}},
 		},
-		Archived: []model.Todo{},
 	}
 	_ = repo.Save("default", workspace)
 
@@ -84,9 +82,6 @@ func TestManageTodos_ArchiveCompletedTodos_Success(t *testing.T) {
 	if len(saved.Todos) != 1 || saved.Todos[0].ID != "2" {
 		t.Error("expected only incomplete TODO to remain")
 	}
-	if len(saved.Archived) != 1 || saved.Archived[0].ID != "1" {
-		t.Error("expected completed TODO to be archived")
-	}
 }
 
 func TestManageTodos_ArchiveCompletedTodos_NestedTodos(t *testing.T) {
@@ -114,7 +109,6 @@ func TestManageTodos_ArchiveCompletedTodos_NestedTodos(t *testing.T) {
 				},
 			},
 		},
-		Archived: []model.Todo{},
 	}
 	_ = repo.Save("default", workspace)
 
@@ -159,56 +153,6 @@ func TestManageTodos_ArchiveCompletedTodos_NestedTodos(t *testing.T) {
 		t.Errorf("expected completed child to be pruned, got %d subtodos", len(saved.Todos[0].Subtodos))
 	}
 
-	// Archived should contain both:
-	// - fully complete tree (parent 1 + child 1a)
-	// - contextual branch for parent 2 -> child 2a
-	if len(saved.Archived) != 2 {
-		t.Fatalf("expected 2 archived todos, got %d", len(saved.Archived))
-	}
-	if saved.Archived[0].ID != "1" {
-		t.Error("expected parent 1 to be archived")
-	}
-	if len(saved.Archived[0].Subtodos) != 1 {
-		t.Error("expected child 1a to be archived with parent")
-	}
-	if saved.Archived[1].ID != "2" || saved.Archived[1].Completed {
-		t.Fatalf("expected parent 2 context to be archived as incomplete reference, got %+v", saved.Archived[1])
-	}
-	if len(saved.Archived[1].Subtodos) != 1 || saved.Archived[1].Subtodos[0].ID != "2a" {
-		t.Fatalf("expected contextual branch to include completed child 2a, got %+v", saved.Archived[1].Subtodos)
-	}
-}
-
-func TestManageTodos_ClearArchive_Success(t *testing.T) {
-	repo := NewMockTodoRepository()
-	todoOps := service.NewTodoOperations()
-	useCase := NewManageTodosUseCase(repo, todoOps)
-
-	// Create workspace with archived TODOs
-	workspace := model.WorkspaceTodos{
-		Todos: []model.Todo{},
-		Archived: []model.Todo{
-			{ID: "1", Title: "Archived 1", Completed: true, Subtodos: []model.Todo{}},
-			{ID: "2", Title: "Archived 2", Completed: true, Subtodos: []model.Todo{}},
-		},
-	}
-	_ = repo.Save("default", workspace)
-
-	// Clear archive
-	input := ArchiveCompletedTodosInput{Workspace: "default"}
-	err := useCase.ClearArchive(input)
-	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
-	}
-
-	// Verify archive is cleared
-	saved, err := repo.Load("default")
-	if err != nil {
-		t.Fatalf("failed to load saved todos: %v", err)
-	}
-	if len(saved.Archived) != 0 {
-		t.Errorf("expected archive to be empty, got %d items", len(saved.Archived))
-	}
 }
 
 func TestManageTodos_ValidationErrors(t *testing.T) {
@@ -220,10 +164,5 @@ func TestManageTodos_ValidationErrors(t *testing.T) {
 	_, err := useCase.ArchiveCompletedTodos(ArchiveCompletedTodosInput{Workspace: ""})
 	if err == nil {
 		t.Error("expected error for missing workspace")
-	}
-
-	err = useCase.ClearArchive(ArchiveCompletedTodosInput{Workspace: ""})
-	if err == nil {
-		t.Error("expected error for missing workspace in clear archive")
 	}
 }

@@ -312,8 +312,8 @@ func isFullyCompleted(t Todo) bool {
 }
 
 // collectFullyCompleted returns all top-level todos (and their subtree) for
-// which isFullyCompleted is true. These are the items that will be moved to
-// the archive when the user leaves the day view.
+// which isFullyCompleted is true. These items are removed from active todos
+// and merged into the day record's TodayDone snapshot when leaving day view.
 func collectFullyCompleted(todos []Todo) []Todo {
 	var result []Todo
 	for _, t := range todos {
@@ -451,7 +451,7 @@ func (m Model) renderTodosPanel(w int) string {
 		if m.day.Selection.Pane != 1 {
 			b.WriteString(dayViewMutedStyle.Render("  t open todo overview") + "\n")
 		}
-		if len(m.workspace.Archived) == 0 && len(m.day.Record.TodayDone) == 0 {
+		if len(m.day.Record.TodayDone) == 0 {
 			return b.String()
 		}
 	}
@@ -507,16 +507,6 @@ func (m Model) renderTodosPanel(w int) string {
 		b.WriteString(dayViewMutedStyle.Render("  Today Done") + "\n")
 		for _, td := range m.day.Record.TodayDone {
 			b.WriteString(renderArchivedTodoTree(td, 0, w))
-		}
-	}
-	if len(m.workspace.Archived) > 0 {
-		b.WriteString(dayViewDividerStyle.Render(strings.Repeat("─", w)) + "\n")
-		b.WriteString(dayViewMutedStyle.Render("  Archived") + "\n")
-		for _, td := range m.workspace.Archived {
-			b.WriteString(renderArchivedTodoTree(td, 0, w))
-		}
-		if m.day.Selection.Pane == 1 {
-			b.WriteString(dayViewMutedStyle.Render("  X clear archive") + "\n")
 		}
 	}
 	return b.String()

@@ -22,7 +22,7 @@ func NewFileSystemTodoRepository(storage *StorageManager) repository.TodoReposit
 	}
 }
 
-// Load reads workspace TODOs (active + archived) for the given workspace.
+// Load reads workspace TODOs for the given workspace.
 func (r *FileSystemTodoRepository) Load(workspace string) (model.WorkspaceTodos, error) {
 	path, err := r.storage.TodosPath()
 	if err != nil {
@@ -33,8 +33,7 @@ func (r *FileSystemTodoRepository) Load(workspace string) (model.WorkspaceTodos,
 	if os.IsNotExist(err) {
 		// Return empty TODOs if file doesn't exist.
 		return model.WorkspaceTodos{
-			Todos:    []model.Todo{},
-			Archived: []model.Todo{},
+			Todos: []model.Todo{},
 		}, nil
 	}
 	if err != nil {
@@ -91,7 +90,6 @@ func (r *FileSystemTodoRepository) Delete(workspace string) error {
 // normalizeWorkspaceTodos ensures no nil slices in the TODO structure.
 func normalizeWorkspaceTodos(w model.WorkspaceTodos) model.WorkspaceTodos {
 	w.Todos = normalizeTodos(w.Todos)
-	w.Archived = normalizeTodos(w.Archived)
 	return w
 }
 

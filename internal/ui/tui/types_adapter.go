@@ -116,8 +116,7 @@ func toUseCaseDayRecord(rec DayRecord) usecase.DayRecordDTO {
 
 func toUIWorkspaceTodos(todos usecase.WorkspaceTodosDTO) WorkspaceTodos {
 	return WorkspaceTodos{
-		Todos:    toUITodos(todos.Todos),
-		Archived: toUITodos(todos.Archived),
+		Todos: toUITodos(todos.Todos),
 	}
 }
 
@@ -136,8 +135,7 @@ func toUITodos(todos []usecase.TodoDTO) []Todo {
 
 func toUseCaseWorkspaceTodos(todos WorkspaceTodos) usecase.WorkspaceTodosDTO {
 	return usecase.WorkspaceTodosDTO{
-		Todos:    toUseCaseTodos(todos.Todos),
-		Archived: toUseCaseTodos(todos.Archived),
+		Todos: toUseCaseTodos(todos.Todos),
 	}
 }
 
