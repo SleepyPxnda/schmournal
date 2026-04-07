@@ -11,7 +11,7 @@ func newDayViewTestModel(t *testing.T) Model {
 	t.Helper()
 
 	cfg := model.DefaultAppConfig()
-	m := New(cfg, "", "test", nil)
+	m := New(cfg, "", "test", nil, nil)
 	updated, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
 	m = updated.(Model)
 	m.ui.Current = stateDayView

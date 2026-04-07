@@ -375,8 +375,13 @@ func TestTodosPanelUsesSingleDraftHintAcrossEnterToggle(t *testing.T) {
 	)
 
 	m := Model{
-		ui:         UIState{Current: stateDayView},
-		day:        DayViewState{Selection: SelectionState{Pane: 1, DayTab: 0}},
+		ui:  UIState{Current: stateDayView},
+		day: DayViewState{Selection: SelectionState{Pane: 1, DayTab: 0}},
+		context: AppContextState{
+			Config: model.AppConfig{
+				Modules: model.Modules{TodoEnabled: true},
+			},
+		},
 		todoEditor: TodoEditorState{InputMode: false, Draft: ""},
 		workspace:  WorkspaceDataState{Todos: []Todo{}},
 	}

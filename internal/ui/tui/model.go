@@ -296,7 +296,9 @@ func newDelegate() workDayDelegate {
 }
 
 // New constructs the initial model using the provided configuration.
-func New(cfg domainmodel.AppConfig, activeWorkspace string, version string, useCases *UseCases) Model {
+// initErr, if non-nil, is shown as an error status message on startup
+// so that config problems are visible even when running without a terminal.
+func New(cfg domainmodel.AppConfig, activeWorkspace string, version string, useCases *UseCases, initErr error) Model {
 	l := list.New([]list.Item{}, newDelegate(), 0, 0)
 	l.SetShowTitle(false)
 	l.SetShowStatusBar(false)
@@ -358,7 +360,7 @@ func New(cfg domainmodel.AppConfig, activeWorkspace string, version string, useC
 	todoIn.TextStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(cText))
 	todoIn.PlaceholderStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(cOverlay0))
 
-	return Model{
+	m := Model{
 		ui: UIState{
 			Current: stateList,
 			Version: version,
@@ -406,6 +408,11 @@ func New(cfg domainmodel.AppConfig, activeWorkspace string, version string, useC
 			Input:    todoIn,
 		},
 	}
+	if initErr != nil {
+		m.status.Message = "✗ Config error: " + initErr.Error()
+		m.status.IsError = true
+	}
+	return m
 }
 
 func (m Model) Init() tea.Cmd {

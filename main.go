@@ -36,9 +36,9 @@ func main() {
 	}
 	stateRepo := infraConfig.NewFileSystemStateRepository(configDir)
 
-	cfgModel, err := loadConfigModel(configRepo)
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "Warning: could not load config:", err)
+	cfgModel, cfgErr := loadConfigModel(configRepo)
+	if cfgErr != nil {
+		fmt.Fprintln(os.Stderr, "Warning: could not load config:", cfgErr)
 	}
 
 	// Determine the active workspace and apply its settings.
@@ -69,7 +69,7 @@ func main() {
 	useCases := tui.NewUseCases(initialSet, useCaseFactory)
 
 	p := tea.NewProgram(
-		tui.New(cfgModel, activeWorkspace, version, useCases),
+		tui.New(cfgModel, activeWorkspace, version, useCases, cfgErr),
 		tea.WithAltScreen(),
 		tea.WithMouseCellMotion(),
 	)

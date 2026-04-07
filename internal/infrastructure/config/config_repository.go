@@ -171,5 +171,13 @@ func (r *FileSystemConfigRepository) migrateConfig(path string, cfg model.AppCon
 	if err := os.Rename(path, oldPath); err != nil {
 		return err
 	}
-	return r.Save(cfg)
+	if err := r.Save(cfg); err != nil {
+		// Best-effort restoration: if we cannot write the new config, put the
+		// old file back so the next startup does not lose the user's workspaces.
+		// The rename error is intentionally ignored — the Save error is the
+		// primary failure and is returned to the caller.
+		_ = os.Rename(oldPath, path)
+		return err
+	}
+	return nil
 }
