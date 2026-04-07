@@ -601,7 +601,7 @@ func (m Model) viewWeekView() string {
 	footer := m.renderFooter([][2]string{
 		{"j/k", "scroll"},
 		{"←/→", "prev/next week"},
-		{"esc", "back"},
+		{m.context.Config.Keybinds.List.Quit, "back"},
 	})
 	return lipgloss.JoinVertical(lipgloss.Left, header, subHeader, m.day.Viewport.View(), footer)
 }

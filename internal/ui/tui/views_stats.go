@@ -16,10 +16,11 @@ const statsDurFieldW = 9
 func (m Model) viewStats() string {
 	header := m.renderHeader("📊  Stats", "Overview")
 	tabBar := m.renderStatsTabBar()
+	kb := m.context.Config.Keybinds.List
 	footer := m.renderFooter([][2]string{
 		{"←/→", "switch tab"},
 		{"j/k", "scroll"},
-		{"esc", "back"},
+		{kb.Quit, "back"},
 	})
 	return lipgloss.JoinVertical(lipgloss.Left, header, tabBar, m.day.Viewport.View(), footer)
 }

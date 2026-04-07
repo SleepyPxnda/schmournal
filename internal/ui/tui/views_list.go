@@ -28,7 +28,7 @@ func (m Model) viewList() string {
 	if len(m.context.Config.Workspaces) > 0 {
 		footerKeys = append(footerKeys, [2]string{kb.SwitchWorkspace, "workspace"})
 	}
-	footerKeys = append(footerKeys, [2]string{"esc", "quit"})
+	footerKeys = append(footerKeys, [2]string{kb.Quit, "quit"})
 	footer := m.renderFooter(footerKeys)
 	sections := []string{header, m.renderStats()}
 	if eom := m.renderEOMBanner(); eom != "" {

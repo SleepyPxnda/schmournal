@@ -292,7 +292,8 @@ func (m Model) viewWorkspacePicker() string {
 		rows = append(rows, line)
 	}
 	rows = append(rows, div)
-	rows = append(rows, dayViewMutedStyle.Render("j/k  navigate  ·  enter  switch  ·  esc  cancel"))
+	quitKey := m.context.Config.Keybinds.List.Quit
+	rows = append(rows, dayViewMutedStyle.Render("j/k  navigate  ·  enter  switch  ·  "+quitKey+"  cancel"))
 	box := formBoxStyle.Render(lipgloss.JoinVertical(lipgloss.Left, rows...))
 	bh := lipgloss.Height(box)
 	ch := m.contentHeight()
@@ -301,6 +302,6 @@ func (m Model) viewWorkspacePicker() string {
 		topPad = 0
 	}
 	centered := lipgloss.NewStyle().Width(m.window.Width).Align(lipgloss.Center).Render(box)
-	footer := m.renderFooter([][2]string{{"j/k", "navigate"}, {"enter", "switch"}, {"esc", "cancel"}})
+	footer := m.renderFooter([][2]string{{"j/k", "navigate"}, {"enter", "switch"}, {quitKey, "cancel"}})
 	return lipgloss.JoinVertical(lipgloss.Left, header, strings.Repeat("\n", topPad)+centered, footer)
 }
