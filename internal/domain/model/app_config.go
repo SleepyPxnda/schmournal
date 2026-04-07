@@ -146,6 +146,8 @@ func (cfg *AppConfig) ValidateAndNormalize() error {
 		}
 	}
 
+	fill(&cfg.StoragePath, def.StoragePath)
+
 	lk := &cfg.Keybinds.List
 	dl := def.Keybinds.List
 	fill(&lk.Quit, dl.Quit)
