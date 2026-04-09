@@ -118,8 +118,11 @@ func DefaultAppConfig() AppConfig {
 // IsWorkDay reports whether t falls on a configured working day.
 func (cfg AppConfig) IsWorkDay(t time.Time) bool {
 	workDays := DefaultWorkspaceConfig("").WorkDays
-	if len(cfg.Workspaces) > 0 && len(cfg.Workspaces[0].WorkDays) > 0 {
-		workDays = cfg.Workspaces[0].WorkDays
+	for _, ws := range cfg.Workspaces {
+		if ws.Name == "default" && len(ws.WorkDays) > 0 {
+			workDays = ws.WorkDays
+			break
+		}
 	}
 	wd := strings.ToLower(t.Weekday().String())
 	for _, d := range workDays {

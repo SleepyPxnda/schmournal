@@ -80,7 +80,7 @@ func (r *FileSystemConfigRepository) Load() (model.AppConfig, error) {
 	if !md.IsDefined("modules", "todo_enabled") {
 		cfg.Modules.TodoEnabled = true
 	}
-	applyLegacyWorkspaceFallbacks(&cfg, legacy, md)
+	applyLegacyWorkspaceFallbacks(&cfg, legacy)
 
 	if err := cfg.ValidateAndNormalize(); err != nil {
 		return def, err
@@ -176,19 +176,12 @@ func (r *FileSystemConfigRepository) migrateConfig(path string, cfg model.AppCon
 	return r.Save(cfg)
 }
 
-func applyLegacyWorkspaceFallbacks(cfg *model.AppConfig, legacy legacyGlobalSettings, md toml.MetaData) {
+func applyLegacyWorkspaceFallbacks(cfg *model.AppConfig, legacy legacyGlobalSettings) {
 	def := model.DefaultWorkspaceConfig("")
-	allDays := []string{
-		"monday", "tuesday", "wednesday", "thursday",
-		"friday", "saturday", "sunday",
-	}
 
 	workDaysFallback := append([]string(nil), def.WorkDays...)
-	switch {
-	case len(legacy.WorkDays) > 0:
+	if len(legacy.WorkDays) > 0 {
 		workDaysFallback = append([]string(nil), legacy.WorkDays...)
-	case !md.IsDefined("work_days"):
-		workDaysFallback = append([]string(nil), allDays...)
 	}
 
 	weeklyGoalFallback := def.WeeklyHoursGoal

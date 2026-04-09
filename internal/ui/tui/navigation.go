@@ -37,9 +37,6 @@ func (m Model) activeWorkspaceConfig() *domainmodel.WorkspaceConfig {
 			return &m.context.Config.Workspaces[i]
 		}
 	}
-	if len(m.context.Config.Workspaces) > 0 {
-		return &m.context.Config.Workspaces[0]
-	}
 	return nil
 }
 
