@@ -59,7 +59,7 @@ Important: Active TODOs are workspace-global, not day-specific. Day records pers
 - Pure business logic only.
 - No dependency on UI, config package, or infrastructure package.
 - Repository contracts live in `internal/domain/repository`.
-- Domain services (duration parsing/formatting, clock conversion, export generation, todo ops) are the source of business behavior.
+- Domain services (duration parsing/formatting, clock conversion, todo ops) are the source of business behavior.
 
 ### Infrastructure (`internal/infrastructure`)
 - Implement domain repository interfaces and provider interfaces.

@@ -407,7 +407,10 @@ func New(cfg domainmodel.AppConfig, activeWorkspace string, version string, useC
 }
 
 func (m Model) Init() tea.Cmd {
-	return tea.Batch(m.loadRecordsCmd(), m.loadWorkspaceTodosCmd())
+	if m.context.Config.Modules.TodoEnabled {
+		return tea.Batch(m.loadRecordsCmd(), m.loadWorkspaceTodosCmd())
+	}
+	return m.loadRecordsCmd()
 }
 
 // ── Update ────────────────────────────────────────────────────────────────────

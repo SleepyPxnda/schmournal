@@ -52,7 +52,13 @@ func (m Model) handleListKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 func (m Model) handleDayViewKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	n := len(m.day.Record.Entries)
-	inTodoPane := m.day.Selection.DayTab == 0 && m.day.Selection.Pane == 1
+	todoEnabled := m.context.Config.Modules.TodoEnabled
+	if !todoEnabled && m.day.Selection.Pane == 1 {
+		// Clamp selection to the main pane when TODOs are disabled so TODO-specific
+		// navigation/actions are effectively unbound.
+		m.day.Selection.Pane = 0
+	}
+	inTodoPane := todoEnabled && m.day.Selection.DayTab == 0 && m.day.Selection.Pane == 1
 
 	updated, cmd, handled := m.handleDayTodoInlineInput(msg, inTodoPane)
 	if handled {
@@ -260,6 +266,8 @@ func (m Model) handleDayNavigationKey(key string, n int) (Model, tea.Cmd, bool) 
 
 func (m Model) handleDayConfiguredCommandKey(key string, n int) (Model, tea.Cmd, bool) {
 	kb := m.context.Config.Keybinds.Day
+	clockEnabled := m.context.Config.Modules.ClockEnabled
+	todoEnabled := m.context.Config.Modules.TodoEnabled
 	switch key {
 	case kb.AddWork:
 		modelOut, cmd := m.openWorkForm(false, -1)
@@ -268,7 +276,7 @@ func (m Model) handleDayConfiguredCommandKey(key string, n int) (Model, tea.Cmd,
 		modelOut, cmd := m.openWorkForm(true, -1)
 		return modelOut.(Model), cmd, true
 	case kb.Edit:
-		if m.day.Selection.DayTab == 0 && m.day.Selection.Pane == 1 {
+		if todoEnabled && m.day.Selection.DayTab == 0 && m.day.Selection.Pane == 1 {
 			modelOut, cmd := m.openTodoFormForSelection()
 			return modelOut.(Model), cmd, true
 		}
@@ -279,7 +287,7 @@ func (m Model) handleDayConfiguredCommandKey(key string, n int) (Model, tea.Cmd,
 		modelOut, cmd := m.openNotesEditor()
 		return modelOut.(Model), cmd, true
 	case kb.Delete:
-		if m.day.Selection.DayTab == 0 && m.day.Selection.Pane == 1 {
+		if todoEnabled && m.day.Selection.DayTab == 0 && m.day.Selection.Pane == 1 {
 			if m.todoSelection.Top >= 0 && m.todoSelection.Top < len(m.workspace.Todos) {
 				m.delete.Day = false
 				m.delete.Idx = deleteTodoIdx
@@ -348,6 +356,9 @@ func (m Model) handleDayConfiguredCommandKey(key string, n int) (Model, tea.Cmd,
 		modelOut, cmd := m.openNotesEditor()
 		return modelOut.(Model), cmd, true
 	case kb.TodoOverview:
+		if !todoEnabled {
+			return m, nil, false
+		}
 		if m.day.Selection.DayTab == 0 {
 			if m.day.Selection.Pane != 1 {
 				m.day.Selection.Pane = 1
@@ -364,6 +375,9 @@ func (m Model) handleDayConfiguredCommandKey(key string, n int) (Model, tea.Cmd,
 		m.day.Viewport.SetContent(m.renderDayContent())
 		return m, nil, true
 	case kb.ClockStart:
+		if !clockEnabled {
+			return m, nil, false
+		}
 		if !m.clock.Running {
 			modelOut, cmd := m.openClockForm()
 			return modelOut.(Model), cmd, true
@@ -374,6 +388,9 @@ func (m Model) handleDayConfiguredCommandKey(key string, n int) (Model, tea.Cmd,
 		}
 		return m, nil, true
 	case kb.ClockStop:
+		if !clockEnabled {
+			return m, nil, false
+		}
 		if m.clock.Running {
 			modelOut, cmd := m.stopClock()
 			return modelOut.(Model), cmd, true
@@ -392,17 +409,19 @@ func (m Model) handleDayConfiguredCommandKey(key string, n int) (Model, tea.Cmd,
 			m.status.IsError = false
 			cmds = append(cmds, clearStatusCmd())
 		}
-		if m.context.UseCases != nil && m.context.UseCases.ManageTodos != nil {
-			cmds = append(cmds, m.collectCompletedTodosCmd(""))
-		} else {
-			// Fallback path: preserve existing behavior if use case wiring is unavailable.
-			harvested := collectFullyCompleted(m.workspace.Todos)
-			pruned := pruneCompletedTodos(m.workspace.Todos)
-			if len(pruned) != len(m.workspace.Todos) {
-				m.workspace.Todos = pruned
-				m.day.Record.TodayDone = mergeTodayDoneTrees(m.day.Record.TodayDone, harvested)
-				cmds = append(cmds, m.saveWorkspaceTodosCmd(""))
-				cmds = append(cmds, m.saveDayCmd(""))
+		if todoEnabled {
+			if m.context.UseCases != nil && m.context.UseCases.ManageTodos != nil {
+				cmds = append(cmds, m.collectCompletedTodosCmd(""))
+			} else {
+				// Fallback path: preserve existing behavior if use case wiring is unavailable.
+				harvested := collectFullyCompleted(m.workspace.Todos)
+				pruned := pruneCompletedTodos(m.workspace.Todos)
+				if len(pruned) != len(m.workspace.Todos) {
+					m.workspace.Todos = pruned
+					m.day.Record.TodayDone = mergeTodayDoneTrees(m.day.Record.TodayDone, harvested)
+					cmds = append(cmds, m.saveWorkspaceTodosCmd(""))
+					cmds = append(cmds, m.saveDayCmd(""))
+				}
 			}
 		}
 		return m, tea.Batch(cmds...), true
@@ -443,18 +462,22 @@ func (m Model) isDayCommandKey(key string) bool {
 		return false
 	}
 	kb := m.context.Config.Keybinds.Day
-	return key == kb.AddWork ||
-		key == kb.AddBreak ||
-		key == kb.Edit ||
-		key == kb.Delete ||
-		key == kb.SetStartNow ||
-		key == kb.SetStartManual ||
-		key == kb.SetEndNow ||
-		key == kb.SetEndManual ||
-		key == kb.Notes ||
-		key == kb.TodoOverview ||
-		key == kb.ClockStart ||
-		key == kb.ClockStop
+	clockEnabled := m.context.Config.Modules.ClockEnabled
+	todoEnabled := m.context.Config.Modules.TodoEnabled
+	if key == kb.AddWork || key == kb.AddBreak ||
+		key == kb.Edit || key == kb.Delete ||
+		key == kb.SetStartNow || key == kb.SetStartManual ||
+		key == kb.SetEndNow || key == kb.SetEndManual ||
+		key == kb.Notes {
+		return true
+	}
+	if todoEnabled && key == kb.TodoOverview {
+		return true
+	}
+	if clockEnabled && (key == kb.ClockStart || key == kb.ClockStop) {
+		return true
+	}
+	return false
 }
 
 func (m Model) handleTodoFormKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {

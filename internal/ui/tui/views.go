@@ -101,7 +101,8 @@ func (m Model) renderWorkLogContent() string {
 	// The clock panel has a left border (+1 char), so:
 	//   leftW + 1 + rightW = innerW  →  leftW = innerW - rightW - 1
 	const clockMinW = 28
-	if innerW >= 60 {
+	clockEnabled := m.context.Config.Modules.ClockEnabled
+	if clockEnabled && innerW >= 60 {
 		rightW := innerW / 2
 		if rightW < clockMinW {
 			rightW = clockMinW
@@ -111,19 +112,24 @@ func (m Model) renderWorkLogContent() string {
 		rightBlock := clockPanelBorderStyle.Width(rightW).Render(m.renderClockPanel(rightW))
 		b.WriteString(lipgloss.JoinHorizontal(lipgloss.Top, leftBlock, rightBlock))
 		b.WriteString("\n")
-	} else {
+	} else if clockEnabled {
 		// Narrow terminal: stack entries above the clock panel.
 		b.WriteString(m.renderEntriesPanel(innerW))
 		b.WriteString("\n" + div + "\n")
 		b.WriteString(m.renderClockPanel(innerW))
+		b.WriteString("\n")
+	} else {
+		// Clock disabled: entries take full width.
+		b.WriteString(m.renderEntriesPanel(innerW))
 		b.WriteString("\n")
 	}
 
 	b.WriteString("\n")
 
 	// ── Notes + Todos two-column section ───────────────────────────────────────
+	todoEnabled := m.context.Config.Modules.TodoEnabled
 	b.WriteString("\n" + div + "\n")
-	if innerW >= 60 {
+	if todoEnabled && innerW >= 60 {
 		leftW := (innerW - 1) / 2
 		rightW := innerW - leftW - 1
 		leftPanel := m.renderNotesPanel(leftW)
@@ -145,10 +151,14 @@ func (m Model) renderWorkLogContent() string {
 		rightBlock := clockPanelBorderStyle.Width(rightW).Height(maxH).Render(rightPanel)
 		b.WriteString(lipgloss.JoinHorizontal(lipgloss.Top, leftBlock, rightBlock))
 		b.WriteString("\n")
-	} else {
+	} else if todoEnabled {
 		b.WriteString(m.renderNotesPanel(innerW))
 		b.WriteString("\n" + div + "\n")
 		b.WriteString(m.renderTodosPanel(innerW))
+		b.WriteString("\n")
+	} else {
+		// Todo disabled: notes take full width.
+		b.WriteString(m.renderNotesPanel(innerW))
 		b.WriteString("\n")
 	}
 
