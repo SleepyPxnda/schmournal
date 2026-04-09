@@ -48,13 +48,11 @@ func main() {
 	}
 	activeWorkspace := resolveActiveWorkspace(cfgModel, state.ActiveWorkspace)
 
-	storagePath := cfgModel.StoragePath
+	storagePath := model.DefaultWorkspaceConfig("").StoragePath
 	if activeWorkspace != "" {
 		for _, ws := range cfgModel.Workspaces {
 			if ws.Name == activeWorkspace {
-				if ws.StoragePath != "" {
-					storagePath = ws.StoragePath
-				}
+				storagePath = ws.StoragePath
 				break
 			}
 		}

@@ -134,7 +134,6 @@ clock_stop = "c"
 	}
 }
 
-
 func TestFileSystemConfigRepository_LoadSaveRoundTrip(t *testing.T) {
 	repo, err := NewFileSystemConfigRepository(t.TempDir())
 	if err != nil {
@@ -142,8 +141,8 @@ func TestFileSystemConfigRepository_LoadSaveRoundTrip(t *testing.T) {
 	}
 
 	cfg := model.DefaultAppConfig()
-	cfg.WeeklyHoursGoal = 37.5
-	cfg.WorkDays = []string{"monday", "wednesday", "friday"}
+	cfg.Workspaces[0].WeeklyHoursGoal = 37.5
+	cfg.Workspaces[0].WorkDays = []string{"monday", "wednesday", "friday"}
 
 	if err := repo.Save(cfg); err != nil {
 		t.Fatalf("Save() error = %v", err)
@@ -154,11 +153,11 @@ func TestFileSystemConfigRepository_LoadSaveRoundTrip(t *testing.T) {
 		t.Fatalf("Load() error = %v", err)
 	}
 
-	if loaded.WeeklyHoursGoal != cfg.WeeklyHoursGoal {
-		t.Fatalf("WeeklyHoursGoal = %v, want %v", loaded.WeeklyHoursGoal, cfg.WeeklyHoursGoal)
+	if loaded.Workspaces[0].WeeklyHoursGoal != cfg.Workspaces[0].WeeklyHoursGoal {
+		t.Fatalf("WeeklyHoursGoal = %v, want %v", loaded.Workspaces[0].WeeklyHoursGoal, cfg.Workspaces[0].WeeklyHoursGoal)
 	}
-	if len(loaded.WorkDays) != len(cfg.WorkDays) {
-		t.Fatalf("WorkDays length = %d, want %d", len(loaded.WorkDays), len(cfg.WorkDays))
+	if len(loaded.Workspaces[0].WorkDays) != len(cfg.Workspaces[0].WorkDays) {
+		t.Fatalf("WorkDays length = %d, want %d", len(loaded.Workspaces[0].WorkDays), len(cfg.Workspaces[0].WorkDays))
 	}
 }
 
@@ -175,8 +174,8 @@ func TestFileSystemConfigRepository_LoadCreatesDefaultWhenMissing(t *testing.T) 
 	}
 
 	def := model.DefaultAppConfig()
-	if loaded.WeeklyHoursGoal != def.WeeklyHoursGoal {
-		t.Fatalf("WeeklyHoursGoal = %v, want %v", loaded.WeeklyHoursGoal, def.WeeklyHoursGoal)
+	if loaded.Workspaces[0].WeeklyHoursGoal != def.Workspaces[0].WeeklyHoursGoal {
+		t.Fatalf("WeeklyHoursGoal = %v, want %v", loaded.Workspaces[0].WeeklyHoursGoal, def.Workspaces[0].WeeklyHoursGoal)
 	}
 
 	cfgPath := filepath.Join(dir, "schmournal.config")
@@ -240,12 +239,12 @@ clock_stop = "c"
 		t.Fatal("WeekView keybind should be filled during load")
 	}
 
-	// Workspace work_days should be expanded during migration to preserve legacy behavior.
+	// Workspace work_days should inherit the legacy top-level work_days value.
 	if len(loaded.Workspaces) != 1 {
 		t.Fatalf("Workspaces length = %d, want 1", len(loaded.Workspaces))
 	}
-	if len(loaded.Workspaces[0].WorkDays) != 7 {
-		t.Fatalf("workspace WorkDays length = %d, want 7", len(loaded.Workspaces[0].WorkDays))
+	if len(loaded.Workspaces[0].WorkDays) != 5 {
+		t.Fatalf("workspace WorkDays length = %d, want 5", len(loaded.Workspaces[0].WorkDays))
 	}
 
 	backupPath := filepath.Join(dir, "schmournal.old.config")
@@ -259,5 +258,50 @@ clock_stop = "c"
 	}
 	if !strings.Contains(string(newRaw), "week_view") {
 		t.Fatal("migrated config should contain week_view key")
+	}
+	if strings.HasPrefix(strings.TrimSpace(string(newRaw)), "storage_path") {
+		t.Fatal("migrated config should not start with legacy top-level storage settings")
+	}
+}
+
+func TestFileSystemConfigRepository_LoadUsesLegacyGlobalFallbacksForWorkspaceSettings(t *testing.T) {
+	dir := t.TempDir()
+	repo, err := NewFileSystemConfigRepository(dir)
+	if err != nil {
+		t.Fatalf("NewFileSystemConfigRepository() error = %v", err)
+	}
+
+	cfgPath := filepath.Join(dir, "schmournal.config")
+	oldCfg := `storage_path = "~/.journal/legacy"
+weekly_hours_goal = 32.5
+work_days = ["monday", "wednesday"]
+
+[[workspaces]]
+name = "Work"
+
+[modules]
+clock_enabled = true
+todo_enabled = true
+`
+	if err := os.WriteFile(cfgPath, []byte(oldCfg), 0o644); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	loaded, err := repo.Load()
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if len(loaded.Workspaces) != 1 {
+		t.Fatalf("Workspaces length = %d, want 1", len(loaded.Workspaces))
+	}
+	ws := loaded.Workspaces[0]
+	if ws.StoragePath != "~/.journal/legacy" {
+		t.Fatalf("StoragePath = %q, want %q", ws.StoragePath, "~/.journal/legacy")
+	}
+	if ws.WeeklyHoursGoal != 32.5 {
+		t.Fatalf("WeeklyHoursGoal = %v, want 32.5", ws.WeeklyHoursGoal)
+	}
+	if len(ws.WorkDays) != 2 || ws.WorkDays[0] != "monday" || ws.WorkDays[1] != "wednesday" {
+		t.Fatalf("WorkDays = %v, want [monday wednesday]", ws.WorkDays)
 	}
 }

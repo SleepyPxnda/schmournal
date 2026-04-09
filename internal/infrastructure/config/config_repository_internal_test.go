@@ -22,8 +22,7 @@ func TestCollectTOMLPathsCoversAllLeafs(t *testing.T) {
 func TestCollectTOMLPathsIncludesKnownPaths(t *testing.T) {
 	paths := collectTOMLPaths(reflect.TypeOf(model.AppConfig{}), nil)
 	want := [][]string{
-		{"storage_path"},
-		{"weekly_hours_goal"},
+		{"modules", "clock_enabled"},
 		{"keybinds", "list", "quit"},
 		{"keybinds", "list", "week_view"},
 		{"keybinds", "day", "add_work"},

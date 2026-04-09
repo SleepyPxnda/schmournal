@@ -57,23 +57,33 @@ type Modules struct {
 
 // AppConfig is the top-level application configuration.
 type AppConfig struct {
-	StoragePath     string            `toml:"storage_path"`
-	WeeklyHoursGoal float64           `toml:"weekly_hours_goal"`
-	WorkDays        []string          `toml:"work_days"`
-	Modules         Modules           `toml:"modules"`
-	Keybinds        Keybinds          `toml:"keybinds"`
-	Workspaces      []WorkspaceConfig `toml:"workspaces"`
+	Modules    Modules           `toml:"modules"`
+	Keybinds   Keybinds          `toml:"keybinds"`
+	Workspaces []WorkspaceConfig `toml:"workspaces"`
+}
+
+// DefaultWorkspaceConfig returns default settings for a workspace.
+func DefaultWorkspaceConfig(name string) WorkspaceConfig {
+	if name == "" {
+		name = "default"
+	}
+	return WorkspaceConfig{
+		Name:            name,
+		StoragePath:     "~/.journal",
+		WeeklyHoursGoal: 40,
+		WorkDays:        []string{"monday", "tuesday", "wednesday", "thursday", "friday"},
+	}
 }
 
 // DefaultAppConfig returns the default configuration.
 func DefaultAppConfig() AppConfig {
 	return AppConfig{
-		StoragePath:     "~/.journal",
-		WeeklyHoursGoal: 40,
-		WorkDays:        []string{"monday", "tuesday", "wednesday", "thursday", "friday"},
 		Modules: Modules{
 			ClockEnabled: true,
 			TodoEnabled:  true,
+		},
+		Workspaces: []WorkspaceConfig{
+			DefaultWorkspaceConfig("default"),
 		},
 		Keybinds: Keybinds{
 			List: ListKeybinds{
@@ -107,8 +117,12 @@ func DefaultAppConfig() AppConfig {
 
 // IsWorkDay reports whether t falls on a configured working day.
 func (cfg AppConfig) IsWorkDay(t time.Time) bool {
+	workDays := DefaultWorkspaceConfig("").WorkDays
+	if len(cfg.Workspaces) > 0 && len(cfg.Workspaces[0].WorkDays) > 0 {
+		workDays = cfg.Workspaces[0].WorkDays
+	}
 	wd := strings.ToLower(t.Weekday().String())
-	for _, d := range cfg.WorkDays {
+	for _, d := range workDays {
 		if d == wd {
 			return true
 		}
@@ -119,27 +133,12 @@ func (cfg AppConfig) IsWorkDay(t time.Time) bool {
 // ValidateAndNormalize validates configuration and applies defaults.
 func (cfg *AppConfig) ValidateAndNormalize() error {
 	def := DefaultAppConfig()
-
-	if cfg.WeeklyHoursGoal <= 0 {
-		cfg.WeeklyHoursGoal = def.WeeklyHoursGoal
-	}
+	workspaceDef := def.Workspaces[0]
 
 	validDays := map[string]bool{
 		"monday": true, "tuesday": true, "wednesday": true,
 		"thursday": true, "friday": true, "saturday": true, "sunday": true,
 	}
-	if len(cfg.WorkDays) == 0 {
-		cfg.WorkDays = def.WorkDays
-	} else {
-		for i, d := range cfg.WorkDays {
-			lower := strings.ToLower(d)
-			if !validDays[lower] {
-				return fmt.Errorf("invalid work_day %q", d)
-			}
-			cfg.WorkDays[i] = lower
-		}
-	}
-
 	fill := func(s *string, d string) {
 		if *s == "" {
 			*s = d
@@ -188,6 +187,10 @@ func (cfg *AppConfig) ValidateAndNormalize() error {
 		return err
 	}
 
+	if len(cfg.Workspaces) == 0 {
+		cfg.Workspaces = []WorkspaceConfig{DefaultWorkspaceConfig("default")}
+	}
+
 	seen := make(map[string]struct{}, len(cfg.Workspaces))
 	for i, ws := range cfg.Workspaces {
 		name := strings.TrimSpace(ws.Name)
@@ -201,15 +204,25 @@ func (cfg *AppConfig) ValidateAndNormalize() error {
 			return fmt.Errorf("duplicate workspace name %q", name)
 		}
 		seen[name] = struct{}{}
+		if ws.StoragePath == "" {
+			cfg.Workspaces[i].StoragePath = workspaceDef.StoragePath
+		}
 		if ws.WeeklyHoursGoal < 0 {
 			return fmt.Errorf("workspace %q has a negative weekly_hours_goal", name)
 		}
-		for j, d := range ws.WorkDays {
-			lower := strings.ToLower(d)
-			if !validDays[lower] {
-				return fmt.Errorf("workspace %q has invalid work_day %q", name, d)
+		if ws.WeeklyHoursGoal == 0 {
+			cfg.Workspaces[i].WeeklyHoursGoal = workspaceDef.WeeklyHoursGoal
+		}
+		if len(ws.WorkDays) == 0 {
+			cfg.Workspaces[i].WorkDays = append([]string(nil), workspaceDef.WorkDays...)
+		} else {
+			for j, d := range ws.WorkDays {
+				lower := strings.ToLower(d)
+				if !validDays[lower] {
+					return fmt.Errorf("workspace %q has invalid work_day %q", name, d)
+				}
+				cfg.Workspaces[i].WorkDays[j] = lower
 			}
-			cfg.Workspaces[i].WorkDays[j] = lower
 		}
 	}
 
