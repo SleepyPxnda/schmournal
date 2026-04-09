@@ -18,6 +18,12 @@ type FileSystemConfigRepository struct {
 	configDir string // directory containing config file (e.g., ~/.config)
 }
 
+type legacyGlobalSettings struct {
+	StoragePath     string   `toml:"storage_path"`
+	WeeklyHoursGoal float64  `toml:"weekly_hours_goal"`
+	WorkDays        []string `toml:"work_days"`
+}
+
 // NewFileSystemConfigRepository creates a new FileSystemConfigRepository.
 // If configDir is empty, uses the user's home directory + ".config".
 func NewFileSystemConfigRepository(configDir string) (repository.ConfigRepository, error) {
@@ -60,6 +66,10 @@ func (r *FileSystemConfigRepository) Load() (model.AppConfig, error) {
 	if err != nil {
 		return def, err
 	}
+	var legacy legacyGlobalSettings
+	if _, err := toml.DecodeFile(path, &legacy); err != nil {
+		return def, err
+	}
 
 	// Apply defaults for boolean module fields that were absent in older configs.
 	// We cannot rely on ValidateAndNormalize for booleans because false is a valid
@@ -70,6 +80,7 @@ func (r *FileSystemConfigRepository) Load() (model.AppConfig, error) {
 	if !md.IsDefined("modules", "todo_enabled") {
 		cfg.Modules.TodoEnabled = true
 	}
+	applyLegacyWorkspaceFallbacks(&cfg, legacy)
 
 	if err := cfg.ValidateAndNormalize(); err != nil {
 		return def, err
@@ -116,6 +127,9 @@ func (r *FileSystemConfigRepository) GetPath() (string, error) {
 }
 
 func needsMigration(md toml.MetaData) bool {
+	if md.IsDefined("storage_path") || md.IsDefined("weekly_hours_goal") || md.IsDefined("work_days") {
+		return true
+	}
 	for _, path := range collectTOMLPaths(reflect.TypeOf(model.AppConfig{}), nil) {
 		if !md.IsDefined(path...) {
 			return true
@@ -155,21 +169,52 @@ func collectTOMLPaths(t reflect.Type, prefix []string) [][]string {
 }
 
 func (r *FileSystemConfigRepository) migrateConfig(path string, cfg model.AppConfig) error {
-	// Preserve legacy behavior: workspace entries created before work_days existed
-	// should keep counting all days when migration runs.
-	allDays := []string{
-		"monday", "tuesday", "wednesday", "thursday",
-		"friday", "saturday", "sunday",
-	}
-	for i := range cfg.Workspaces {
-		if len(cfg.Workspaces[i].WorkDays) == 0 {
-			cfg.Workspaces[i].WorkDays = append([]string(nil), allDays...)
-		}
-	}
-
 	oldPath := strings.TrimSuffix(path, ".config") + ".old.config"
 	if err := os.Rename(path, oldPath); err != nil {
 		return err
 	}
 	return r.Save(cfg)
+}
+
+func applyLegacyWorkspaceFallbacks(cfg *model.AppConfig, legacy legacyGlobalSettings) {
+	def := model.DefaultWorkspaceConfig("")
+
+	workDaysFallback := append([]string(nil), def.WorkDays...)
+	if len(legacy.WorkDays) > 0 {
+		workDaysFallback = append([]string(nil), legacy.WorkDays...)
+	}
+
+	weeklyGoalFallback := def.WeeklyHoursGoal
+	if legacy.WeeklyHoursGoal > 0 {
+		weeklyGoalFallback = legacy.WeeklyHoursGoal
+	}
+
+	storageFallback := def.StoragePath
+	if legacy.StoragePath != "" {
+		storageFallback = legacy.StoragePath
+	}
+
+	if len(cfg.Workspaces) == 0 {
+		cfg.Workspaces = []model.WorkspaceConfig{
+			{
+				Name:            "default",
+				StoragePath:     storageFallback,
+				WeeklyHoursGoal: weeklyGoalFallback,
+				WorkDays:        append([]string(nil), workDaysFallback...),
+			},
+		}
+		return
+	}
+
+	for i := range cfg.Workspaces {
+		if cfg.Workspaces[i].StoragePath == "" {
+			cfg.Workspaces[i].StoragePath = storageFallback
+		}
+		if cfg.Workspaces[i].WeeklyHoursGoal == 0 {
+			cfg.Workspaces[i].WeeklyHoursGoal = weeklyGoalFallback
+		}
+		if len(cfg.Workspaces[i].WorkDays) == 0 {
+			cfg.Workspaces[i].WorkDays = append([]string(nil), workDaysFallback...)
+		}
+	}
 }

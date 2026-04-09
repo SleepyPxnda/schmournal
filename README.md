@@ -424,36 +424,8 @@ Schmournal is configured via `~/.config/schmournal.config` (TOML). The file is c
 ### Full reference
 
 ```toml
-# ── Storage ───────────────────────────────────────────────────────────────────
-
-# Root directory where daily JSON files are stored.
-# Supports ~ expansion. Default: "~/.journal"
-storage_path = "~/.journal"
-
-# ── Goals & Schedule ──────────────────────────────────────────────────────────
-
-# Weekly working-hours target used in the stats bar progress meter.
-# Default: 40
-weekly_hours_goal = 40
-
-# Days of the week treated as working days.
-# Only these days are counted for streak calculation and the heatmap.
-# Accepted values (case-insensitive): "monday" … "sunday"
-# Default: ["monday","tuesday","wednesday","thursday","friday"]
-work_days = ["monday", "tuesday", "wednesday", "thursday", "friday"]
-
-# ── Modules ───────────────────────────────────────────────────────────────────
-
-[modules]
-# Enable / disable the clock timer feature.  Default: true
-clock_enabled = true
-
-# Enable / disable the TODO panel.  Default: true
-todo_enabled = true
-
 # ── Workspaces ────────────────────────────────────────────────────────────────
-# Define multiple independent journal directories.
-# Omitted per-workspace fields fall back to the top-level defaults.
+# Define one or more workspace configurations.
 # Workspace names must be unique and have no leading/trailing whitespace.
 
 [[workspaces]]
@@ -466,6 +438,15 @@ work_days         = ["monday", "tuesday", "wednesday", "thursday", "friday"]
 name              = "Work"
 storage_path      = "~/.journal/work"
 weekly_hours_goal = 37.5
+
+# ── Modules ───────────────────────────────────────────────────────────────────
+
+[modules]
+# Enable / disable the clock timer feature.  Default: true
+clock_enabled = true
+
+# Enable / disable the TODO panel.  Default: true
+todo_enabled = true
 
 # ── Keybinds ──────────────────────────────────────────────────────────────────
 # Keybinds use Bubble Tea key strings (e.g. "q", "ctrl+s", "f1", "left").
@@ -501,9 +482,9 @@ clock_stop       = "c"   # Stop the clock and save the entry (same key as clock_
                          # You can bind these to different keys if you prefer explicit start/stop.
 ```
 
-### Per-workspace overrides
+### Workspace settings
 
-Each `[[workspaces]]` block can override `storage_path`, `weekly_hours_goal`, and `work_days`. Any field not set falls back to the top-level value. Each workspace also maintains its own `todos.json` file at the workspace storage root.
+`storage_path`, `weekly_hours_goal`, and `work_days` are configured per workspace. If a workspace omits one of these values, Schmournal applies defaults (`~/.journal`, `40`, and Monday-Friday).
 
 | Field | Effect |
 |-------|--------|

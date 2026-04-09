@@ -21,9 +21,11 @@ class Schmournal < Formula
       # Schmournal Configuration
       # Location: ~/.config/schmournal.config
 
-      # Directory where journal JSON files are stored.
-      # The ~ is expanded to your home directory.
-      storage_path = "~/.journal"
+      [[workspaces]]
+      name              = "default"
+      storage_path      = "~/.journal"
+      weekly_hours_goal = 40
+      work_days         = ["monday", "tuesday", "wednesday", "thursday", "friday"]
 
       # ── Keybinds ──────────────────────────────────────────────────────────────────
       # Each value is a single key string as understood by the terminal

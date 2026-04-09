@@ -11,10 +11,8 @@ import (
 )
 
 // effectiveIsWorkDay reports whether t is a work day for the active workspace.
-// When the active workspace has its own work_days override, that list is used;
-// otherwise the top-level config's work_days is consulted.
 func (m Model) effectiveIsWorkDay(t time.Time) bool {
-	if ws := m.activeWorkspaceConfig(); ws != nil && len(ws.WorkDays) > 0 {
+	if ws := m.activeWorkspaceConfig(); ws != nil {
 		wd := strings.ToLower(t.Weekday().String())
 		for _, d := range ws.WorkDays {
 			if d == wd {
@@ -23,7 +21,12 @@ func (m Model) effectiveIsWorkDay(t time.Time) bool {
 		}
 		return false
 	}
-	return m.context.Config.IsWorkDay(t)
+	for _, d := range domainmodel.DefaultWorkspaceConfig("").WorkDays {
+		if d == strings.ToLower(t.Weekday().String()) {
+			return true
+		}
+	}
+	return false
 }
 
 // activeWorkspaceConfig returns a pointer to the active WorkspaceConfig, or nil
@@ -38,12 +41,12 @@ func (m Model) activeWorkspaceConfig() *domainmodel.WorkspaceConfig {
 }
 
 // effectiveWeeklyHoursGoal returns the hours-per-week goal for the active
-// workspace, falling back to the global config default when not overridden.
+// workspace.
 func (m Model) effectiveWeeklyHoursGoal() float64 {
-	if ws := m.activeWorkspaceConfig(); ws != nil && ws.WeeklyHoursGoal > 0 {
+	if ws := m.activeWorkspaceConfig(); ws != nil {
 		return ws.WeeklyHoursGoal
 	}
-	return m.context.Config.WeeklyHoursGoal
+	return domainmodel.DefaultWorkspaceConfig("").WeeklyHoursGoal
 }
 
 // openWorkspacePicker opens the workspace picker dialog. If no workspaces are
@@ -69,12 +72,10 @@ func (m Model) openWorkspacePicker() (tea.Model, tea.Cmd) {
 // switchWorkspace applies the named workspace: rebinds use cases to the
 // workspace storage path, records the active workspace name and reloads data.
 func (m Model) switchWorkspace(name string) (tea.Model, tea.Cmd) {
-	storagePath := m.context.Config.StoragePath
+	storagePath := domainmodel.DefaultWorkspaceConfig("").StoragePath
 	for _, ws := range m.context.Config.Workspaces {
 		if ws.Name == name {
-			if ws.StoragePath != "" {
-				storagePath = ws.StoragePath
-			}
+			storagePath = ws.StoragePath
 			break
 		}
 	}
